@@ -15,9 +15,11 @@ Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition
 | USB gadget (serial + NCM) | Working, connects about 85s after boot with no replug |
 | `reboot recovery` to TWRP | Working |
 | MAX77705 charger, fuel gauge | Working, limited to 500mA / 4.35V |
-| Pogo keyboard | Working |
+| Pogo keyboard | Works until the trackpad is touched |
+| Pogo trackpad | Touch crashes the MCU, under investigation |
+| Touchscreen | Working, multitouch, orientation fix not yet re-tested |
 | Sway on Alpine v3.22 (software rendering) | Working |
-| Touch, Wi-Fi, GPU, audio | Not started |
+| Wi-Fi, GPU, audio | Not started |
 
 ## Desktop
 
@@ -50,4 +52,4 @@ aren't published because a live dump contains device identifiers.
 
 ## Keyboard notes
 
-Don't send the MCU unsolicited I2C transfers. A test program that polled it outside its interrupt sent it into a reset loop, seen as gpio43 bouncing about 10 times a second, and that caused most of the earlier failures. The MCU only sends frames when it has something to report.
+Touching the trackpad makes the MCU send a few valid frames, then stop, with gpio43 bouncing about 10 times a second. Typing alone is fine. Unsolicited I2C polling also upsets the MCU, so don't poll it. The pin overrides tried earlier made no difference.

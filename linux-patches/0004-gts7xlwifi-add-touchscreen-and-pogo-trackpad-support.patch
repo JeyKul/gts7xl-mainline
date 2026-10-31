@@ -1,0 +1,716 @@
+From 8bd11623a5eecf8388b0ab3b275b7146f4facce2 Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sat, 31 Oct 2026 15:34:22 +0100
+Subject: [PATCH 4/4] gts7xlwifi: add touchscreen and pogo trackpad support
+
+Touch uses the FTS driver from r8q-arch on a per-bus FIFO path. The
+trackpad currently crashes the pogo MCU on first touch; frame logging is
+kept in to debug that.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    |  72 ++--
+ drivers/i2c/busses/i2c-qcom-geni.c            |  11 +-
+ drivers/input/keyboard/samsung-stm32-pogo.c   | 112 ++++++-
+ drivers/input/touchscreen/Kconfig             |   7 +
+ drivers/input/touchscreen/Makefile            |   1 +
+ drivers/input/touchscreen/fts5cu56a.c         | 317 ++++++++++++++++++
+ 6 files changed, 471 insertions(+), 49 deletions(-)
+ create mode 100644 drivers/input/touchscreen/fts5cu56a.c
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 747c5b1bb..9442a0957 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -77,6 +77,47 @@ &qupv3_id_0 {
+ 	status = "okay";
+ };
+ 
++&apps_rsc {
++	regulators-0 {
++		vreg_l13a_3p3: ldo13 {
++			regulator-name = "vreg_l13a_3p3";
++			regulator-min-microvolt = <3304000>;
++			regulator-max-microvolt = <3304000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++		};
++
++		vreg_l14a_1p8: ldo14 {
++			regulator-name = "vreg_l14a_1p8";
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <1800000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++		};
++	};
++};
++
++&gpi_dma0 {
++	status = "okay";
++};
++
++&i2c5 {
++	/* Firmware disables the FIFO interface on this serial engine */
++	qcom,force-fifo;
++	status = "okay";
++
++	touchscreen@49 {
++		compatible = "samsung,fts1ba90a";
++		reg = <0x49>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <15 IRQ_TYPE_LEVEL_LOW>;
++		avdd-supply = <&vreg_l13a_3p3>;
++		vdd-supply = <&vreg_l14a_1p8>;
++		touchscreen-size-x = <1752>;
++		touchscreen-size-y = <2800>;
++		touchscreen-swapped-x-y;
++		touchscreen-inverted-x;
++	};
++};
++
+ &i2c0 {
+ 	status = "okay";
+ 
+@@ -250,37 +291,6 @@ &tlmm {
+ 	/* gpio43 is the pogo connection detect line on this board */
+ 	gpio-reserved-ranges = <20 4>, <40 3>;
+ 
+-	pinctrl-names = "default";
+-	pinctrl-0 = <&stock_input_bias>, <&stock_input_pullup>;
+-
+-	/* Bring-up test: match the stock pulls on undriven inputs */
+-	stock_input_bias: stock-input-bias-state {
+-		pins = "gpio4", "gpio5", "gpio7", "gpio12", "gpio13", "gpio15", "gpio16", "gpio51", "gpio52", "gpio53", "gpio60", "gpio61", "gpio67", "gpio77", "gpio84", "gpio110", "gpio112", "gpio113", "gpio119", "gpio134", "gpio136";
+-		function = "gpio";
+-		bias-disable;
+-	};
+-
+-	stock_input_pullup: stock-input-pullup-state {
+-		pins = "gpio81", "gpio121";
+-		function = "gpio";
+-		bias-pull-up;
+-	};
+-
+-	/* Bring-up test: match the stock state of these power enables */
+-	spen-3v3-hog {
+-		gpio-hog;
+-		gpios = <93 GPIO_ACTIVE_HIGH>;
+-		output-high;
+-		line-name = "vdd_spen_3p3";
+-	};
+-
+-	grip-ldo-hog {
+-		gpio-hog;
+-		gpios = <64 GPIO_ACTIVE_HIGH>;
+-		output-high;
+-		line-name = "grip_ldo";
+-	};
+-
+ 	pogo_default: pogo-default-state {
+ 		int-pins {
+ 			pins = "gpio31";
+diff --git a/drivers/i2c/busses/i2c-qcom-geni.c b/drivers/i2c/busses/i2c-qcom-geni.c
+index 176218e9b..5fa4227a8 100644
+--- a/drivers/i2c/busses/i2c-qcom-geni.c
++++ b/drivers/i2c/busses/i2c-qcom-geni.c
+@@ -114,6 +114,7 @@ struct geni_i2c_gpi_multi_desc_xfer {
+ };
+ 
+ struct geni_i2c_dev {
++	bool force_fifo;
+ 	struct geni_se se;
+ 	u32 tx_wm;
+ 	int irq;
+@@ -184,9 +185,6 @@ struct geni_i2c_clk_fld {
+  * source_clock = 19.2 MHz
+  */
+ 
+-static bool r8q_force_fifo;
+-module_param(r8q_force_fifo, bool, 0644);
+-MODULE_PARM_DESC(r8q_force_fifo, "r8q: ignore FIFO_IF_DISABLE and force FIFO mode");
+ static const struct geni_i2c_clk_fld geni_i2c_clk_map_19p2mhz[] = {
+ 	{ I2C_MAX_STANDARD_MODE_FREQ, 7, 10, 12, 26 },
+ 	{ I2C_MAX_FAST_MODE_FREQ, 2,  5, 11, 22 },
+@@ -529,7 +527,7 @@ static int geni_i2c_rx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 	size_t len = msg->len;
+ 	struct i2c_msg *cur;
+ 
+-	dma_buf = gi2c->no_dma ? NULL : i2c_get_dma_safe_msg_buf(msg, r8q_force_fifo ? 1 : 32);
++	dma_buf = gi2c->no_dma ? NULL : i2c_get_dma_safe_msg_buf(msg, gi2c->force_fifo ? 1 : 32);
+ 	if (dma_buf)
+ 		geni_se_select_mode(se, GENI_SE_DMA);
+ 	else
+@@ -568,7 +566,7 @@ static int geni_i2c_tx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 	size_t len = msg->len;
+ 	struct i2c_msg *cur;
+ 
+-	dma_buf = gi2c->no_dma ? NULL : i2c_get_dma_safe_msg_buf(msg, r8q_force_fifo ? 1 : 32);
++	dma_buf = gi2c->no_dma ? NULL : i2c_get_dma_safe_msg_buf(msg, gi2c->force_fifo ? 1 : 32);
+ 	if (dma_buf)
+ 		geni_se_select_mode(se, GENI_SE_DMA);
+ 	else
+@@ -1099,7 +1097,8 @@ static int geni_i2c_init(struct geni_i2c_dev *gi2c)
+ 		fifo_disable = false;
+ 		gi2c->no_dma = true;
+ 	} else {
+-		fifo_disable = r8q_force_fifo ? false : (readl_relaxed(gi2c->se.base + GENI_IF_DISABLE_RO) & FIFO_IF_DISABLE);
++		gi2c->force_fifo = device_property_read_bool(gi2c->se.dev, "qcom,force-fifo");
++		fifo_disable = gi2c->force_fifo ? false : (readl_relaxed(gi2c->se.base + GENI_IF_DISABLE_RO) & FIFO_IF_DISABLE);
+ 	}
+ 
+ 	if (fifo_disable) {
+diff --git a/drivers/input/keyboard/samsung-stm32-pogo.c b/drivers/input/keyboard/samsung-stm32-pogo.c
+index 9189b86e8..356a7049f 100644
+--- a/drivers/input/keyboard/samsung-stm32-pogo.c
++++ b/drivers/input/keyboard/samsung-stm32-pogo.c
+@@ -9,6 +9,7 @@
+ #include <linux/i2c.h>
+ #include <linux/input.h>
+ #include <linux/input/matrix_keypad.h>
++#include <linux/input/mt.h>
+ #include <linux/interrupt.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
+@@ -34,24 +35,29 @@
+ #define POGO_CMD_TC_CRC		0x19
+ #define POGO_CMD_TC_RESOLUTION	0x1a
+ 
++#define POGO_FRAME_LOG		60
++#define POGO_TP_FINGERS		3
++#define POGO_TP_EVENT_SIZE	22
++#define POGO_TP_MAX_X		2560
++#define POGO_TP_MAX_Y		1600
++#define POGO_TP_ICON_EVENT	BIT(15)
++#define POGO_TP_ICON_DOWN	BIT(0)
++#define POGO_TP_FINGER_EXIST	BIT(0)
++
+ #define POGO_KEY_PRESS		BIT(0)
+ #define POGO_KEY_COL(v)		(((v) >> 1) & 0x1f)
+ #define POGO_KEY_ROW(v)		(((v) >> 6) & 0x7)
+ 
+-static bool pogo_quiet;
+-module_param(pogo_quiet, bool, 0644);
+-MODULE_PARM_DESC(pogo_quiet, "Power the MCU but leave its interrupt off, for bring-up");
+-
+ struct pogo_kbd {
+ 	struct i2c_client *client;
+ 	struct input_dev *input;
++	struct input_dev *touchpad;
+ 	struct regulator *vdd;
+ 	struct gpio_desc *conn;
+ 	struct delayed_work conn_work;
+ 	unsigned int rows;
+ 	unsigned int cols;
+ 	bool connected;
+-	bool irq_on;
+ 	unsigned short keycodes[8 << POGO_ROW_SHIFT];
+ };
+ 
+@@ -65,6 +71,55 @@ static void pogo_release_keys(struct pogo_kbd *kbd)
+ 	input_sync(kbd->input);
+ }
+ 
++static void pogo_report_touchpad(struct pogo_kbd *kbd, const u8 *data, unsigned int len)
++{
++	struct input_dev *tp = kbd->touchpad;
++	u16 status;
++	unsigned int i;
++
++	if (len != POGO_TP_EVENT_SIZE)
++		return;
++
++	status = get_unaligned_le16(data);
++	if (status & POGO_TP_ICON_EVENT)
++		input_report_key(tp, BTN_LEFT, data[3] & POGO_TP_ICON_DOWN);
++
++	for (i = 0; i < POGO_TP_FINGERS; i++) {
++		const u8 *c = data + 4 + i * 6;
++		bool down = c[5] & POGO_TP_FINGER_EXIST;
++		unsigned int x = get_unaligned_le16(c);
++		unsigned int y = get_unaligned_le16(c + 2);
++
++		if (down && (x >= POGO_TP_MAX_X || y >= POGO_TP_MAX_Y))
++			continue;
++
++		input_mt_slot(tp, i);
++		input_mt_report_slot_state(tp, MT_TOOL_FINGER, down);
++		if (down) {
++			/* The sensor is mounted rotated, as in the stock driver */
++			input_report_abs(tp, ABS_MT_POSITION_X, POGO_TP_MAX_Y - 1 - y);
++			input_report_abs(tp, ABS_MT_POSITION_Y, x);
++			input_report_abs(tp, ABS_MT_TOUCH_MAJOR, max_t(int, c[4], 45));
++		}
++	}
++
++	input_mt_sync_frame(tp);
++	input_sync(tp);
++}
++
++static void pogo_release_touchpad(struct pogo_kbd *kbd)
++{
++	unsigned int i;
++
++	for (i = 0; i < POGO_TP_FINGERS; i++) {
++		input_mt_slot(kbd->touchpad, i);
++		input_mt_report_slot_state(kbd->touchpad, MT_TOOL_FINGER, false);
++	}
++	input_report_key(kbd->touchpad, BTN_LEFT, 0);
++	input_mt_sync_frame(kbd->touchpad);
++	input_sync(kbd->touchpad);
++}
++
+ static void pogo_report_keys(struct pogo_kbd *kbd, const u8 *data, unsigned int len)
+ {
+ 	unsigned int i;
+@@ -177,7 +232,7 @@ static irqreturn_t pogo_irq(int irq, void *dev_id)
+ 	}
+ 
+ 	size = get_unaligned_le16(hdr);
+-	dev_info_ratelimited(&client->dev, "frame size=%u id=%u\n", size, hdr[2]);
++	dev_dbg(&client->dev, "frame size=%u id=%u\n", size, hdr[2]);
+ 	/* The MCU sends an empty frame after it (re)starts */
+ 	if (size <= POGO_HDR_SIZE || size - POGO_HDR_SIZE > sizeof(data)) {
+ 		pogo_handshake(kbd);
+@@ -187,20 +242,34 @@ static irqreturn_t pogo_irq(int irq, void *dev_id)
+ 
+ 	ret = pogo_xfer(client, NULL, 0, data, size);
+ 	if (ret) {
+-		dev_err_ratelimited(&client->dev, "payload read failed: %d\n", ret);
++		dev_err_ratelimited(&client->dev, "payload read failed: %d (id=%u len=%u)\n", ret, hdr[2], size);
+ 		goto err;
+ 	}
+ 
++	{
++		static int logged;
++
++		if (hdr[2] != POGO_ID_KEYPAD && logged < POGO_FRAME_LOG) {
++			logged++;
++			dev_info(&client->dev, "frame id=%u len=%u: %*ph\n", hdr[2], size,
++				 min_t(int, size, 24), data);
++		}
++	}
++
+ 	/* Noise from the connector settling */
+ 	if (size >= 3 && data[0] == 0x03 && data[1] == 0x00 && data[2] == 0x05)
+ 		return IRQ_HANDLED;
+ 
+ 	switch (hdr[2]) {
++	case POGO_ID_TOUCHPAD:
++		pogo_report_touchpad(kbd, data, size);
++		break;
+ 	case POGO_ID_KEYPAD:
+ 		pogo_report_keys(kbd, data, size);
+ 		break;
+ 	case POGO_ID_HALL:
+ 		pogo_release_keys(kbd);
++		pogo_release_touchpad(kbd);
+ 		break;
+ 	default:
+ 		break;
+@@ -210,6 +279,7 @@ static irqreturn_t pogo_irq(int irq, void *dev_id)
+ 
+ err:
+ 	pogo_release_keys(kbd);
++	pogo_release_touchpad(kbd);
+ 	return IRQ_HANDLED;
+ }
+ 
+@@ -227,13 +297,11 @@ static void pogo_set_connected(struct pogo_kbd *kbd, bool connected)
+ 			return;
+ 		}
+ 		msleep(50);
+-		if (!pogo_quiet)
+-			enable_irq(kbd->client->irq);
+-		kbd->irq_on = !pogo_quiet;
++		enable_irq(kbd->client->irq);
+ 	} else {
+-		if (kbd->irq_on)
+-			disable_irq(kbd->client->irq);
++		disable_irq(kbd->client->irq);
+ 		pogo_release_keys(kbd);
++		pogo_release_touchpad(kbd);
+ 		regulator_disable(kbd->vdd);
+ 	}
+ 
+@@ -321,6 +389,26 @@ static int pogo_probe(struct i2c_client *client)
+ 	if (ret)
+ 		return ret;
+ 
++	kbd->touchpad = devm_input_allocate_device(dev);
++	if (!kbd->touchpad)
++		return -ENOMEM;
++
++	kbd->touchpad->name = "Samsung Book Cover Touchpad";
++	kbd->touchpad->id.bustype = BUS_I2C;
++	input_set_capability(kbd->touchpad, EV_KEY, BTN_LEFT);
++	__set_bit(INPUT_PROP_BUTTONPAD, kbd->touchpad->propbit);
++	input_set_abs_params(kbd->touchpad, ABS_MT_POSITION_X, 0, POGO_TP_MAX_Y - 1, 0, 0);
++	input_set_abs_params(kbd->touchpad, ABS_MT_POSITION_Y, 0, POGO_TP_MAX_X - 1, 0, 0);
++	input_set_abs_params(kbd->touchpad, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
++
++	ret = input_mt_init_slots(kbd->touchpad, POGO_TP_FINGERS, INPUT_MT_POINTER);
++	if (ret)
++		return ret;
++
++	ret = input_register_device(kbd->touchpad);
++	if (ret)
++		return ret;
++
+ 	ret = devm_request_threaded_irq(dev, client->irq, NULL, pogo_irq,
+ 					IRQF_ONESHOT | IRQF_NO_AUTOEN,
+ 					"pogo-keyboard", kbd);
+diff --git a/drivers/input/touchscreen/Kconfig b/drivers/input/touchscreen/Kconfig
+index 9b9ae8ac3..18debd544 100644
+--- a/drivers/input/touchscreen/Kconfig
++++ b/drivers/input/touchscreen/Kconfig
+@@ -1240,6 +1240,13 @@ config TOUCHSCREEN_ST1232
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called st1232_ts.
+ 
++config TOUCHSCREEN_FTS5CU56A
++	tristate "STM FTS touchscreen with Samsung TSP firmware"
++	depends on I2C
++	help
++	  Minimal driver for STM FTS5CU56A and FTS1BA90A touch controllers
++	  with Samsung TSP firmware.
++
+ config TOUCHSCREEN_STMFTS
+ 	tristate "STMicroelectronics STMFTS touchscreen"
+ 	depends on I2C
+diff --git a/drivers/input/touchscreen/Makefile b/drivers/input/touchscreen/Makefile
+index bfd9de833..7912b1238 100644
+--- a/drivers/input/touchscreen/Makefile
++++ b/drivers/input/touchscreen/Makefile
+@@ -81,6 +81,7 @@ obj-$(CONFIG_TOUCHSCREEN_S6SY761)	+= s6sy761.o
+ obj-$(CONFIG_TOUCHSCREEN_SILEAD)	+= silead.o
+ obj-$(CONFIG_TOUCHSCREEN_SIS_I2C)	+= sis_i2c.o
+ obj-$(CONFIG_TOUCHSCREEN_ST1232)	+= st1232.o
++obj-$(CONFIG_TOUCHSCREEN_FTS5CU56A)	+= fts5cu56a.o
+ obj-$(CONFIG_TOUCHSCREEN_STMFTS)	+= stmfts.o
+ obj-$(CONFIG_TOUCHSCREEN_STMPE)		+= stmpe-ts.o
+ obj-$(CONFIG_TOUCHSCREEN_SUN4I)		+= sun4i-ts.o
+diff --git a/drivers/input/touchscreen/fts5cu56a.c b/drivers/input/touchscreen/fts5cu56a.c
+new file mode 100644
+index 000000000..5abbf3471
+--- /dev/null
++++ b/drivers/input/touchscreen/fts5cu56a.c
+@@ -0,0 +1,317 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Minimal driver for the STMicroelectronics FTS5CU56A touchscreen
++ * (Samsung TSP firmware, "stm,fts_touch" protocol generation) as found
++ * in the Samsung Galaxy S20 FE (r8q).
++ *
++ * Protocol distilled from Samsung's downstream fts5cu56a driver
++ * (drivers/input/touchscreen/stm/fts5cu56a). Raw-byte writes; reads are
++ * a one-byte register write followed by a read. Events are 16-byte
++ * records drained from a FIFO at reg 0x60/0x61.
++ */
++
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/input.h>
++#include <linux/input/mt.h>
++#include <linux/input/touchscreen.h>
++#include <linux/interrupt.h>
++#include <linux/module.h>
++#include <linux/regulator/consumer.h>
++
++#define FTS_READ_DEVICE_ID	0x22
++#define FTS_ID0			0x48
++#define FTS_ID0_1BA90A		0x39
++#define FTS_ID1			0x36
++
++#define FTS_READ_ONE_EVENT	0x60
++#define FTS_READ_ALL_EVENT	0x61
++#define FTS_CMD_CLEAR_ALL_EVENT	0x62
++#define FTS_CMD_SET_TOUCHTYPE	0x30
++#define FTS_TOUCHTYPE_DEFAULT	0x0061	/* TOUCH | PALM | WET */
++
++#define FTS_EVENT_SIZE		16
++#define FTS_FIFO_MAX		31
++#define FTS_FINGER_MAX		10
++
++#define FTS_EV_COORDINATE	0
++#define FTS_EV_STATUS		1
++
++#define FTS_ACT_PRESS		1
++#define FTS_ACT_MOVE		2
++#define FTS_ACT_RELEASE		3
++
++#define FTS_STYPE_INFO		2
++#define FTS_INFO_READY		0x00
++
++#define FTS_MAX_COORD		4095	/* downstream stm,max_coords */
++
++struct fts5_data {
++	struct i2c_client *client;
++	struct input_dev *input;
++	struct regulator_bulk_data supplies[2];
++	struct touchscreen_properties prop;
++};
++
++static int fts5_write(struct fts5_data *ts, const u8 *buf, int len)
++{
++	int ret = i2c_master_send(ts->client, buf, len);
++
++	if (ret < 0)
++		return ret;
++	return ret != len ? -EIO : 0;
++}
++
++static int fts5_read(struct fts5_data *ts, u8 reg, u8 *buf, int len)
++{
++	struct i2c_msg msgs[2] = {
++		{ .addr = ts->client->addr, .len = 1, .buf = &reg },
++		{ .addr = ts->client->addr, .flags = I2C_M_RD,
++		  .len = len, .buf = buf },
++	};
++	int ret = i2c_transfer(ts->client->adapter, msgs, 2);
++
++	if (ret < 0)
++		return ret;
++	return ret != 2 ? -EIO : 0;
++}
++
++static int fts5_wait_for_ready(struct fts5_data *ts)
++{
++	u8 ev[FTS_EVENT_SIZE];
++	int retry;
++
++	for (retry = 0; retry < 50; retry++) {
++		if (fts5_read(ts, FTS_READ_ONE_EVENT, ev, sizeof(ev)))
++			return -EIO;
++
++		if ((ev[0] & 0x3) == FTS_EV_STATUS &&
++		    ((ev[0] >> 2) & 0xf) == FTS_STYPE_INFO &&
++		    ev[1] == FTS_INFO_READY)
++			return 0;
++
++		if (ev[0] == 0xf3)	/* error report */
++			dev_warn(&ts->client->dev,
++				 "boot error event: %*ph\n", 8, ev);
++
++		msleep(20);
++	}
++	return -ETIMEDOUT;
++}
++
++static int fts5_system_reset(struct fts5_data *ts)
++{
++	static const u8 cmd[] = { 0xfa, 0x20, 0x00, 0x00, 0x24, 0x81 };
++	int ret;
++
++	ret = fts5_write(ts, cmd, sizeof(cmd));
++	if (ret)
++		return ret;
++	msleep(10);
++	return fts5_wait_for_ready(ts);
++}
++
++static void fts5_report_event(struct fts5_data *ts, const u8 *ev)
++{
++	u8 id = ev[0] & 0x3;
++	u8 tid, action;
++	unsigned int x, y;
++	u8 z, major, minor;
++
++	if (id != FTS_EV_COORDINATE)
++		return;
++
++	tid = (ev[0] >> 2) & 0xf;
++	action = ev[0] >> 6;
++	if (tid >= FTS_FINGER_MAX)
++		return;
++
++	x = (ev[1] << 4) | (ev[3] >> 4);
++	y = (ev[2] << 4) | (ev[3] & 0xf);
++	major = ev[4];
++	minor = ev[5];
++	z = ev[6] & 0x3f;
++
++	input_mt_slot(ts->input, tid);
++
++	switch (action) {
++	case FTS_ACT_PRESS:
++	case FTS_ACT_MOVE:
++		input_mt_report_slot_state(ts->input, MT_TOOL_FINGER, true);
++		touchscreen_report_pos(ts->input, &ts->prop, x, y, true);
++		input_report_abs(ts->input, ABS_MT_TOUCH_MAJOR, major);
++		input_report_abs(ts->input, ABS_MT_TOUCH_MINOR, minor);
++		input_report_abs(ts->input, ABS_MT_PRESSURE, z ? z : 1);
++		break;
++	case FTS_ACT_RELEASE:
++		input_mt_report_slot_state(ts->input, MT_TOOL_FINGER, false);
++		break;
++	}
++}
++
++static irqreturn_t fts5_irq_handler(int irq, void *dev_id)
++{
++	struct fts5_data *ts = dev_id;
++	u8 data[FTS_FIFO_MAX * FTS_EVENT_SIZE];
++	int left, i;
++
++	if (fts5_read(ts, FTS_READ_ONE_EVENT, data, FTS_EVENT_SIZE))
++		return IRQ_HANDLED;
++
++	left = data[7] & 0x1f;
++	if (left >= FTS_FIFO_MAX)
++		left = FTS_FIFO_MAX - 1;
++	if (left > 0 &&
++	    fts5_read(ts, FTS_READ_ALL_EVENT, data + FTS_EVENT_SIZE,
++		      left * FTS_EVENT_SIZE))
++		left = 0;
++
++	for (i = 0; i <= left; i++)
++		fts5_report_event(ts, data + i * FTS_EVENT_SIZE);
++
++	input_mt_sync_frame(ts->input);
++	input_sync(ts->input);
++
++	return IRQ_HANDLED;
++}
++
++static int fts5_hw_init(struct fts5_data *ts)
++{
++	static const u8 clear_events = FTS_CMD_CLEAR_ALL_EVENT;
++	static const u8 touchtype[] = { FTS_CMD_SET_TOUCHTYPE,
++		FTS_TOUCHTYPE_DEFAULT & 0xff, FTS_TOUCHTYPE_DEFAULT >> 8 };
++	static const u8 int_on[] = { 0xa4, 0x01, 0x01 };
++	static const u8 scan_on[] = { 0xa0, 0x00, 0x01 };
++	u8 id[5];
++	int ret;
++
++	ret = fts5_read(ts, FTS_READ_DEVICE_ID, id, sizeof(id));
++	if (ret)
++		return dev_err_probe(&ts->client->dev, ret, "no response\n");
++
++	if ((id[2] != FTS_ID0 && id[2] != FTS_ID0_1BA90A) || id[3] != FTS_ID1)
++		return dev_err_probe(&ts->client->dev, -ENODEV,
++				     "unexpected chip id %*ph\n", 5, id);
++
++	dev_info(&ts->client->dev, "found %c%c %02x %02x rev %02x\n",
++		 id[0], id[1], id[2], id[3], id[4]);
++
++	ret = fts5_system_reset(ts);
++	if (ret)
++		dev_warn(&ts->client->dev,
++			 "system reset not confirmed (%d), continuing\n", ret);
++
++	fts5_write(ts, &clear_events, 1);
++	fts5_write(ts, touchtype, sizeof(touchtype));
++	fts5_write(ts, int_on, sizeof(int_on));
++	msleep(10);
++	fts5_write(ts, scan_on, sizeof(scan_on));
++	msleep(50);
++
++	return 0;
++}
++
++static int fts5_probe(struct i2c_client *client)
++{
++	struct fts5_data *ts;
++	int ret;
++
++	ts = devm_kzalloc(&client->dev, sizeof(*ts), GFP_KERNEL);
++	if (!ts)
++		return -ENOMEM;
++
++	ts->client = client;
++
++	ts->supplies[0].supply = "avdd";
++	ts->supplies[1].supply = "vdd";
++	ret = devm_regulator_bulk_get(&client->dev, ARRAY_SIZE(ts->supplies),
++				      ts->supplies);
++	if (ret)
++		return ret;
++
++	ret = regulator_bulk_enable(ARRAY_SIZE(ts->supplies), ts->supplies);
++	if (ret)
++		return ret;
++
++	/* power-on to firmware-ready is a few hundred ms */
++	msleep(300);
++
++	ret = fts5_hw_init(ts);
++	if (ret)
++		goto err_disable;
++
++	ts->input = devm_input_allocate_device(&client->dev);
++	if (!ts->input) {
++		ret = -ENOMEM;
++		goto err_disable;
++	}
++
++	ts->input->name = "STM FTS Touchscreen";
++	ts->input->id.bustype = BUS_I2C;
++
++	input_set_abs_params(ts->input, ABS_MT_POSITION_X, 0,
++			     FTS_MAX_COORD, 0, 0);
++	input_set_abs_params(ts->input, ABS_MT_POSITION_Y, 0,
++			     FTS_MAX_COORD, 0, 0);
++	input_set_abs_params(ts->input, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
++	input_set_abs_params(ts->input, ABS_MT_TOUCH_MINOR, 0, 255, 0, 0);
++	input_set_abs_params(ts->input, ABS_MT_PRESSURE, 0, 63, 0, 0);
++
++	touchscreen_parse_properties(ts->input, true, &ts->prop);
++
++	ret = input_mt_init_slots(ts->input, FTS_FINGER_MAX,
++				  INPUT_MT_DIRECT | INPUT_MT_DROP_UNUSED);
++	if (ret)
++		goto err_disable;
++
++	ret = input_register_device(ts->input);
++	if (ret)
++		goto err_disable;
++
++	ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
++					fts5_irq_handler,
++					IRQF_ONESHOT, "fts5cu56a", ts);
++	if (ret)
++		goto err_disable;
++
++	i2c_set_clientdata(client, ts);
++	return 0;
++
++err_disable:
++	regulator_bulk_disable(ARRAY_SIZE(ts->supplies), ts->supplies);
++	return ret;
++}
++
++static void fts5_remove(struct i2c_client *client)
++{
++	struct fts5_data *ts = i2c_get_clientdata(client);
++
++	regulator_bulk_disable(ARRAY_SIZE(ts->supplies), ts->supplies);
++}
++
++static const struct of_device_id fts5_of_match[] = {
++	{ .compatible = "samsung,fts5cu56a" },
++	{ .compatible = "samsung,fts1ba90a" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, fts5_of_match);
++
++static const struct i2c_device_id fts5_id[] = {
++	{ "fts5cu56a" },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, fts5_id);
++
++static struct i2c_driver fts5_driver = {
++	.driver = {
++		.name = "fts5cu56a",
++		.of_match_table = fts5_of_match,
++	},
++	.probe = fts5_probe,
++	.remove = fts5_remove,
++	.id_table = fts5_id,
++};
++module_i2c_driver(fts5_driver);
++
++MODULE_DESCRIPTION("STM FTS5CU56A (Samsung TSP) touchscreen driver");
++MODULE_LICENSE("GPL");
+-- 
+2.56.0
+
