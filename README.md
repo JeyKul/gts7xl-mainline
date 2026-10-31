@@ -17,13 +17,18 @@ Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition
 | MAX77705 charger, fuel gauge | Working, limited to 500mA / 4.35V |
 | Pogo keyboard | Works until the trackpad is touched |
 | Pogo trackpad | Touch crashes the MCU, under investigation |
-| Touchscreen | Working, multitouch, orientation fix not yet re-tested |
-| Sway on Alpine v3.22 (software rendering) | Working |
-| Wi-Fi, GPU, audio | Not started |
+| Touchscreen | Working, multitouch |
+| Sway on Alpine v3.22 (Vulkan renderer) | Working |
+| Adreno 650 GPU (OpenGL, Vulkan) | Working, `glxgears` about 100 FPS |
+| Wi-Fi, audio | Not started |
 
 ## Desktop
 
 Alpine and Sway live on `userdata` (formatted ext4, which erases Android data). In TWRP, run `rootfs/twrp-setup.sh` with the packages pushed to `/tmp`, then `rootfs/rootcfg.sh`. The initramfs switches to it at boot, with a fallback shell if it's missing. The serial shell and the `user` account have no password.
+
+## GPU
+
+`msm` is a module with `separate_gpu_kms=1 r8q_zap_dyn=1 r8q_zap_secvid=0`, loaded from `/etc/local.d/gpu.start` and never by udev. It needs the Samsung-signed `a650_zap` files from your own `apnhlos` partition in `/lib/firmware/qcom/sm8250/` (the `.mdt` renamed to `a650_zap.mbn`), which aren't published here. The module must match the running kernel.
 
 ## Layout
 

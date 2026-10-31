@@ -1,7 +1,7 @@
 From e0d3598421e9aa746cb33564a201565aa37d3b5a Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sat, 31 Oct 2026 13:49:09 +0100
-Subject: [PATCH 1/4] arm64: dts: qcom: add Samsung Galaxy Tab S7+ Wi-Fi
+Subject: [PATCH 1/5] arm64: dts: qcom: add Samsung Galaxy Tab S7+ Wi-Fi
  bring-up
 
 Board file, pogo keyboard driver and charger support. The pin hogs and

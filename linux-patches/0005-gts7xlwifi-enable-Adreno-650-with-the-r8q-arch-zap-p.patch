@@ -1,0 +1,209 @@
+From a65e2253e9bbae411fd4efb2bad57c74d732a9f3 Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sat, 31 Oct 2026 15:52:07 +0100
+Subject: [PATCH 5/5] gts7xlwifi: enable Adreno 650 with the r8q-arch zap
+ patches
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 14 ++++-
+ drivers/gpu/drm/msm/adreno/a6xx_gpu.c         | 31 ++++++++-
+ drivers/gpu/drm/msm/adreno/adreno_gpu.c       | 63 ++++++++++++++-----
+ 3 files changed, 89 insertions(+), 19 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 9442a0957..e2fc2230f 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -60,6 +60,18 @@ reboot-mode {
+ 	};
+ };
+ 
++&gmu {
++	status = "okay";
++};
++
++&gpu {
++	status = "okay";
++};
++
++&gpu_zap_shader {
++	firmware-name = "qcom/sm8250/a650_zap.mbn";
++};
++
+ &framebuffer {
+ 	width = <2800>;
+ 	height = <1752>;
+@@ -162,7 +174,7 @@ &qupv3_id_1 {
+ };
+ 
+ &i2c9 {
+-	clock-frequency = <400000>;
++	clock-frequency = <100000>;
+ 	status = "okay";
+ 
+ 	keyboard@2a {
+diff --git a/drivers/gpu/drm/msm/adreno/a6xx_gpu.c b/drivers/gpu/drm/msm/adreno/a6xx_gpu.c
+index 081e79ea4..e3ad393d3 100644
+--- a/drivers/gpu/drm/msm/adreno/a6xx_gpu.c
++++ b/drivers/gpu/drm/msm/adreno/a6xx_gpu.c
+@@ -16,6 +16,16 @@
+ 
+ #define GPU_PAS_ID 13
+ 
++/* r8q (Samsung Galaxy S20 FE 5G): TZ rejects the generic zap shader (-22) and
++ * hard-resets on the Samsung-signed one; kernel runs at EL1 under Samsung hyp. */
++static bool r8q_zap_secvid = true;
++MODULE_PARM_DESC(r8q_zap_secvid, "r8q: on zap auth failure, write SECVID_TRUST_CNTL=0 (upstream no-zap fallback)");
++module_param(r8q_zap_secvid, bool, 0600);
++
++static bool r8q_no_ppt;
++MODULE_PARM_DESC(r8q_no_ppt, "r8q: disable per-process pagetables (user contexts share the global VM)");
++module_param(r8q_no_ppt, bool, 0600);
++
+ static u64 a6xx_gmu_get_timestamp(struct msm_gpu *gpu)
+ {
+ 	struct adreno_gpu *adreno_gpu = to_adreno_gpu(gpu);
+@@ -1515,8 +1525,22 @@ static int hw_init(struct msm_gpu *gpu)
+ 			"Zap shader not enabled - using SECVID_TRUST_CNTL instead\n");
+ 		gpu_write(gpu, REG_A6XX_RBBM_SECVID_TRUST_CNTL, 0x0);
+ 		ret = 0;
++	} else if (r8q_zap_secvid) {
++		/*
++		 * r8q: zap auth is expected to fail (-22); attempt the no-zap
++		 * fallback anyway. If Samsung's hyp blocks the register this
++		 * faults (msm is loaded manually post-boot, so recoverable).
++		 */
++		dev_warn_once(gpu->dev->dev,
++			"r8q: zap auth failed (%d) - writing SECVID_TRUST_CNTL=0 anyway\n",
++			ret);
++		gpu_write(gpu, REG_A6XX_RBBM_SECVID_TRUST_CNTL, 0x0);
++		ret = 0;
+ 	} else {
+-		return ret;
++		dev_warn_once(gpu->dev->dev,
++			"r8q: zap auth failed (%d) - skipping secure-mode setup, assuming XBL left GPU non-secure\n",
++			ret);
++		ret = 0;
+ 	}
+ 
+ out:
+@@ -2380,6 +2404,11 @@ a6xx_create_private_vm(struct msm_gpu *gpu, bool kernel_managed)
+ {
+ 	struct msm_mmu *mmu;
+ 
++	/* r8q: ERR_PTR (not NULL) makes msm_gpu_create_private_vm fall back
++	 * to the global VM without touching to_msm_vm(vm)->pid. */
++	if (r8q_no_ppt)
++		return ERR_PTR(-ENODEV);
++
+ 	mmu = msm_iommu_pagetable_create(to_msm_vm(gpu->vm)->mmu, kernel_managed);
+ 
+ 	if (IS_ERR(mmu))
+diff --git a/drivers/gpu/drm/msm/adreno/adreno_gpu.c b/drivers/gpu/drm/msm/adreno/adreno_gpu.c
+index 5832dc25d..66b00afdd 100644
+--- a/drivers/gpu/drm/msm/adreno/adreno_gpu.c
++++ b/drivers/gpu/drm/msm/adreno/adreno_gpu.c
+@@ -28,6 +28,14 @@ module_param(address_space_size, ullong, 0600);
+ 
+ static bool zap_available = true;
+ 
++/* r8q: load the zap into a DMA-allocated buffer instead of the DT carveout
++ * (0x8681a000 sits next to the TZ/hyp carveout; Samsung's TZ hard-resets the
++ * SoC during PAS mem_setup/auth on it). Stock kgsl-hyp uses pil-tz-generic
++ * with NO fixed region, i.e. dynamically allocated RAM — this mirrors that. */
++static bool r8q_zap_dyn;
++MODULE_PARM_DESC(r8q_zap_dyn, "r8q: load zap shader via dma_alloc instead of the DT memory-region");
++module_param(r8q_zap_dyn, bool, 0600);
++
+ static int zap_shader_load_mdt(struct msm_gpu *gpu, const char *fwname,
+ 		u32 pasid)
+ {
+@@ -39,6 +47,7 @@ static int zap_shader_load_mdt(struct msm_gpu *gpu, const char *fwname,
+ 	phys_addr_t mem_phys;
+ 	ssize_t mem_size;
+ 	void *mem_region = NULL;
++	dma_addr_t dyn_dma = 0;
+ 	int ret;
+ 
+ 	if (!IS_ENABLED(CONFIG_ARCH_QCOM)) {
+@@ -58,12 +67,16 @@ static int zap_shader_load_mdt(struct msm_gpu *gpu, const char *fwname,
+ 		return -EPROBE_DEFER;
+ 	}
+ 
+-	ret = of_reserved_mem_region_to_resource(np, 0, &r);
+-	if (ret) {
+-		zap_available = false;
+-		return ret;
++	if (r8q_zap_dyn) {
++		mem_phys = 0;	/* allocated after we know mem_size */
++	} else {
++		ret = of_reserved_mem_region_to_resource(np, 0, &r);
++		if (ret) {
++			zap_available = false;
++			return ret;
++		}
++		mem_phys = r.start;
+ 	}
+-	mem_phys = r.start;
+ 
+ 	/*
+ 	 * Check for a firmware-name property.  This is the new scheme
+@@ -114,18 +127,32 @@ static int zap_shader_load_mdt(struct msm_gpu *gpu, const char *fwname,
+ 		goto out;
+ 	}
+ 
+-	if (mem_size > resource_size(&r)) {
+-		DRM_DEV_ERROR(dev,
+-			"memory region is too small to load the MDT\n");
+-		ret = -E2BIG;
+-		goto out;
+-	}
++	if (r8q_zap_dyn) {
++		/* Uncached coherent buffer; dma_handle == PA here (proven: the
++		 * mdt_loader metadata buffer on this same dev reaches TZ). */
++		mem_region = dma_alloc_coherent(dev, PAGE_ALIGN(mem_size),
++						&dyn_dma, GFP_KERNEL);
++		if (!mem_region) {
++			ret = -ENOMEM;
++			goto out;
++		}
++		mem_phys = dyn_dma;
++		DRM_DEV_INFO(dev, "r8q: zap region dma_alloc'd at %pa (%zd bytes)\n",
++			     &mem_phys, mem_size);
++	} else {
++		if (mem_size > resource_size(&r)) {
++			DRM_DEV_ERROR(dev,
++				"memory region is too small to load the MDT\n");
++			ret = -E2BIG;
++			goto out;
++		}
+ 
+-	/* Allocate memory for the firmware image */
+-	mem_region = memremap(mem_phys, mem_size,  MEMREMAP_WC);
+-	if (!mem_region) {
+-		ret = -ENOMEM;
+-		goto out;
++		/* Allocate memory for the firmware image */
++		mem_region = memremap(mem_phys, mem_size,  MEMREMAP_WC);
++		if (!mem_region) {
++			ret = -ENOMEM;
++			goto out;
++		}
+ 	}
+ 
+ 	/*
+@@ -165,7 +192,9 @@ static int zap_shader_load_mdt(struct msm_gpu *gpu, const char *fwname,
+ 		DRM_DEV_ERROR(dev, "Unable to authorize the image\n");
+ 
+ out:
+-	if (mem_region)
++	/* r8q_zap_dyn: deliberately never freed — after a successful auth the
++	 * region is owned by the secure world (loaded once per boot anyway). */
++	if (mem_region && !r8q_zap_dyn)
+ 		memunmap(mem_region);
+ 
+ 	release_firmware(fw);
+-- 
+2.56.0
+
