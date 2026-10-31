@@ -24,6 +24,8 @@ ip addr add 172.16.42.1/24 dev usb0 2>/dev/null; ip link set usb0 up 2>/dev/null
 (while :; do setsid -c sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'; sleep 1; done) &
 echo "gts7xlwifi bring-up: udc=$udc" > /dev/kmsg
 mount -t debugfs d /sys/kernel/debug
+# conn sampler: log edge counts so the onset of bouncing is visible
+(i=0; p=0; while [ $i -lt 40 ]; do c=$(grep pogo-conn /proc/interrupts | tr -s ' ' | cut -d' ' -f3); echo "--- conn +$((c-p)) total=$c" > /dev/kmsg; p=$c; i=$((i+1)); sleep 2; done) &
 # usb retry: the host misses the first connect, so rebind until configured
 (n=0; while [ $n -lt 20 ]; do sleep 8; n=$((n+1)); [ "$(cat /sys/class/udc/*/state)" = configured ] && break; /bin/usbroute >/dev/null 2>&1; echo > $G/UDC; sleep 1; echo "$udc" > $G/UDC; echo "--- usb rebind $n" > /dev/kmsg; done) &
 for t in 15 20 30 30; do

@@ -1,7 +1,8 @@
 # Galaxy Tab S7+ Wi-Fi (SM-T970, gts7xlwifi) mainline Linux
 
-Linux v7.3 on the Snapdragon 865 Tab S7+, booted through
-[Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium) UEFI. The approach follows
+Linux v7.3 on the Snapdragon 865 Tab S7+, booted directly from the Samsung bootloader
+(v1 boot image, gzip kernel, appended DTB) or through
+[Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium) UEFI. The UEFI approach follows
 [r8q-arch](https://github.com/Itzkristis/r8q-arch) for the Galaxy S20 FE.
 
 Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition first.
@@ -14,7 +15,7 @@ Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition
 | USB gadget (serial + NCM) | Working, connects about 85s after boot with no replug |
 | `reboot recovery` to TWRP | Working |
 | MAX77705 charger, fuel gauge | Working, limited to 500mA / 4.35V |
-| Pogo keyboard | Not working: MCU answers briefly, then stops |
+| Pogo keyboard | Working, with the `deferred_probe_timeout` workaround |
 | Touch, Wi-Fi, GPU, audio | Not started |
 
 ## Layout
@@ -44,4 +45,4 @@ aren't published because a live dump contains device identifiers.
 
 ## Keyboard status
 
-The MCU answers for a moment after power-on, then stops, and gpio43 bounces about 10 times a second while its rail is on. Stock is steady on the same battery. Ruled out: I2C traffic, charger, reset and boot pins, gpio93/gpio64, undeclared RPMh rails, S20 FE board drivers, and input pulls.
+The keyboard failed once the kernel's `sync_state` deadline passed and it dropped votes for unused resources. With `deferred_probe_timeout=600` it works, and the deadline only moves to 10 minutes. The specific resource isn't identified yet, so that is the real fix still to make.
