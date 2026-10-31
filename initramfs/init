@@ -34,7 +34,6 @@ for t in 15 20 30 30; do
 		echo "--- usb state=$(cat /sys/class/udc/*/state)"
 		echo "--- pogo irqs: $(grep -E 'pogo|a84000' /proc/interrupts | tr -s ' ' | cut -d' ' -f3,12- | tr '\n' ';')"
 		echo "--- pogo gpio: $(grep -E 'gpio(31|43) ' /sys/kernel/debug/gpio | tr -s ' ' | tr '\n' ';')"
-		/bin/pogotest 2>&1 | sed 's/^/--- pogotest: /'
 		for f in /sys/class/power_supply/*; do echo "--- psu $(basename $f): $(cat $f/status $f/online $f/capacity $f/voltage_now $f/current_now $f/constant_charge_current_max $f/input_current_limit 2>/dev/null | tr '\n' ' ')"; done
 	} > /dev/kmsg
 done

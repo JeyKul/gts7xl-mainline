@@ -15,7 +15,7 @@ Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition
 | USB gadget (serial + NCM) | Working, connects about 85s after boot with no replug |
 | `reboot recovery` to TWRP | Working |
 | MAX77705 charger, fuel gauge | Working, limited to 500mA / 4.35V |
-| Pogo keyboard | Working, with the `deferred_probe_timeout` workaround |
+| Pogo keyboard | Working |
 | Touch, Wi-Fi, GPU, audio | Not started |
 
 ## Layout
@@ -43,6 +43,6 @@ aren't published because a live dump contains device identifiers.
 - The framebuffer is 2800x1752.
 - `max77705` routes the USB data lines; without command `0x06 0x09` the host needs a replug.
 
-## Keyboard status
+## Keyboard notes
 
-The keyboard failed once the kernel's `sync_state` deadline passed and it dropped votes for unused resources. With `deferred_probe_timeout=600` it works, and the deadline only moves to 10 minutes. The specific resource isn't identified yet, so that is the real fix still to make.
+Don't send the MCU unsolicited I2C transfers. A test program that polled it outside its interrupt sent it into a reset loop, seen as gpio43 bouncing about 10 times a second, and that caused most of the earlier failures. The MCU only sends frames when it has something to report.
