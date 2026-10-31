@@ -1,0 +1,36 @@
+#!/bin/busybox sh
+# Early bring-up shell. Never mounts or writes to UFS.
+B=/bin/busybox
+$B --install -s /bin
+mount -t proc proc /proc; mount -t sysfs sys /sys; mount -t devtmpfs dev /dev
+mkdir -p /dev/pts /sys/fs/pstore; mount -t devpts devpts /dev/pts; mount -t pstore pstore /sys/fs/pstore
+mount -t configfs configfs /sys/kernel/config
+G=/sys/kernel/config/usb_gadget/g1
+mkdir -p $G/strings/0x409 $G/configs/c.1/strings/0x409 $G/functions/acm.0 $G/functions/ncm.0
+echo 0x1d6b > $G/idVendor; echo 0x0104 > $G/idProduct
+echo mainline > $G/strings/0x409/manufacturer; echo gts7xlwifi > $G/strings/0x409/product; echo gts7xl0001 > $G/strings/0x409/serialnumber
+echo bringup > $G/configs/c.1/strings/0x409/configuration
+ln -s $G/functions/acm.0 $G/configs/c.1/; ln -s $G/functions/ncm.0 $G/configs/c.1/
+for i in 1 2 3 4 5 6 7 8 9 10; do
+	udc=$(ls /sys/class/udc 2>/dev/null | head -1)
+	[ -n "$udc" ] && break; sleep 1
+done
+[ -n "$udc" ] && echo "$udc" > $G/UDC
+ip addr add 172.16.42.1/24 dev usb0 2>/dev/null; ip link set usb0 up 2>/dev/null
+(while :; do setsid -c sh -c 'stty -F /dev/ttyGS0 sane -echo 2>/dev/null; exec sh </dev/ttyGS0 >/dev/ttyGS0 2>&1'; sleep 1; done) &
+(while :; do setsid -c sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'; sleep 1; done) &
+echo "gts7xlwifi bring-up: udc=$udc" > /dev/kmsg
+mount -t debugfs d /sys/kernel/debug
+# usb retry: the host misses the first connect, so rebind until configured
+(n=0; while [ $n -lt 20 ]; do sleep 8; n=$((n+1)); [ "$(cat /sys/class/udc/*/state)" = configured ] && break; echo > $G/UDC; sleep 1; echo "$udc" > $G/UDC; echo "--- usb rebind $n" > /dev/kmsg; done) &
+for t in 15 20 30 30; do
+	sleep $t
+	{
+		echo "--- usb state=$(cat /sys/class/udc/*/state)"
+		echo "--- pogo irqs: $(grep -E 'pogo|a84000' /proc/interrupts | tr -s ' ' | cut -d' ' -f3,12- | tr '\n' ';')"
+		echo "--- pogo gpio: $(grep -E 'gpio(31|43) ' /sys/kernel/debug/gpio | tr -s ' ' | tr '\n' ';')"
+		/bin/pogotest 2>&1 | sed 's/^/--- pogotest: /'
+		for f in /sys/class/power_supply/*; do echo "--- psu $(basename $f): $(cat $f/status $f/online $f/capacity $f/voltage_now $f/current_now $f/constant_charge_current_max $f/input_current_limit 2>/dev/null | tr '\n' ' ')"; done
+	} > /dev/kmsg
+done
+while :; do sleep 3600; done

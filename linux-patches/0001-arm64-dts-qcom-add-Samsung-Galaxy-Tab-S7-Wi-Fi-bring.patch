@@ -1,0 +1,809 @@
+From e0d3598421e9aa746cb33564a201565aa37d3b5a Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sat, 31 Oct 2026 13:49:09 +0100
+Subject: [PATCH] arm64: dts: qcom: add Samsung Galaxy Tab S7+ Wi-Fi bring-up
+
+Board file, pogo keyboard driver and charger support. The pin hogs and
+extra logging are temporary bring-up aids.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ arch/arm64/boot/dts/qcom/Makefile             |   1 +
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 304 +++++++++++++++
+ drivers/i2c/busses/i2c-qcom-geni.c            |  10 +-
+ drivers/input/keyboard/Kconfig                |   8 +
+ drivers/input/keyboard/Makefile               |   1 +
+ drivers/input/keyboard/samsung-stm32-pogo.c   | 364 ++++++++++++++++++
+ drivers/mfd/max77705.c                        |  11 +-
+ 7 files changed, 695 insertions(+), 4 deletions(-)
+ create mode 100644 arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+ create mode 100644 drivers/input/keyboard/samsung-stm32-pogo.c
+
+diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
+index 1c86e7e98..92f3a645c 100644
+--- a/arch/arm64/boot/dts/qcom/Makefile
++++ b/arch/arm64/boot/dts/qcom/Makefile
+@@ -364,6 +364,7 @@ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-sony-xperia-kumano-bahamut.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8150-sony-xperia-kumano-griffin.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-hdk.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-mtp.dtb
++dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-gts7xlwifi.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-r8q.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-x1q.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-sony-xperia-edo-pdx203.dtb
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+new file mode 100644
+index 000000000..b44951f7f
+--- /dev/null
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -0,0 +1,304 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++/dts-v1/;
++
++#include <dt-bindings/clock/qcom,dispcc-sm8250.h>
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/interrupt-controller/irq.h>
++#include "sm8250-samsung-common.dtsi"
++#include "pm8150l.dtsi"
++
++/ {
++	model = "Samsung Galaxy Tab S7+ (Wi-Fi)";
++	compatible = "samsung,gts7xlwifi", "qcom,sm8250";
++	chassis-type = "tablet";
++
++	/* The bootloader matches these against base DTBs before applying dtbo */
++	qcom,msm-id = <356 0x20001>;
++	qcom,board-id = <0 0>;
++
++	/* Stock limits are 4.38V and 3.15A; stay conservative during bring-up */
++	battery: battery {
++		compatible = "simple-battery";
++		voltage-max-design-microvolt = <4350000>;
++		voltage-min-design-microvolt = <3400000>;
++		over-voltage-threshold-microvolt = <4500000>;
++		charge-full-design-microamp-hours = <10090000>;
++		constant-charge-voltage-max-microvolt = <4350000>;
++		constant-charge-current-max-microamp = <500000>;
++	};
++
++	pogo_vdd: pogo-vdd-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "pogo_vdd_3v3";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&tlmm 70 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++	};
++};
++
++&pon {
++	mode-recovery = <0x01>;
++	mode-bootloader = <0x02>;
++};
++
++&soc {
++	imem@146bf000 {
++		compatible = "syscon", "simple-mfd";
++		reg = <0x0 0x146bf000 0x0 0x1000>;
++
++		/* Stock also passes the boot target in IMEM */
++		reboot-mode {
++			compatible = "syscon-reboot-mode";
++			offset = <0x65c>;
++			mask = <0xffffffff>;
++			mode-recovery = <0x77665502>;
++			mode-bootloader = <0x77665500>;
++		};
++	};
++};
++
++&framebuffer {
++	width = <2800>;
++	height = <1752>;
++	stride = <(2800 * 4)>;
++	/* Keep MDSS powered for the firmware-initialised scanout */
++	power-domains = <&dispcc MDSS_GDSC>;
++};
++
++&dispcc {
++	/* The firmware drives the panel, so Linux must not touch these */
++	protected-clocks = <0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57>;
++};
++
++&qupv3_id_0 {
++	status = "okay";
++};
++
++&i2c0 {
++	status = "okay";
++
++	max77705: pmic@66 {
++		compatible = "maxim,max77705";
++		reg = <0x66>;
++		interrupt-parent = <&pm8150l_gpios>;
++		interrupts = <11 IRQ_TYPE_LEVEL_LOW>;
++		interrupt-controller;
++		#interrupt-cells = <1>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&max77705_int_default>;
++	};
++
++	max77705_charger: charger@69 {
++		compatible = "maxim,max77705-charger";
++		reg = <0x69>;
++		monitored-battery = <&battery>;
++		interrupt-parent = <&max77705>;
++		interrupts = <0>;
++	};
++
++	fuel-gauge@36 {
++		compatible = "maxim,max77705-battery";
++		reg = <0x36>;
++		maxim,rsns-microohm = <5000>;
++	};
++};
++
++&pm8150l_gpios {
++	max77705_int_default: max77705-int-default-state {
++		pins = "gpio11";
++		function = "normal";
++		input-enable;
++		bias-disable;
++		power-source = <0>;
++	};
++};
++
++&qupv3_id_1 {
++	status = "okay";
++};
++
++&i2c9 {
++	clock-frequency = <400000>;
++	status = "okay";
++
++	keyboard@2a {
++		compatible = "samsung,stm32-pogo-keyboard";
++		reg = <0x2a>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <31 IRQ_TYPE_LEVEL_LOW>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pogo_default>;
++		vdd-supply = <&pogo_vdd>;
++		conn-gpios = <&tlmm 43 GPIO_ACTIVE_HIGH>;
++		reset-gpios = <&tlmm 174 GPIO_ACTIVE_LOW>;
++		boot-gpios = <&tlmm 172 GPIO_ACTIVE_HIGH>;
++		keypad,num-rows = <8>;
++		keypad,num-columns = <24>;
++		linux,keymap = <
++			0x0004002C
++			0x00050056
++			0x0007002F
++			0x00080032
++			0x0009006C
++			0x000B0039
++			0x000C0067
++			0x00100001
++			0x00110072
++			0x001602C2
++			0x010201d0
++			0x0103007D
++			0x0104001E
++			0x0105002D
++			0x01060020
++			0x01070030
++			0x01090033
++			0x010A0034
++			0x010B0035
++			0x011002C1
++			0x01110073
++			0x01160066
++			0x0202007A
++			0x02040010
++			0x0206002E
++			0x02070021
++			0x02080024
++			0x02090025
++			0x020A0026
++			0x020B0027
++			0x020D001C
++			0x021000FE
++			0x021100A5
++			0x02160068
++			0x03020038
++			0x0304000F
++			0x03050011
++			0x03060012
++			0x03070022
++			0x03080023
++			0x03090017
++			0x030A0028
++			0x030B0019
++			0x031000AC
++			0x031100A4
++			0x0316006D
++			0x0400003A
++			0x04010064
++			0x04040002
++			0x04050003
++			0x04060004
++			0x04070013
++			0x04080016
++			0x04090009
++			0x040A0018
++			0x040B000B
++			0x040F002B
++			0x041000E0
++			0x041100A3
++			0x0416006B
++			0x0501001D
++			0x0503006A
++			0x05040029
++			0x0505003E
++			0x05060041
++			0x05070014
++			0x05080015
++			0x05090044
++			0x050A001A
++			0x050B000E
++			0x050D000C
++			0x050F001B
++			0x051000E1
++			0x051102C5
++			0x051502BD
++			0x06000036
++			0x06010069
++			0x0604003B
++			0x0605003D
++			0x06060040
++			0x06070005
++			0x06080008
++			0x06090043
++			0x060A000A
++			0x060B0058
++			0x060C0031
++			0x0610007D
++			0x0611006F
++			0x0700002A
++			0x070102C6
++			0x0703001F
++			0x07040001
++			0x0705003C
++			0x0706003F
++			0x07070006
++			0x07080007
++			0x07090042
++			0x070A000D
++			0x070B0057
++			0x070D0063
++			0x070E006F
++			0x07100071
++			0x07110214
++			0x07120213
++		>;
++	};
++};
++
++&tlmm {
++	/* gpio43 is the pogo connection detect line on this board */
++	gpio-reserved-ranges = <20 4>, <40 3>;
++
++	/* Bring-up test: match the stock state of these power enables */
++	spen-3v3-hog {
++		gpio-hog;
++		gpios = <93 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "vdd_spen_3p3";
++	};
++
++	grip-ldo-hog {
++		gpio-hog;
++		gpios = <64 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "grip_ldo";
++	};
++
++	pogo_default: pogo-default-state {
++		int-pins {
++			pins = "gpio31";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++
++		conn-pins {
++			pins = "gpio43";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-disable;
++		};
++
++		ldo-en-pins {
++			pins = "gpio70";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-disable;
++		};
++
++		boot-pins {
++			pins = "gpio172";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-disable;
++		};
++
++		reset-pins {
++			pins = "gpio174";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-disable;
++		};
++	};
++};
+diff --git a/drivers/i2c/busses/i2c-qcom-geni.c b/drivers/i2c/busses/i2c-qcom-geni.c
+index c4c6202ff..176218e9b 100644
+--- a/drivers/i2c/busses/i2c-qcom-geni.c
++++ b/drivers/i2c/busses/i2c-qcom-geni.c
+@@ -183,6 +183,10 @@ struct geni_i2c_clk_fld {
+  * clk_freq_out = t / t_cycle
+  * source_clock = 19.2 MHz
+  */
++
++static bool r8q_force_fifo;
++module_param(r8q_force_fifo, bool, 0644);
++MODULE_PARM_DESC(r8q_force_fifo, "r8q: ignore FIFO_IF_DISABLE and force FIFO mode");
+ static const struct geni_i2c_clk_fld geni_i2c_clk_map_19p2mhz[] = {
+ 	{ I2C_MAX_STANDARD_MODE_FREQ, 7, 10, 12, 26 },
+ 	{ I2C_MAX_FAST_MODE_FREQ, 2,  5, 11, 22 },
+@@ -525,7 +529,7 @@ static int geni_i2c_rx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 	size_t len = msg->len;
+ 	struct i2c_msg *cur;
+ 
+-	dma_buf = gi2c->no_dma ? NULL : i2c_get_dma_safe_msg_buf(msg, 32);
++	dma_buf = gi2c->no_dma ? NULL : i2c_get_dma_safe_msg_buf(msg, r8q_force_fifo ? 1 : 32);
+ 	if (dma_buf)
+ 		geni_se_select_mode(se, GENI_SE_DMA);
+ 	else
+@@ -564,7 +568,7 @@ static int geni_i2c_tx_one_msg(struct geni_i2c_dev *gi2c, struct i2c_msg *msg,
+ 	size_t len = msg->len;
+ 	struct i2c_msg *cur;
+ 
+-	dma_buf = gi2c->no_dma ? NULL : i2c_get_dma_safe_msg_buf(msg, 32);
++	dma_buf = gi2c->no_dma ? NULL : i2c_get_dma_safe_msg_buf(msg, r8q_force_fifo ? 1 : 32);
+ 	if (dma_buf)
+ 		geni_se_select_mode(se, GENI_SE_DMA);
+ 	else
+@@ -1095,7 +1099,7 @@ static int geni_i2c_init(struct geni_i2c_dev *gi2c)
+ 		fifo_disable = false;
+ 		gi2c->no_dma = true;
+ 	} else {
+-		fifo_disable = readl_relaxed(gi2c->se.base + GENI_IF_DISABLE_RO) & FIFO_IF_DISABLE;
++		fifo_disable = r8q_force_fifo ? false : (readl_relaxed(gi2c->se.base + GENI_IF_DISABLE_RO) & FIFO_IF_DISABLE);
+ 	}
+ 
+ 	if (fifo_disable) {
+diff --git a/drivers/input/keyboard/Kconfig b/drivers/input/keyboard/Kconfig
+index d8c64f333..01bdc6f66 100644
+--- a/drivers/input/keyboard/Kconfig
++++ b/drivers/input/keyboard/Kconfig
+@@ -194,6 +194,14 @@ config KEYBOARD_EP93XX
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called ep93xx_keypad.
+ 
++config KEYBOARD_SAMSUNG_STM32_POGO
++	tristate "Samsung Book Cover pogo keyboard"
++	depends on I2C && OF
++	select INPUT_MATRIXKMAP
++	help
++	  Say Y here to support Samsung Book Cover keyboards attached
++	  through the pogo connector and an STM32 MCU.
++
+ config KEYBOARD_GPIO
+ 	tristate "GPIO Buttons"
+ 	depends on GPIOLIB || COMPILE_TEST
+diff --git a/drivers/input/keyboard/Makefile b/drivers/input/keyboard/Makefile
+index 60bb7baf8..eddb1a900 100644
+--- a/drivers/input/keyboard/Makefile
++++ b/drivers/input/keyboard/Makefile
+@@ -71,3 +71,4 @@ obj-$(CONFIG_KEYBOARD_TEGRA)		+= tegra-kbc.o
+ obj-$(CONFIG_KEYBOARD_TM2_TOUCHKEY)	+= tm2-touchkey.o
+ obj-$(CONFIG_KEYBOARD_TWL4030)		+= twl4030_keypad.o
+ obj-$(CONFIG_KEYBOARD_XTKBD)		+= xtkbd.o
++obj-$(CONFIG_KEYBOARD_SAMSUNG_STM32_POGO)	+= samsung-stm32-pogo.o
+diff --git a/drivers/input/keyboard/samsung-stm32-pogo.c b/drivers/input/keyboard/samsung-stm32-pogo.c
+new file mode 100644
+index 000000000..9189b86e8
+--- /dev/null
++++ b/drivers/input/keyboard/samsung-stm32-pogo.c
+@@ -0,0 +1,364 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Keyboard driver for Samsung Book Cover keyboards attached through the pogo
++ * connector. An STM32 MCU on the tablet exposes key events over I2C.
++ */
++
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/input.h>
++#include <linux/input/matrix_keypad.h>
++#include <linux/interrupt.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/pinctrl/consumer.h>
++#include <linux/regulator/consumer.h>
++#include <linux/unaligned.h>
++#include <linux/workqueue.h>
++
++#define POGO_ROW_SHIFT		5
++#define POGO_MAX_EVENT_SIZE	100
++#define POGO_HDR_SIZE		3
++#define POGO_I2C_RETRIES	3
++
++#define POGO_ID_MCU		1
++#define POGO_ID_TOUCHPAD	2
++#define POGO_ID_KEYPAD		3
++#define POGO_ID_HALL		4
++
++#define POGO_CMD_GET_MODE	0x01
++#define POGO_CMD_CHECK_VERSION	0x02
++#define POGO_CMD_CHECK_CRC	0x03
++#define POGO_CMD_TC_VERSION	0x18
++#define POGO_CMD_TC_CRC		0x19
++#define POGO_CMD_TC_RESOLUTION	0x1a
++
++#define POGO_KEY_PRESS		BIT(0)
++#define POGO_KEY_COL(v)		(((v) >> 1) & 0x1f)
++#define POGO_KEY_ROW(v)		(((v) >> 6) & 0x7)
++
++static bool pogo_quiet;
++module_param(pogo_quiet, bool, 0644);
++MODULE_PARM_DESC(pogo_quiet, "Power the MCU but leave its interrupt off, for bring-up");
++
++struct pogo_kbd {
++	struct i2c_client *client;
++	struct input_dev *input;
++	struct regulator *vdd;
++	struct gpio_desc *conn;
++	struct delayed_work conn_work;
++	unsigned int rows;
++	unsigned int cols;
++	bool connected;
++	bool irq_on;
++	unsigned short keycodes[8 << POGO_ROW_SHIFT];
++};
++
++static void pogo_release_keys(struct pogo_kbd *kbd)
++{
++	unsigned int i;
++
++	for (i = 0; i < ARRAY_SIZE(kbd->keycodes); i++)
++		if (kbd->keycodes[i])
++			input_report_key(kbd->input, kbd->keycodes[i], 0);
++	input_sync(kbd->input);
++}
++
++static void pogo_report_keys(struct pogo_kbd *kbd, const u8 *data, unsigned int len)
++{
++	unsigned int i;
++
++	for (i = 0; i + 2 <= len; i += 2) {
++		u16 ev = get_unaligned_le16(data + i);
++		unsigned int row = POGO_KEY_ROW(ev);
++		unsigned int col = POGO_KEY_COL(ev);
++		unsigned int code;
++
++		if (row >= kbd->rows || col >= kbd->cols)
++			continue;
++
++		code = MATRIX_SCAN_CODE(row, col, POGO_ROW_SHIFT);
++		input_event(kbd->input, EV_MSC, MSC_SCAN, code);
++		input_report_key(kbd->input, kbd->keycodes[code], ev & POGO_KEY_PRESS);
++		input_sync(kbd->input);
++	}
++}
++
++static int pogo_xfer(struct i2c_client *client, const u8 *tx, int txlen, u8 *rx, int rxlen)
++{
++	int retry, ret = 0;
++
++	for (retry = 0; retry < POGO_I2C_RETRIES; retry++) {
++		ret = tx ? i2c_master_send(client, tx, txlen) : i2c_master_recv(client, rx, rxlen);
++		if (ret == (tx ? txlen : rxlen))
++			return 0;
++		msleep(10);
++	}
++
++	return ret < 0 ? ret : -EIO;
++}
++
++static int pogo_reg_read(struct i2c_client *client, u8 id, u8 reg, u8 *val, unsigned int len)
++{
++	u8 req[POGO_HDR_SIZE] = { POGO_HDR_SIZE + 1, 0, id };
++	u8 hdr[POGO_HDR_SIZE];
++	unsigned int size;
++	int ret;
++
++	ret = pogo_xfer(client, req, sizeof(req), NULL, 0);
++	if (!ret)
++		ret = pogo_xfer(client, &reg, 1, NULL, 0);
++	if (!ret)
++		ret = pogo_xfer(client, NULL, 0, hdr, sizeof(hdr));
++	if (ret)
++		return ret;
++
++	size = get_unaligned_le16(hdr);
++	if (size <= POGO_HDR_SIZE || size - POGO_HDR_SIZE > len)
++		return -EIO;
++
++	return pogo_xfer(client, NULL, 0, val, size - POGO_HDR_SIZE);
++}
++
++/* The MCU expects these queries after it announces itself with an empty frame */
++static void pogo_handshake(struct pogo_kbd *kbd)
++{
++	static const struct {
++		u8 id;
++		u8 reg;
++		u8 len;
++		const char *name;
++	} steps[] = {
++		{ POGO_ID_MCU, POGO_CMD_CHECK_VERSION, 4, "version" },
++		{ POGO_ID_MCU, POGO_CMD_GET_MODE, 1, "mode" },
++		{ POGO_ID_MCU, POGO_CMD_CHECK_CRC, 4, "crc" },
++		{ POGO_ID_TOUCHPAD, POGO_CMD_TC_VERSION, 6, "tc version" },
++		{ POGO_ID_TOUCHPAD, POGO_CMD_TC_CRC, 2, "tc crc" },
++		{ POGO_ID_TOUCHPAD, POGO_CMD_TC_RESOLUTION, 4, "tc resolution" },
++	};
++	struct device *dev = &kbd->client->dev;
++	u8 val[6];
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < ARRAY_SIZE(steps); i++) {
++		memset(val, 0, sizeof(val));
++		ret = pogo_reg_read(kbd->client, steps[i].id, steps[i].reg, val, steps[i].len);
++		if (ret)
++			dev_err(dev, "%s read failed: %d\n", steps[i].name, ret);
++		else
++			dev_info(dev, "%s: %*ph\n", steps[i].name, steps[i].len, val);
++		if (steps[i].reg == POGO_CMD_GET_MODE)
++			msleep(200);
++	}
++}
++
++static irqreturn_t pogo_irq(int irq, void *dev_id)
++{
++	static const u8 req[POGO_HDR_SIZE] = { POGO_HDR_SIZE, 0, POGO_ID_MCU };
++	struct pogo_kbd *kbd = dev_id;
++	struct i2c_client *client = kbd->client;
++	u8 hdr[POGO_HDR_SIZE];
++	u8 data[POGO_MAX_EVENT_SIZE];
++	unsigned int size;
++	int ret;
++
++	ret = pogo_xfer(client, req, sizeof(req), NULL, 0);
++	if (ret) {
++		dev_err_ratelimited(&client->dev, "header write failed: %d\n", ret);
++		goto err;
++	}
++
++	ret = pogo_xfer(client, NULL, 0, hdr, sizeof(hdr));
++	if (ret) {
++		dev_err_ratelimited(&client->dev, "header read failed: %d\n", ret);
++		goto err;
++	}
++
++	size = get_unaligned_le16(hdr);
++	dev_info_ratelimited(&client->dev, "frame size=%u id=%u\n", size, hdr[2]);
++	/* The MCU sends an empty frame after it (re)starts */
++	if (size <= POGO_HDR_SIZE || size - POGO_HDR_SIZE > sizeof(data)) {
++		pogo_handshake(kbd);
++		return IRQ_HANDLED;
++	}
++	size -= POGO_HDR_SIZE;
++
++	ret = pogo_xfer(client, NULL, 0, data, size);
++	if (ret) {
++		dev_err_ratelimited(&client->dev, "payload read failed: %d\n", ret);
++		goto err;
++	}
++
++	/* Noise from the connector settling */
++	if (size >= 3 && data[0] == 0x03 && data[1] == 0x00 && data[2] == 0x05)
++		return IRQ_HANDLED;
++
++	switch (hdr[2]) {
++	case POGO_ID_KEYPAD:
++		pogo_report_keys(kbd, data, size);
++		break;
++	case POGO_ID_HALL:
++		pogo_release_keys(kbd);
++		break;
++	default:
++		break;
++	}
++
++	return IRQ_HANDLED;
++
++err:
++	pogo_release_keys(kbd);
++	return IRQ_HANDLED;
++}
++
++static void pogo_set_connected(struct pogo_kbd *kbd, bool connected)
++{
++	int ret;
++
++	if (connected == kbd->connected)
++		return;
++
++	if (connected) {
++		ret = regulator_enable(kbd->vdd);
++		if (ret) {
++			dev_err(&kbd->client->dev, "failed to enable vdd: %d\n", ret);
++			return;
++		}
++		msleep(50);
++		if (!pogo_quiet)
++			enable_irq(kbd->client->irq);
++		kbd->irq_on = !pogo_quiet;
++	} else {
++		if (kbd->irq_on)
++			disable_irq(kbd->client->irq);
++		pogo_release_keys(kbd);
++		regulator_disable(kbd->vdd);
++	}
++
++	kbd->connected = connected;
++	dev_info(&kbd->client->dev, "keyboard %s\n", connected ? "attached" : "detached");
++}
++
++static void pogo_conn_work(struct work_struct *work)
++{
++	struct pogo_kbd *kbd = container_of(work, struct pogo_kbd, conn_work.work);
++
++	pogo_set_connected(kbd, gpiod_get_value_cansleep(kbd->conn));
++}
++
++static irqreturn_t pogo_conn_irq(int irq, void *dev_id)
++{
++	struct pogo_kbd *kbd = dev_id;
++
++	mod_delayed_work(system_wq, &kbd->conn_work, msecs_to_jiffies(250));
++	return IRQ_HANDLED;
++}
++
++static void pogo_shutdown_action(void *data)
++{
++	struct pogo_kbd *kbd = data;
++
++	cancel_delayed_work_sync(&kbd->conn_work);
++	pogo_set_connected(kbd, false);
++}
++
++static int pogo_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct gpio_desc *reset, *boot;
++	struct pogo_kbd *kbd;
++	int conn_irq;
++	int ret;
++
++	kbd = devm_kzalloc(dev, sizeof(*kbd), GFP_KERNEL);
++	if (!kbd)
++		return -ENOMEM;
++
++	kbd->client = client;
++	INIT_DELAYED_WORK(&kbd->conn_work, pogo_conn_work);
++
++	kbd->vdd = devm_regulator_get(dev, "vdd");
++	if (IS_ERR(kbd->vdd))
++		return dev_err_probe(dev, PTR_ERR(kbd->vdd), "failed to get vdd\n");
++
++	kbd->conn = devm_gpiod_get(dev, "conn", GPIOD_IN);
++	if (IS_ERR(kbd->conn))
++		return dev_err_probe(dev, PTR_ERR(kbd->conn), "failed to get conn gpio\n");
++
++	reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
++	if (IS_ERR(reset))
++		return dev_err_probe(dev, PTR_ERR(reset), "failed to get reset gpio\n");
++
++	boot = devm_gpiod_get(dev, "boot", GPIOD_OUT_LOW);
++	if (IS_ERR(boot))
++		return dev_err_probe(dev, PTR_ERR(boot), "failed to get boot gpio\n");
++
++	ret = of_property_read_u32(dev->of_node, "keypad,num-rows", &kbd->rows);
++	if (ret)
++		return ret;
++	ret = of_property_read_u32(dev->of_node, "keypad,num-columns", &kbd->cols);
++	if (ret)
++		return ret;
++	if (kbd->rows > 8 || kbd->cols > BIT(POGO_ROW_SHIFT))
++		return -EINVAL;
++
++	kbd->input = devm_input_allocate_device(dev);
++	if (!kbd->input)
++		return -ENOMEM;
++
++	kbd->input->name = "Samsung Book Cover Keyboard";
++	kbd->input->id.bustype = BUS_I2C;
++	input_set_capability(kbd->input, EV_MSC, MSC_SCAN);
++
++	ret = matrix_keypad_build_keymap(NULL, NULL, kbd->rows, BIT(POGO_ROW_SHIFT),
++					 kbd->keycodes, kbd->input);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to build keymap\n");
++
++	ret = input_register_device(kbd->input);
++	if (ret)
++		return ret;
++
++	ret = devm_request_threaded_irq(dev, client->irq, NULL, pogo_irq,
++					IRQF_ONESHOT | IRQF_NO_AUTOEN,
++					"pogo-keyboard", kbd);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to request irq\n");
++
++	ret = devm_add_action_or_reset(dev, pogo_shutdown_action, kbd);
++	if (ret)
++		return ret;
++
++	conn_irq = gpiod_to_irq(kbd->conn);
++	if (conn_irq < 0)
++		return dev_err_probe(dev, conn_irq, "failed to get conn irq\n");
++
++	ret = devm_request_threaded_irq(dev, conn_irq, NULL, pogo_conn_irq,
++					IRQF_ONESHOT | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
++					"pogo-conn", kbd);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to request conn irq\n");
++
++	schedule_delayed_work(&kbd->conn_work, 0);
++	return 0;
++}
++
++static const struct of_device_id pogo_of_match[] = {
++	{ .compatible = "samsung,stm32-pogo-keyboard" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, pogo_of_match);
++
++static struct i2c_driver pogo_driver = {
++	.driver = {
++		.name = "samsung-stm32-pogo",
++		.of_match_table = pogo_of_match,
++	},
++	.probe = pogo_probe,
++};
++module_i2c_driver(pogo_driver);
++
++MODULE_DESCRIPTION("Samsung Book Cover pogo keyboard driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/mfd/max77705.c b/drivers/mfd/max77705.c
+index e98c76d6b..282e658fc 100644
+--- a/drivers/mfd/max77705.c
++++ b/drivers/mfd/max77705.c
+@@ -105,8 +105,17 @@ static int max77705_i2c_probe(struct i2c_client *i2c)
+ 		return -ENODEV;
+ 
+ 	pmic_rev = pmic_rev_value & MAX77705_REVISION_MASK;
+-	if (pmic_rev != MAX77705_PASS3)
++	/*
++	 * r8q (Galaxy S20 FE): this unit's MAX77705 reports PASS2 (rev 0x2),
++	 * but mainline only whitelisted PASS3. The charger/fuel-gauge register
++	 * layout is the same on PASS2 -- Samsung's downstream driver drives both
++	 * -- so accept PASS2 as well and just note it.
++	 */
++	if (pmic_rev != MAX77705_PASS3 && pmic_rev != MAX77705_PASS2)
+ 		return dev_err_probe(dev, -ENODEV, "Rev.0x%x is not tested\n", pmic_rev);
++	if (pmic_rev != MAX77705_PASS3)
++		dev_info(dev, "accepting untested MAX77705 rev 0x%x (PASS%d)\n",
++			 pmic_rev, pmic_rev);
+ 
+ 	/* Active Discharge Enable */
+ 	regmap_update_bits(max77705->regmap, MAX77705_PMIC_REG_MAINCTRL1, 1, 1);
+-- 
+2.56.0
+
