@@ -16,7 +16,12 @@ Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition
 | `reboot recovery` to TWRP | Working |
 | MAX77705 charger, fuel gauge | Working, limited to 500mA / 4.35V |
 | Pogo keyboard | Working |
+| Sway on Alpine v3.22 (software rendering) | Working |
 | Touch, Wi-Fi, GPU, audio | Not started |
+
+## Desktop
+
+Alpine and Sway live on `userdata` (formatted ext4, which erases Android data). In TWRP, run `rootfs/twrp-setup.sh` with the packages pushed to `/tmp`, then `rootfs/rootcfg.sh`. The initramfs switches to it at boot, with a fallback shell if it's missing. The serial shell and the `user` account have no password.
 
 ## Layout
 
