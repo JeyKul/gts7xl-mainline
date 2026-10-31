@@ -6,6 +6,9 @@ mount -t proc proc /proc; mount -t sysfs sys /sys; mount -t devtmpfs dev /dev
 mkdir -p /dev/pts /sys/fs/pstore; mount -t devpts devpts /dev/pts; mount -t pstore pstore /sys/fs/pstore
 mount -t configfs configfs /sys/kernel/config
 G=/sys/kernel/config/usb_gadget/g1
+# usb retry below; the data switch has to be routed before the host can see us
+for i in 1 2 3 4 5 6 7 8; do [ -e /dev/i2c-0 ] && break; sleep 1; done
+/bin/usbroute > /dev/kmsg 2>&1
 mkdir -p $G/strings/0x409 $G/configs/c.1/strings/0x409 $G/functions/acm.0 $G/functions/ncm.0
 echo 0x1d6b > $G/idVendor; echo 0x0104 > $G/idProduct
 echo mainline > $G/strings/0x409/manufacturer; echo gts7xlwifi > $G/strings/0x409/product; echo gts7xl0001 > $G/strings/0x409/serialnumber
@@ -22,7 +25,7 @@ ip addr add 172.16.42.1/24 dev usb0 2>/dev/null; ip link set usb0 up 2>/dev/null
 echo "gts7xlwifi bring-up: udc=$udc" > /dev/kmsg
 mount -t debugfs d /sys/kernel/debug
 # usb retry: the host misses the first connect, so rebind until configured
-(n=0; while [ $n -lt 20 ]; do sleep 8; n=$((n+1)); [ "$(cat /sys/class/udc/*/state)" = configured ] && break; echo > $G/UDC; sleep 1; echo "$udc" > $G/UDC; echo "--- usb rebind $n" > /dev/kmsg; done) &
+(n=0; while [ $n -lt 20 ]; do sleep 8; n=$((n+1)); [ "$(cat /sys/class/udc/*/state)" = configured ] && break; /bin/usbroute >/dev/null 2>&1; echo > $G/UDC; sleep 1; echo "$udc" > $G/UDC; echo "--- usb rebind $n" > /dev/kmsg; done) &
 for t in 15 20 30 30; do
 	sleep $t
 	{
