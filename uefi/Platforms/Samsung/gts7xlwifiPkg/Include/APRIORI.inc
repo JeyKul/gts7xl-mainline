@@ -2,7 +2,7 @@ APRIORI DXE {
   INF MdeModulePkg/Core/Dxe/DxeMain.inf
   INF MdeModulePkg/Universal/PCD/Dxe/Pcd.inf
 
-  INF Binaries/r8q/QcomPkg/Drivers/EnvDxe/EnvDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/EnvDxe/EnvDxe.inf
 
   INF MdeModulePkg/Universal/ReportStatusCodeRouter/RuntimeDxe/ReportStatusCodeRouterRuntimeDxe.inf
   INF MdeModulePkg/Universal/StatusCodeHandler/RuntimeDxe/StatusCodeHandlerRuntimeDxe.inf
@@ -12,61 +12,61 @@ APRIORI DXE {
   INF EmbeddedPkg/MetronomeDxe/MetronomeDxe.inf
   INF ArmPkg/Drivers/TimerDxe/TimerDxe.inf
 
-  INF Binaries/r8q/QcomPkg/Drivers/SmemDxe/SmemDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/DALSYSDxe/DALSYSDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/HWIODxe/HWIODxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/ChipInfoDxe/ChipInfoDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/PlatformInfoDxe/PlatformInfoDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/HALIOMMUDxe/HALIOMMUDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/ULogDxe/ULogDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/CmdDbDxe/CmdDbDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/PwrUtilsDxe/PwrUtilsDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/NpaDxe/NpaDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/RpmhDxe/RpmhDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/PdcDxe/PdcDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/VcsDxe/VcsDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/ClockDxe/ClockDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/SPMIDxe/SPMIDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/ShmBridgeDxe/ShmBridgeDxeLA.inf
-  INF Binaries/r8q/QcomPkg/Drivers/TzDxe/ScmDxeLA.inf
-  INF Binaries/r8q/QcomPkg/Drivers/TLMMDxe/TLMMDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/SmemDxe/SmemDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/DALSYSDxe/DALSYSDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/HWIODxe/HWIODxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/ChipInfoDxe/ChipInfoDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/PlatformInfoDxe/PlatformInfoDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/HALIOMMUDxe/HALIOMMUDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/ULogDxe/ULogDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/CmdDbDxe/CmdDbDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/PwrUtilsDxe/PwrUtilsDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/NpaDxe/NpaDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/RpmhDxe/RpmhDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/PdcDxe/PdcDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/VcsDxe/VcsDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/ClockDxe/ClockDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/SPMIDxe/SPMIDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/ShmBridgeDxe/ShmBridgeDxeLA.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/TzDxe/ScmDxeLA.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/TLMMDxe/TLMMDxe.inf
 
   INF MdeModulePkg/Universal/ResetSystemRuntimeDxe/ResetSystemRuntimeDxe.inf
 
-  INF Binaries/r8q/QcomPkg/Drivers/PmicDxe/PmicDxeLa.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/PmicDxe/PmicDxeLa.inf
 
   INF MdeModulePkg/Universal/Disk/DiskIoDxe/DiskIoDxe.inf
   INF MdeModulePkg/Universal/Disk/PartitionDxe/PartitionDxe.inf
   INF MdeModulePkg/Universal/Disk/UnicodeCollation/EnglishDxe/EnglishDxe.inf
 
-  INF Binaries/r8q/QcomPkg/Drivers/SdccDxe/SdccDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/UFSDxe/UFSDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/SdccDxe/SdccDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/UFSDxe/UFSDxe.inf
 
   INF FatPkg/EnhancedFatDxe/Fat.inf
 
-  INF Binaries/r8q/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/TzDxe/TzDxeLA.inf
 
   INF MdeModulePkg/Universal/Variable/RuntimeDxe/VariableRuntimeDxe.inf
 
-  INF Binaries/r8q/QcomPkg/Drivers/FeatureEnablerDxe/FeatureEnablerDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/DDRInfoDxe/DDRInfoDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/I2CDxe/I2CDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/AdcDxe/AdcDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/SamsungDxe/CcicDxe/CcicDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/SamsungDxe/MuicDxe/MuicDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/SamsungDxe/ChgDxe/ChgDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/FeatureEnablerDxe/FeatureEnablerDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/DDRInfoDxe/DDRInfoDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/I2CDxe/I2CDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/AdcDxe/AdcDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/SamsungDxe/CcicDxe/CcicDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/SamsungDxe/MuicDxe/MuicDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/SamsungDxe/ChgDxe/ChgDxe.inf
 
 !if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
-  INF Binaries/r8q/QcomPkg/Drivers/DisplayDxe/DisplayDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/DisplayDxe/DisplayDxe.inf
 !else
   INF SiliciumPkg/Drivers/SimpleFbDxe/SimpleFbDxe.inf
 !endif
 
-  INF Binaries/r8q/QcomPkg/Drivers/PILProxyDxe/PILProxyDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/PILDxe/PILDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/SPSSDxe/SPSSDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/PILProxyDxe/PILProxyDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/PILDxe/PILDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/SPSSDxe/SPSSDxe.inf
 !if $(USE_CUSTOM_DISPLAY_DRIVER) == 1
-  INF Binaries/r8q/QcomPkg/Drivers/CPRDxe/CPRDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/CPRDxe/CPRDxe.inf
 !endif
 
   INF MdeModulePkg/Universal/WatchdogTimerDxe/WatchdogTimer.inf
@@ -79,27 +79,27 @@ APRIORI DXE {
   INF MdeModulePkg/Universal/HiiDatabaseDxe/HiiDatabaseDxe.inf
   INF MdeModulePkg/Universal/BdsDxe/BdsDxe.inf
 
-  INF Binaries/r8q/QcomPkg/Drivers/UsbPwrCtrlDxe/UsbPwrCtrlDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/UsbfnDwc3Dxe/UsbfnDwc3Dxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/XhciPciEmulationDxe/XhciPciEmulationDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/XhciDxe/XhciDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/UsbPwrCtrlDxe/UsbPwrCtrlDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/UsbfnDwc3Dxe/UsbfnDwc3Dxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/XhciPciEmulationDxe/XhciPciEmulationDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/XhciDxe/XhciDxe.inf
 
   INF MdeModulePkg/Bus/Usb/UsbBusDxe/UsbBusDxe.inf
   INF MdeModulePkg/Bus/Usb/UsbKbDxe/UsbKbDxe.inf
   INF MdeModulePkg/Bus/Usb/UsbMassStorageDxe/UsbMassStorageDxe.inf
 
-  INF Binaries/r8q/QcomPkg/Drivers/UsbMsdDxe/UsbMsdDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/UsbDeviceDxe/UsbDeviceDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/UsbConfigDxe/UsbConfigDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/UsbInitDxe/UsbInitDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/ButtonsDxe/ButtonsDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/TsensDxe/TsensDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/LimitsDxe/LimitsDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/GpiDxe/GpiDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/HashDxe/HashDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/CipherDxe/CipherDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/MacDxe/MacDxe.inf
-  INF Binaries/r8q/QcomPkg/Drivers/RNGDxe/RngDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/UsbMsdDxe/UsbMsdDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/UsbDeviceDxe/UsbDeviceDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/UsbConfigDxe/UsbConfigDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/UsbInitDxe/UsbInitDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/ButtonsDxe/ButtonsDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/TsensDxe/TsensDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/LimitsDxe/LimitsDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/GpiDxe/GpiDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/HashDxe/HashDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/CipherDxe/CipherDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/MacDxe/MacDxe.inf
+  INF Binaries/gts7xlwifi/QcomPkg/Drivers/RNGDxe/RngDxe.inf
 
   INF EmbeddedPkg/SimpleTextInOutSerial/SimpleTextInOutSerial.inf
   INF MdeModulePkg/Universal/Console/ConPlatformDxe/ConPlatformDxe.inf

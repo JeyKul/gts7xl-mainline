@@ -1,0 +1,44 @@
+From a01994fc346ccbe6c8a08282c1b5f7598375b728 Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sat, 31 Oct 2026 14:14:31 +0100
+Subject: [PATCH 2/2] arm64: dts: qcom: gts7xlwifi: add reboot modes and
+ bring-up pin tests
+
+Add recovery and bootloader reboot modes. The pin hogs and stock input
+pulls are temporary tests that did not fix the pogo keyboard.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts  | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index b44951f7f..c0730693e 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -250,6 +250,22 @@ &tlmm {
+ 	/* gpio43 is the pogo connection detect line on this board */
+ 	gpio-reserved-ranges = <20 4>, <40 3>;
+ 
++	pinctrl-names = "default";
++	pinctrl-0 = <&stock_input_bias>, <&stock_input_pullup>;
++
++	/* Bring-up test: match the stock pulls on undriven inputs */
++	stock_input_bias: stock-input-bias-state {
++		pins = "gpio4", "gpio5", "gpio7", "gpio12", "gpio13", "gpio15", "gpio16", "gpio51", "gpio52", "gpio53", "gpio60", "gpio61", "gpio67", "gpio77", "gpio84", "gpio110", "gpio112", "gpio113", "gpio119", "gpio134", "gpio136";
++		function = "gpio";
++		bias-disable;
++	};
++
++	stock_input_pullup: stock-input-pullup-state {
++		pins = "gpio81", "gpio121";
++		function = "gpio";
++		bias-pull-up;
++	};
++
+ 	/* Bring-up test: match the stock state of these power enables */
+ 	spen-3v3-hog {
+ 		gpio-hog;
+-- 
+2.56.0
+
