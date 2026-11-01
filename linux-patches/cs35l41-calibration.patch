@@ -1,0 +1,67 @@
+diff --git a/sound/soc/codecs/cs35l41.c b/sound/soc/codecs/cs35l41.c
+index b2a076706..ecc09c920 100644
+--- a/sound/soc/codecs/cs35l41.c
++++ b/sound/soc/codecs/cs35l41.c
+@@ -9,6 +9,7 @@
+ #include <linux/acpi.h>
+ #include <acpi/acpi_bus.h>
+ #include <linux/delay.h>
++#include <linux/firmware.h>
+ #include <linux/err.h>
+ #include <linux/init.h>
+ #include <linux/kernel.h>
+@@ -210,6 +211,42 @@ static int cs35l41_dsp_preload_ev(struct snd_soc_dapm_widget *w,
+ 	}
+ }
+ 
++/* Factory calibration, written while the DSP is halted: rdc, ambient, vsc, isc */
++static void cs35l41_apply_calibration(struct cs35l41_private *cs35l41)
++{
++	const struct firmware *fw;
++	const __le32 *cal;
++	u32 rdc;
++	char *name;
++
++	name = kasprintf(GFP_KERNEL, "cirrus/cs35l41-cal-%s.bin", dev_name(cs35l41->dev));
++	if (!name)
++		return;
++
++	if (request_firmware_direct(&fw, name, cs35l41->dev)) {
++		dev_warn(cs35l41->dev, "No calibration in %s\n", name);
++		kfree(name);
++		return;
++	}
++	kfree(name);
++
++	if (fw->size == 4 * sizeof(u32)) {
++		cal = (const __le32 *)fw->data;
++		rdc = le32_to_cpu(cal[0]);
++		regmap_write(cs35l41->regmap, 0x02800224, rdc);
++		regmap_write(cs35l41->regmap, 0x02800228, le32_to_cpu(cal[1]));
++		regmap_write(cs35l41->regmap, 0x0280022c, 1);
++		regmap_write(cs35l41->regmap, 0x02800230, rdc + 1);
++		regmap_write(cs35l41->regmap, 0x0280006c, 2);
++		regmap_write(cs35l41->regmap, 0x02800070, le32_to_cpu(cal[2]));
++		regmap_write(cs35l41->regmap, 0x02800074, le32_to_cpu(cal[3]));
++		dev_info(cs35l41->dev, "Calibration applied\n");
++	} else {
++		dev_err(cs35l41->dev, "Bad calibration size %zu\n", fw->size);
++	}
++	release_firmware(fw);
++}
++
+ static int cs35l41_dsp_audio_ev(struct snd_soc_dapm_widget *w,
+ 				struct snd_kcontrol *kcontrol, int event)
+ {
+@@ -220,8 +257,10 @@ static int cs35l41_dsp_audio_ev(struct snd_soc_dapm_widget *w,
+ 
+ 	switch (event) {
+ 	case SND_SOC_DAPM_POST_PMU:
+-		if (!cs35l41->dsp.cs_dsp.running)
++		if (!cs35l41->dsp.cs_dsp.running) {
++			cs35l41_apply_calibration(cs35l41);
+ 			return wm_adsp_event(w, kcontrol, event);
++		}
+ 
+ 		ret = regmap_read(cs35l41->regmap, CS35L41_DSP_MBOX_2, &fw_status);
+ 		if (ret < 0) {

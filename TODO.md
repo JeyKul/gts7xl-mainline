@@ -20,13 +20,14 @@ Last updated 2026-11-01.
 - [x] Reserved memory map matches stock (mainline's was wrong for Samsung)
 - [x] ADSP firmware boots (loaded by hand, `qcom_q6v5_pas`)
 - [x] All 4 amps probe (i2c11, 0x40-0x43, 1.0uH, 4100mA, slots FL0 FR1 RL2 RR3), loaded by hand
-- [ ] Amp firmware from vendor: `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning `.bin`
+- [x] Amp firmware and tuning loaded on all 4, factory calibration from `sec_efs:/cirrus` applied (driver patch, files in `/lib/firmware/cirrus`, not in repo)
 - [x] Sound card registers: Primary TDM, 4 slots, 48kHz (loaded with `/usr/local/sbin/audio-up`)
 - [x] First sound and music, speed and pitch correct
 - [x] Autoloads at boot, PulseAudio sink `speakers`, amps capped at -15 dB
-- [ ] Crackle: user reports it sounds fine now, recheck with music
-- [x] 4.0 output, one TDM slot per speaker; positions mapped by ear, remap not reconfirmed
-- [ ] Load `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning; lift the -15 dB cap only after that
+- [ ] Distortion at high volume remains with protection on, not confirmed better
+- [ ] `CAL_AMBIENT` reads back 0, stored value 29; unexplained
+- [x] 4.0 output, one TDM slot per speaker; positions confirmed by ear
+- [ ] Keep the -15 dB cap until distortion and `CAL_AMBIENT` are explained
 
 ### Native display (paused)
 
