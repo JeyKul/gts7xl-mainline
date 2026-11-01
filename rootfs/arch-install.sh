@@ -29,7 +29,7 @@ pacman -Syu --noconfirm --needed --overwrite '/etc/dconf/*' \
   gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console \
   gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome \
   adwaita-fonts networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils \
-  alsa-utils mesa swh-plugins sudo psmisc python
+  alsa-utils mesa swh-plugins sudo psmisc python linux-firmware
 userdel -r alarm 2>/dev/null || true
 useradd -m -G wheel,video,input,audio,tty,network -s /bin/bash user
 echo 'user:user' | chpasswd
