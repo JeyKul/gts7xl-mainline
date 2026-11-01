@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Reinstall system
+Comment=Restart into the installer to reinstall or change desktop. This erases everything
+Exec=/usr/local/sbin/gts7xl-reinstall
+Icon=system-reboot
+Categories=System;

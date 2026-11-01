@@ -62,6 +62,7 @@ jobs:
           echo "TAG=$TAG" >> "$GITHUB_ENV"
           echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/stage2.tar.gz" > "$INITRAMFS/s1/stage2.url"
           sha256sum ../stage2.tar.gz | cut -d' ' -f1 > "$INITRAMFS/s1/stage2.sha256"
+          stat -c %s ../stage2.tar.gz > "$INITRAMFS/s1/stage2.size"
           make -s O=build -j"$(nproc)" Image
 
       - name: Package
