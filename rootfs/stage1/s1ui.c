@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <linux/input.h>
+#include <linux/kd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,6 +41,15 @@ struct btn { int x, y, w, h; };
 static int hit(const struct btn *b, int x, int y)
 {
 	return x >= b->x && x < b->x + b->w && y >= b->y && y < b->y + b->h;
+}
+
+static int fb_size;
+
+/* Drawing happens in private memory; only finished pictures reach the screen */
+static void present(void)
+{
+	if (pwrite(fb_fd, fb, fb_size, 0) < 0)
+		return;
 }
 
 /* The panel loses its picture without frames, and a write is what sends one */
@@ -121,9 +131,14 @@ static void open_fb(void)
 		exit(10);
 	fbw = v.xres; fbh = v.yres; stride = f.line_length;
 	fb_fd = fd;
-	fb = mmap(NULL, f.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	if (fb == MAP_FAILED)
+	fb_size = stride * fbh;
+	fb = malloc(fb_size);
+	if (!fb)
 		exit(11);
+	/* Keep the kernel console off the screen */
+	int tty = open("/dev/tty0", O_RDWR);
+	if (tty >= 0)
+		ioctl(tty, KDSETMODE, KD_GRAPHICS);
 }
 
 static void open_touch(void)
@@ -154,6 +169,7 @@ static int wait_tap(int *sx, int *sy, int timeout_ms)
 	struct input_event e;
 	int waited = 0;
 
+	present();
 	for (;;) {
 		while (read(touch_fd, &e, sizeof(e)) == sizeof(e)) {
 			if (e.type == EV_ABS && e.code == ABS_MT_POSITION_X)
@@ -347,16 +363,19 @@ int main(void)
 	text(100, 60, "Galaxy Tab S7+ Linux installer", FG);
 	if (touch_fd < 0) {
 		text(100, 160, "No touchscreen found", WARN);
+		present();
 		sleep(600);
 		return 2;
 	}
 	text(100, 160, "Starting Wi-Fi...", FG);
+	present();
 	wifi_start();
 	snprintf(status, sizeof(status), "Choose a network");
 	for (int need_scan = 1;;) {
 		if (need_scan) {
 			rect(100, 150, fbw - 200, 70, BG);
 			text(100, 160, "Scanning...", FG);
+			present();
 			wifi_scan();
 			need_scan = 0;
 		}
@@ -395,6 +414,7 @@ int main(void)
 				break;
 			rect(0, 0, fbw, fbh, BG);
 			text(100, 160, "Connecting...", FG);
+			present();
 			int r = wifi_connect(&nets[i], pw);
 			memset(pw, 0, sizeof(pw));
 			if (r == -2) snprintf(status, sizeof(status), "Could not join. Wrong password?");
