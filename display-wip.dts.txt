@@ -308,7 +308,23 @@
 	};
 };
 
+&gpio_keys {
+	pinctrl-0 = <&vol_up_l>;
+
+	key-vol-up {
+		gpios = <&pm8150l_gpios 3 GPIO_ACTIVE_LOW>;
+	};
+};
+
 &pm8150l_gpios {
+	vol_up_l: vol-up-l-state {
+		pins = "gpio3";
+		function = "normal";
+		power-source = <0>;
+		input-enable;
+		bias-pull-up;
+	};
+
 	max77705_int_default: max77705-int-default-state {
 		pins = "gpio11";
 		function = "normal";
