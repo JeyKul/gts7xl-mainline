@@ -1,0 +1,4 @@
+#!/bin/sh
+# Toggle the rear LED
+B=/sys/class/leds/white:flash/brightness
+if [ "$(cat "$B")" = 0 ]; then echo 255 > "$B"; else echo 0 > "$B"; fi

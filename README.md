@@ -92,7 +92,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Rear: 13 MP wide | ⬜ | |
 | Rear: 5 MP ultrawide | ⬜ | |
 | Front: 8 MP | ⬜ | |
-| Flash LED | ⬜ | |
+| Flash LED | ✅ | `Flashlight` app, up to 100mA |
 
 ## Installing
 
