@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+# Tablet charging control: PD voltage request through the MAX77705 mailbox, thermal limits
+import fcntl,glob,os,sys,time
+CH='/sys/class/power_supply/max77705-charger/'; BA='/sys/class/power_supply/max170xx_battery/'
+def thm(name):
+    for l in glob.glob('/sys/bus/iio/devices/iio:device*/*_label'):
+        try:
+            if open(l).read().strip()==name: return int(open(l[:-5]+'input').read())/1000
+        except OSError: pass
+    return None
+def rs(p): return open(p).read().strip()
+def setlim(inp,cc=None):
+    open(CH+'input_current_limit','w').write(str(inp)); open(CH+'constant_charge_current','w').write(str(cc if cc else inp))
+def mbox():
+    f=os.open('/dev/i2c-0',os.O_RDWR); fcntl.ioctl(f,0x0706,0x25); return f
+def caps(f):
+    os.write(f,bytes([0x21,0x30])); os.write(f,bytes([0x41,0])); time.sleep(0.25)
+    os.write(f,bytes([0x51])); d=os.read(f,32)
+    return (d[1]>>3)&7,d[1]&7,[int.from_bytes(d[2+i*4:6+i*4],'little') for i in range(d[1]&7)] if d[0]==0x30 else []
+def req(f,n):
+    os.write(f,bytes([0x21,0x32,n])); os.write(f,bytes([0x41,0])); time.sleep(0.8)
+def st():
+    return 'batt=%.1fC chg=%.1fC in=%s cc=%s bat_ma=%d mv=%d pct=%s online=%s %s'%(thm('batt_thm') or -1,thm('chg_thm') or -1,int(rs(CH+'input_current_limit'))//1000,int(rs(CH+'constant_charge_current'))//1000,int(rs(BA+'current_now'))//1000,int(rs(BA+'voltage_now'))//1000,rs(BA+'capacity'),rs(CH+'online'),rs(CH+'status'))
+SAFE=900000
+HOT_BATT,COOL_BATT=42,38
+HOT_CHG,COOL_CHG=60,52
+
+def nine_volt(p):
+    for i,v in enumerate(p):
+        if v>>30==0 and ((v>>10)&0x3ff)*50==9000 and (v&0x3ff)*10>=1650:
+            return i+1
+    return 0
+
+def log(m):
+    print(time.strftime('%T'),m,st(),flush=True)
+
+def main():
+    f=mbox(); fast=False; hot=False; was=None
+    setlim(SAFE)
+    while True:
+        online=rs(CH+'online')=='1'
+        b=thm('batt_thm'); c=thm('chg_thm')
+        if b is None or c is None:
+            # Never run fast without real temperatures
+            if fast: setlim(500000); req(f,1); setlim(SAFE); fast=False; log('no sensor, 5V')
+            time.sleep(3); continue
+        if not online:
+            if was: setlim(SAFE); log('unplugged')
+            fast=False; hot=False
+        else:
+            if b>=HOT_BATT or c>=HOT_CHG:
+                hot=True
+            elif b<=COOL_BATT and c<=COOL_CHG:
+                hot=False
+            if was is False:
+                time.sleep(3) # let PD finish after plugging in
+            if hot and fast:
+                setlim(500000); req(f,1); setlim(SAFE); fast=False; log('too hot, 5V')
+            elif not hot and not fast:
+                try:
+                    sel,n,p=caps(f); idx=nine_volt(p)
+                except OSError:
+                    idx=0
+                if idx:
+                    setlim(500000); time.sleep(0.5); req(f,idx)
+                    if caps(f)[0]==idx:
+                        setlim(1650000,2650000); fast=True; log('9V')
+                    else:
+                        setlim(SAFE); log('9V refused')
+        was=online
+        time.sleep(3)
+
+if __name__=='__main__':
+    main()

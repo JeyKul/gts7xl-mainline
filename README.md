@@ -20,7 +20,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Storage: UFS | ✅ | Booting and running from `userdata` |
 | microSD slot | ⬜ | |
 | Suspend | ❌ | Resumes, but the screen stays black; disabled |
-| Thermal sensors and throttling | ⬜ | |
+| Thermal sensors and throttling | 🟡 | SoC, battery and charger sensors read; third thermistor reads high; throttling not checked |
 | Real-time clock | 🟡 | No saved time, set over Wi-Fi after boot |
 | Hardware buttons: power, volume | ✅ | Emergency reboot combo works |
 | Vibration motor | ⬜ | |
@@ -61,7 +61,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Hardware | State | Notes |
 |---|---|---|
 | Wi-Fi: QCA6390 | ✅ | |
-| Bluetooth: QCA6390 | 🟡 | Firmware loads on `uart6`, controller up; pairing and audio not tested |
+| Bluetooth: QCA6390 | ✅ | Audio to a speaker works; RFCOMM profiles not built yet |
 | GPS | ⬜ | |
 | USB gadget (serial, network) | ✅ | |
 | USB host | ⬜ | |
@@ -72,8 +72,8 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Hardware | State | Notes |
 |---|---|---|
 | Battery, fuel gauge: MAX77705 | ✅ | |
-| Charging: MAX77705 | 🟡 | Limited to 500mA, slow on PC USB |
-| Fast charging | ⬜ | |
+| Charging: MAX77705 | ✅ | 900mA without USB-PD |
+| Fast charging | 🟡 | 9V USB-PD, about 15W, through `rootfs/gts7xl-charge-control`; replug not fully tested. Higher power not done |
 
 ### Sensors
 
