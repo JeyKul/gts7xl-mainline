@@ -1,7 +1,7 @@
 From 05946ffa84bfc2f4055c5de5837f35c3bba3018a Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sun, 1 Nov 2026 14:19:31 +0100
-Subject: [PATCH 12/13] gts7xlwifi: add speaker sound card over Primary TDM
+Subject: [PATCH 12/14] gts7xlwifi: add speaker sound card over Primary TDM
 
 Add a TDM path to the sm8250 machine driver with one slot per side.
 

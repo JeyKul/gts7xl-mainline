@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installed as /usr/local/sbin/audio-up on the tablet, run from /etc/local.d.
-# Amps stay capped at -30 dB because speaker protection is not loaded.
+# Amps stay capped at -24 dB because speaker protection is not loaded.
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 for m in qcom_glink_smem qrtr-smd qcom_pd_mapper qcom_q6v5_pas snd-soc-cs35l41-i2c apr q6asm-dai q6afe-dai q6routing q6afe-clocks; do modprobe $m; done
 sleep 12

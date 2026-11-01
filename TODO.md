@@ -23,10 +23,10 @@ Last updated 2026-11-01.
 - [ ] Amp firmware from vendor: `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning `.bin`
 - [x] Sound card registers: Primary TDM, 4 slots, 48kHz (loaded with `/usr/local/sbin/audio-up`)
 - [x] First sound and music, speed and pitch correct
-- [x] Autoloads at boot, PulseAudio sink `speakers`, amps capped at -30 dB
+- [x] Autoloads at boot, PulseAudio sink `speakers`, amps capped at -24 dB
 - [ ] Crackle (cause unknown; suspects: TDM timing, no tuning)
-- [ ] Stereo and per-speaker check by ear (single-amp test was inaudible)
-- [ ] Load `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning; lift the -30 dB cap only after that
+- [x] Left and right work; each of the 4 amps not checked alone
+- [ ] Load `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning; lift the -24 dB cap only after that
 
 ### Native display (paused)
 

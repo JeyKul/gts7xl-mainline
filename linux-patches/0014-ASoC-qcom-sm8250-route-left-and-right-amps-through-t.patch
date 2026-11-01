@@ -1,0 +1,33 @@
+From 1fc90721927f6d03fe3b901850bf3a09adfbbe56 Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sun, 1 Nov 2026 14:33:00 +0100
+Subject: [PATCH 14/14] ASoC: qcom: sm8250: route left and right amps through
+ the channel map
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ sound/soc/qcom/sm8250.c | 7 +++----
+ 1 file changed, 3 insertions(+), 4 deletions(-)
+
+diff --git a/sound/soc/qcom/sm8250.c b/sound/soc/qcom/sm8250.c
+index 7cb50e9bf..4483b8673 100644
+--- a/sound/soc/qcom/sm8250.c
++++ b/sound/soc/qcom/sm8250.c
+@@ -103,11 +103,10 @@ static int sm8250_snd_hw_params(struct snd_pcm_substream *substream,
+ 
+ 	/* Front and rear amps on one side share the left or right slot */
+ 	for_each_rtd_codec_dais(rtd, i, dai) {
+-		bool right = dai->component->name_prefix[1] == 'R';
++		unsigned int slot = dai->component->name_prefix[1] == 'R' ? 1 : 0;
+ 
+-		ret = snd_soc_dai_set_tdm_slot(dai, 0, right ? BIT(1) : BIT(0),
+-					       TDM_SLOTS, TDM_SLOT_WIDTH);
+-		if (ret && ret != -ENOTSUPP)
++		ret = snd_soc_dai_set_channel_map(dai, 0, NULL, 1, &slot);
++		if (ret)
+ 			return ret;
+ 	}
+ 
+-- 
+2.56.0
+

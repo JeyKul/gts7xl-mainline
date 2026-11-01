@@ -1,7 +1,7 @@
 From 772f918bda05f5e378ebec21287d6d698527f1ff Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sun, 1 Nov 2026 13:51:59 +0100
-Subject: [PATCH 09/13] gts7xlwifi: add Wacom W90xx pen driver
+Subject: [PATCH 09/14] gts7xlwifi: add Wacom W90xx pen driver
 
 Protocol from Samsung's driver. Axis range calibrated by hand, because the
 stock device tree values did not match this digitizer.
