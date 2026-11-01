@@ -45,5 +45,6 @@ install -m755 "$HERE/install.sh" "$R/install.sh"
 cp -a "$HERE/../overlay" "$R/gts7xl/overlay"
 install -m755 "$HERE/../arch-setup.sh" "$R/gts7xl/arch-setup.sh"
 cp "$MODS" "$R/gts7xl/modules.tar.gz"
-tar -C "$R" -czf "$OUT" .
+# Whoever builds this, everything in it belongs to root
+tar -C "$R" --owner=0 --group=0 --numeric-owner -czf "$OUT" .
 du -h "$OUT" | cut -f1
