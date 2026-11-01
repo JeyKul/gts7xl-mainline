@@ -23,14 +23,14 @@ Last updated 2026-11-01.
 - [x] Amp firmware and tuning loaded on all 4, factory calibration from `sec_efs:/cirrus` applied (driver patch, files in `/lib/firmware/cirrus`, not in repo)
 - [x] Sound card registers: Primary TDM, 4 slots, 48kHz (loaded with `/usr/local/sbin/audio-up`)
 - [x] First sound and music, speed and pitch correct
-- [x] Autoloads at boot, PulseAudio sink `speakers`, amps capped at -12 dB
-- [ ] Root cause of distortion unknown; limiter reduces it, amp gain now -12 dB, retest
+- [x] Autoloads at boot, PulseAudio sink `speakers`, amps at stock gain
+- [ ] Root cause of distortion unknown; limiter reduces it, amp gain now stock, retest
 - [ ] Amp mailbox pause/resume fails (`-ENOMSG`) when the stream restarts; DSP state still reads running
 - [x] Limiter sink `limited` (ZaMaximX2, -6 dB) in front of the speakers: distortion a lot better by ear, autoloads
 - [ ] S24 sink and the equalizer sink together made audio barely audible; S16 kept, equalizer sink removed
 - [ ] `CAL_AMBIENT` reads back 0, stored value 29; unexplained
 - [x] 4.0 output, one TDM slot per speaker; positions confirmed by ear
-- [ ] Keep the -12 dB cap until distortion and `CAL_AMBIENT` are explained
+- [ ] Cap removed at user request: stock gain (Analog 17, Digital 817); `CAL_AMBIENT` still unexplained
 
 ### Native display (paused)
 
