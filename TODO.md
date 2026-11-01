@@ -77,12 +77,17 @@ Last updated 2026-11-01.
 - [ ] IRQ 156 (MAX77705, spmi-gpio 10) fires nonstop and gets disabled about a minute after boot: `nobody cared`
 - [ ] Use the RTC offset to keep time across reboots
 
+## Next hardware
+
+- [ ] Flashlight
+- [ ] Microphones
+- [ ] Cameras
+
 ## Not started
 
 - [ ] Sensors (SLPI DSP, rotation)
 - [ ] USB host mode
 - [ ] Suspend: wakes, but the screen stays black until reboot on the firmware framebuffer; targets masked on Arch
-- [ ] Cameras
 - [ ] Retest GPU zap without the dynamic buffer hack, now that the memory map is right
 
 ## Installer in boot
@@ -90,17 +95,17 @@ Last updated 2026-11-01.
 Decision: Linux or Android, not both. An installer in the boot image starts when no distro is found on `userdata`.
 
 - [x] Stage 1 shows a touch interface through the native display, built by `rootfs/stage1/assemble.sh`
-- [ ] Confirm touch, Wi-Fi join and reboot from the installer
+- [x] Touch, Wi-Fi join and reboot from the installer
 - [x] Download the Alpine installer into RAM, check its hash, switch to it
 - [x] Wi-Fi: networks are listed from the initramfs
 - [x] Format `userdata`, download and unpack Arch, create the user, extract firmware
-- [ ] Confirm the installed system reaches GNOME on the first boot
+- [x] Full wipe and install from the installer reaches GNOME, tested on the tablet with a locally served installer
 - [ ] Options, region and device information
-- [ ] Desktop choice: GNOME, KDE, KDE Mobile, Phosh; only GNOME has been tested on this tablet
+- [ ] Desktop choice: GNOME tested; KDE, KDE Mobile and Phosh being tested
 - [ ] Reinstall from the desktop
 - [ ] ztOS (github.com/Zerone-Laboratories/ztOS, GPL-3.0): build its GSI in CI and write a device layer for this tablet; listed in the installer as not ready
 - [ ] Hold volume up at power on to open the installer: test it
-- [ ] Installer progress bars and rounded UI: test on the tablet
+- [x] Installer progress bars and rounded UI
 - [ ] Waydroid: enable binder in the kernel
 - [ ] `f2fs` as root filesystem, optional
 

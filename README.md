@@ -96,7 +96,9 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 ## Installing
 
-Not tested end to end yet. Requires an unlocked bootloader and TWRP. This erases all data on the tablet.
+Tested on one tablet with an installer served locally; the published build has not been tested yet. Requires an unlocked bootloader and TWRP. This erases all data on the tablet.
+
+The boot image contains a small installer. It starts when no system is found, and when volume up is held at power on. It joins Wi-Fi, downloads the rest into RAM, and installs Arch with a desktop you choose. Only GNOME has been tested so far.
 
 1. In TWRP: Wipe, Format Data, then reboot to recovery. `ext4` is the tested filesystem; `f2fs` is supported by the kernel but not tested as the root filesystem.
 2. Flash `gts7xlwifi-arch-twrp.zip` and reboot to system.
