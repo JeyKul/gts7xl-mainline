@@ -19,9 +19,9 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | RAM | ✅ | Reserved memory follows the stock map |
 | Storage: UFS | ✅ | Booting and running from `userdata` |
 | microSD slot | ⬜ | |
-| Suspend | ❌ | Resumes, but the screen stays black; disabled |
+| Suspend | 🟡 | s2idle with the native display: power key and timer wake work; battery drain not measured |
 | Thermal sensors and throttling | 🟡 | SoC, battery and charger sensors read; third thermistor reads high; throttling not checked |
-| Real-time clock | 🟡 | No saved time, set over Wi-Fi after boot |
+| Real-time clock | 🟡 | Driver loaded, runs from 1970; time still set over Wi-Fi |
 | Hardware buttons: power, volume | ✅ | Emergency reboot combo works |
 | Vibration motor | ⬜ | |
 
