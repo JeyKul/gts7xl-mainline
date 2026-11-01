@@ -32,6 +32,10 @@ Alpine and Sway live on `userdata` (formatted ext4, which erases Android data). 
 
 `msm` is a module with `separate_gpu_kms=1 r8q_zap_dyn=1 r8q_zap_secvid=0`, loaded from `/etc/local.d/gpu.start` and never by udev. It needs the Samsung-signed `a650_zap` files from your own `apnhlos` partition in `/lib/firmware/qcom/sm8250/` (the `.mdt` renamed to `a650_zap.mbn`), which aren't published here. The module must match the running kernel.
 
+## Emergency reboot
+
+Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
+
 ## Layout
 
 - `linux-patches/`: apply to Linux v7.3

@@ -1,0 +1,225 @@
+From 79dfaa06601c3a26892ebfc661a91f30c44768d2 Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sun, 1 Nov 2026 13:23:30 +0100
+Subject: [PATCH 8/8] gts7xlwifi: fix Volume Up wiring, add emergency recovery
+ key combo
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    |  16 ++
+ drivers/input/misc/Kconfig                    |   6 +
+ drivers/input/misc/Makefile                   |   1 +
+ drivers/input/misc/gts7xl-emergency.c         | 147 ++++++++++++++++++
+ 4 files changed, 170 insertions(+)
+ create mode 100644 drivers/input/misc/gts7xl-emergency.c
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 4820e9eda..83cdf8b72 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -278,7 +278,23 @@ fuel-gauge@36 {
+ 	};
+ };
+ 
++&gpio_keys {
++	pinctrl-0 = <&vol_up_l>;
++
++	key-vol-up {
++		gpios = <&pm8150l_gpios 3 GPIO_ACTIVE_LOW>;
++	};
++};
++
+ &pm8150l_gpios {
++	vol_up_l: vol-up-l-state {
++		pins = "gpio3";
++		function = "normal";
++		power-source = <0>;
++		input-enable;
++		bias-pull-up;
++	};
++
+ 	max77705_int_default: max77705-int-default-state {
+ 		pins = "gpio11";
+ 		function = "normal";
+diff --git a/drivers/input/misc/Kconfig b/drivers/input/misc/Kconfig
+index 169768e3d..af9880dbf 100644
+--- a/drivers/input/misc/Kconfig
++++ b/drivers/input/misc/Kconfig
+@@ -201,6 +201,12 @@ config INPUT_PF1550_ONKEY
+ 	  To compile this driver as a module, choose M here. The module will be
+ 	  called pf1550-onkey.
+ 
++config INPUT_GTS7XL_EMERGENCY
++	bool "Galaxy Tab S7+ emergency reboot key combination"
++	help
++	  Reboot to recovery after Power, Volume Up and Volume Down are
++	  pressed together and released. Meant for display bring-up.
++
+ config INPUT_PM8941_PWRKEY
+ 	tristate "Qualcomm PM8941 power key support"
+ 	depends on MFD_SPMI_PMIC
+diff --git a/drivers/input/misc/Makefile b/drivers/input/misc/Makefile
+index 1339619f0..ce15fbb3e 100644
+--- a/drivers/input/misc/Makefile
++++ b/drivers/input/misc/Makefile
+@@ -97,3 +97,4 @@ obj-$(CONFIG_INPUT_WM831X_ON)		+= wm831x-on.o
+ obj-$(CONFIG_INPUT_XEN_KBDDEV_FRONTEND)	+= xen-kbdfront.o
+ obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
+ obj-$(CONFIG_INPUT_IDEAPAD_SLIDEBAR)	+= ideapad_slidebar.o
++obj-$(CONFIG_INPUT_GTS7XL_EMERGENCY)	+= gts7xl-emergency.o
+diff --git a/drivers/input/misc/gts7xl-emergency.c b/drivers/input/misc/gts7xl-emergency.c
+new file mode 100644
+index 000000000..f549a4613
+--- /dev/null
++++ b/drivers/input/misc/gts7xl-emergency.c
+@@ -0,0 +1,147 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Bring-up escape hatch: press Power + Volume Up + Volume Down together, then
++ * release them to reboot into recovery. Firing on release avoids the bootloader
++ * seeing the volume keys held, which selects download mode.
++ */
++
++#include <linux/init.h>
++#include <linux/input.h>
++#include <linux/module.h>
++#include <linux/printk.h>
++#include <linux/reboot.h>
++#include <linux/slab.h>
++#include <linux/timer.h>
++#include <linux/workqueue.h>
++
++#define EMERGENCY_FALLBACK_MS	5000
++
++static DEFINE_SPINLOCK(emergency_lock);
++static unsigned int emergency_down;
++static bool emergency_armed;
++static bool emergency_fired;
++
++static void emergency_fallback(struct timer_list *unused)
++{
++	pr_emerg("gts7xl-emergency: clean restart stuck, forcing reset\n");
++	emergency_restart();
++}
++static DEFINE_TIMER(emergency_timer, emergency_fallback);
++
++static void emergency_work_fn(struct work_struct *work)
++{
++	pr_emerg("gts7xl-emergency: rebooting to recovery\n");
++	mod_timer(&emergency_timer, jiffies + msecs_to_jiffies(EMERGENCY_FALLBACK_MS));
++	kernel_restart("recovery");
++}
++static DECLARE_WORK(emergency_work, emergency_work_fn);
++
++static void emergency_event(struct input_handle *handle, unsigned int type,
++			    unsigned int code, int value)
++{
++	unsigned long flags;
++	unsigned int bit;
++
++	if (type != EV_KEY || value == 2)
++		return;
++
++	switch (code) {
++	case KEY_POWER:
++		bit = BIT(0);
++		break;
++	case KEY_VOLUMEUP:
++		bit = BIT(1);
++		break;
++	case KEY_VOLUMEDOWN:
++		bit = BIT(2);
++		break;
++	default:
++		return;
++	}
++
++	spin_lock_irqsave(&emergency_lock, flags);
++	if (value)
++		emergency_down |= bit;
++	else
++		emergency_down &= ~bit;
++
++	if (emergency_down == (BIT(0) | BIT(1) | BIT(2)))
++		emergency_armed = true;
++
++	if (emergency_armed && !emergency_down && !emergency_fired) {
++		emergency_fired = true;
++		schedule_work(&emergency_work);
++	}
++	spin_unlock_irqrestore(&emergency_lock, flags);
++}
++
++static int emergency_connect(struct input_handler *handler, struct input_dev *dev,
++			     const struct input_device_id *id)
++{
++	struct input_handle *handle;
++	int ret;
++
++	handle = kzalloc(sizeof(*handle), GFP_KERNEL);
++	if (!handle)
++		return -ENOMEM;
++
++	handle->dev = dev;
++	handle->handler = handler;
++	handle->name = "gts7xl-emergency";
++
++	ret = input_register_handle(handle);
++	if (ret)
++		goto err_free;
++
++	ret = input_open_device(handle);
++	if (ret)
++		goto err_unregister;
++
++	return 0;
++
++err_unregister:
++	input_unregister_handle(handle);
++err_free:
++	kfree(handle);
++	return ret;
++}
++
++static void emergency_disconnect(struct input_handle *handle)
++{
++	input_close_device(handle);
++	input_unregister_handle(handle);
++	kfree(handle);
++}
++
++static const struct input_device_id emergency_ids[] = {
++	{
++		.flags = INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT,
++		.evbit = { BIT_MASK(EV_KEY) },
++		.keybit = { [BIT_WORD(KEY_POWER)] = BIT_MASK(KEY_POWER) },
++	},
++	{
++		.flags = INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT,
++		.evbit = { BIT_MASK(EV_KEY) },
++		.keybit = { [BIT_WORD(KEY_VOLUMEUP)] = BIT_MASK(KEY_VOLUMEUP) },
++	},
++	{
++		.flags = INPUT_DEVICE_ID_MATCH_EVBIT | INPUT_DEVICE_ID_MATCH_KEYBIT,
++		.evbit = { BIT_MASK(EV_KEY) },
++		.keybit = { [BIT_WORD(KEY_VOLUMEDOWN)] = BIT_MASK(KEY_VOLUMEDOWN) },
++	},
++	{ }
++};
++
++static struct input_handler emergency_handler = {
++	.event = emergency_event,
++	.connect = emergency_connect,
++	.disconnect = emergency_disconnect,
++	.name = "gts7xl-emergency",
++	.id_table = emergency_ids,
++};
++
++static int __init emergency_init(void)
++{
++	return input_register_handler(&emergency_handler);
++}
++device_initcall(emergency_init);
+-- 
+2.56.0
+
