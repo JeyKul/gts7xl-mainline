@@ -95,13 +95,11 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 Every build is a prerelease under [Releases](https://github.com/JeyKul/gts7xl-mainline/releases), named `installer-<run>`. Requires an unlocked bootloader and TWRP. This erases all data on the tablet. So far this was tested on one tablet with a locally served installer; the published build has not been tested end to end.
 
-**With the installer, needs Wi-Fi:**
-
 1. In TWRP: Wipe, Format Data, then reboot to recovery. `ext4` is the tested filesystem.
 2. Flash `gts7xlwifi-arch-twrp.zip` for the complete system, or write `gts7xlwifi-boot.img` to `boot` to get only the installer. With the image alone, zero `boot` first, blank the first 4KB of `dtbo` and clear byte 0 of `param`; the zip does this for you.
 3. Reboot to system.
 
-The boot image contains a small installer. It starts when no system is found, and when volume up is held at power on. It joins Wi-Fi, downloads the rest into RAM, and installs Arch with the desktop you choose: GNOME, KDE or KDE Mobile. KDE Mobile runs but is laggy. A `Reinstall` app on the desktop returns to it.
+The boot image contains a small installer, which needs Wi-Fi. It starts when no system is found, and when volume up is held at power on. It joins Wi-Fi, downloads the rest into RAM, and installs Arch with the desktop you choose: GNOME, KDE or KDE Mobile. KDE Mobile runs but is laggy. A `Reinstall` app on the desktop returns to it.
 
 The zip contains GNOME. Log in as `user`, password `user`, and change the password. The first boot copies firmware and calibration from this tablet's own partitions. Log: `/var/log/gts7xl-firstboot.log`.
 
