@@ -1,0 +1,26 @@
+diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
+index b292dfd26..5aed9a2d7 100644
+--- a/drivers/gpu/drm/msm/dsi/dsi_host.c
++++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
+@@ -853,6 +853,8 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 		/* Do not swap RGB colors */
+ 		data = DSI_CMD_CFG0_RGB_SWAP(SWAP_RGB);
+ 		data |= DSI_CMD_CFG0_DST_FORMAT(dsi_get_cmd_fmt(mipi_fmt));
++		if (msm_host->dsc)
++			data |= DSI_CMD_CFG0_INTERLEAVE_MAX(1);
+ 		dsi_write(msm_host, REG_DSI_CMD_CFG0, data);
+ 
+ 		data = DSI_CMD_CFG1_WR_MEM_START(MIPI_DCS_WRITE_MEMORY_START) |
+@@ -930,6 +932,12 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 			lane_ctrl | DSI_LANE_CTRL_CLKLN_HS_FORCE_REQUEST);
+ 	}
+ 
++	/* The bootloader runs this panel without PHY-selected HS requests */
++	if (flags & MIPI_DSI_CLOCK_NON_CONTINUOUS) {
++		lane_ctrl = dsi_read(msm_host, REG_DSI_LANE_CTRL);
++		dsi_write(msm_host, REG_DSI_LANE_CTRL, lane_ctrl & ~DSI_LANE_CTRL_HS_REQ_SEL_PHY);
++	}
++
+ 	data |= DSI_CTRL_ENABLE;
+ 
+ 	dsi_write(msm_host, REG_DSI_CTRL, data);

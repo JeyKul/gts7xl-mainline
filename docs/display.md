@@ -54,6 +54,16 @@ Plan: swap plane addresses during the blank period using `INTF_TEAR_INT_COUNT_VA
 | 10 | GNOME back on, frames reach the plane (`AR30`, linear): same |
 | 11 | No panel reset or commands at all: same small glitches, then off. Status reads came back as garbage and the tear signal almost stopped, so the panel was not healthy in this run and this result is weak |
 
+| 12 | Stock 60Hz mode (porches 224/320/212, `60 00`): tear signal counter runs at exactly 60 per second. Green briefly, then black |
+| 13 | Auto refresh poked by hand: invalid test, wrong start register, and redraws cancelled it |
+| 14 | Frames rewritten nonstop, HS clock forced on (mainline default): glitches. So frames reach the panel |
+| 15 | `MIPI_DSI_CLOCK_NON_CONTINUOUS`, as the bootloader leaves no force request: black, no glitching, lane status `1f1f` like the bootloader, about 30 frames per second |
+| 16 | `HS_REQ_SEL_PHY` cleared and interleave 1, so `0xac` and `CMD_CFG0` match the bootloader: slightly bigger glitch, then black. Signal mode reads `00` instead of `80` |
+
+Results vary slightly between identical runs, so small differences on screen aren't reliable.
+
+Plane setup still differs: mainline scans one 2800 wide `DMA0` plane split over two mixers; the bootloader uses `VIG0` and `VIG1`, 1400 wide each, from physical memory. Whether the picture reaches the DSC encoder at all is unproven.
+
 Open leads: the 51Hz tear signal; the bootloader runs hardware auto refresh (`INTF` 0x2b4 = 0x80000002) and mainline doesn't; the `CMD_CFG0` interleave field (bootloader 1, mainline 0); `INTF_CONFIG2` bit 8 and `INTF_CONFIG` bit 23; the `vddlcd` rail, which isn't modelled in the device tree.
 
 So sleep out and tear on are back in the driver only because earlier runs got further with them, not because these runs showed they are needed.
