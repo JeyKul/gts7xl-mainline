@@ -103,6 +103,7 @@ Decision: Linux or Android, not both. An installer in the boot image starts when
 - [ ] Options, region and device information
 - [x] Desktop choice: GNOME, KDE and KDE Mobile run on the tablet
 - [ ] KDE Mobile feels laggy: find out why
+- [ ] Wi-Fi address changes every boot, so the IP does too; using the real address from `efs` lost the connection on first try
 - [ ] Phosh: shell exits with Wayland protocol error 71 after start, at 60Hz and 120Hz; not offered by the installer
 - [ ] Reinstall from the desktop
 - [ ] ztOS (github.com/Zerone-Laboratories/ztOS, GPL-3.0): build its GSI in CI and write a device layer for this tablet; listed in the installer as not ready
