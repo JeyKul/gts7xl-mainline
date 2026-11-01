@@ -39,6 +39,17 @@ With `mdss` enabled in the device tree, loading `msm` wipes the bootloader's dis
 | Cause | `protected-clocks` on `dispcc`, added for the firmware framebuffer, stops Linux registering the display clocks, so the escape clock rate reads 0 |
 | 3 | Clocks fixed. Panel driver never loaded: the user saw the panel turning green within the wait before loading it, and restarted. No software fault seen for the green |
 
+| 4 | Panel loaded right after `msm`. Link up, encoder registers match the bootloader, no errors logged. Fullscreen glitchy lines with GNOME |
+| 5 | GNOME off: glitch, then screen off |
+| 6 | Status reads in LP mode work: power mode `1c`, signal mode `80`, DSI errors `00`, `DISP_DET` and TCON ready normal. Reads in HS mode return nothing |
+| 7 | Display on sent 200ms after enable, as stock does it after the first frame: black, no glitch at first |
+| 8 | Colour pattern written to `/dev/fb0`: black. Clocks correct (bit 1528 MHz, pixel 254.7 MHz, byte 191 MHz), no underruns, tear signal about 51 per second instead of 120 |
+| 9 | Brightness 800 instead of 100: small glitches, then off |
+| 10 | GNOME back on, frames reach the plane (`AR30`, linear): same |
+| 11 | No panel reset or commands at all: same small glitches, then off. Status reads came back as garbage and the tear signal almost stopped, so the panel was not healthy in this run and this result is weak |
+
+Open leads: the 51Hz tear signal; the bootloader runs hardware auto refresh (`INTF` 0x2b4 = 0x80000002) and mainline doesn't; the `CMD_CFG0` interleave field (bootloader 1, mainline 0); `INTF_CONFIG2` bit 8 and `INTF_CONFIG` bit 23; the `vddlcd` rail, which isn't modelled in the device tree.
+
 So sleep out and tear on are back in the driver only because earlier runs got further with them, not because these runs showed they are needed.
 
 The native image needs no `protected-clocks`; the working framebuffer image needs them. The source tree currently holds the native variant.
@@ -50,4 +61,4 @@ The panel has gone green whenever Linux takes over the display path and no panel
 - `INTF_CONFIG` bit 23 and `INTF_CONFIG2` bit 8 are set by the bootloader. Neither mainline nor the stock driver code read so far names them.
 - Stock sends display on after the first frame; this driver sends it in `enable`, before the first frame.
 - PHY timings are computed by mainline; stock's table is `00 31 0D 0D 2B 27 0D 0D 09 02 04 00 27 1C`. Not compared yet.
-- None of these changes has reached the panel yet.
+- No run has shown a correct picture yet.

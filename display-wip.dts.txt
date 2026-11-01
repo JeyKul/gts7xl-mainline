@@ -288,6 +288,7 @@
 		vddio-supply = <&vreg_l14a_1p8>;
 		reset-gpios = <&tlmm 82 GPIO_ACTIVE_LOW>;
 		tcon-ready-gpios = <&tlmm 26 GPIO_ACTIVE_HIGH>;
+		disp-det-gpios = <&pm8150_gpios 1 GPIO_ACTIVE_HIGH>;
 		pinctrl-names = "default";
 		pinctrl-0 = <&panel_default>;
 
