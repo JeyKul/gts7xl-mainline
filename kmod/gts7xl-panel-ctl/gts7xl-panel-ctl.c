@@ -25,7 +25,7 @@
 #define DSI_INTR_DMA_DONE	BIT(0)
 #define DSI_CTRL_EXPECTED	0x1f5
 
-#define MAX_BRIGHTNESS		3544 /* Top of the stock normal range, 0xdd8 */
+#define MAX_BRIGHTNESS		2047 /* Top of the stock normal range: 11 bits, 420 cd */
 #define DMA_BUF_SIZE		64
 
 static struct platform_device *ctl_pdev;

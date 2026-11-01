@@ -1,6 +1,6 @@
 # Native display research
 
-**Status: working at 60Hz.** What it took: stock on sequence with no sleep out or tear on, stock 60Hz mode, one packet per line, non-continuous DSI clock, `HS_REQ_SEL_PHY` cleared, interleave 1, no `TE` or block DMA in `TRIG_CTRL`, no `protected-clocks` on `dispcc`, and the panel module loaded straight after `msm`. Which of these are strictly needed hasn't been tested one by one.
+**Status: working, 120Hz and 60Hz.** What it took: stock on sequence with no sleep out or tear on, stock 60Hz mode, one packet per line, non-continuous DSI clock, `HS_REQ_SEL_PHY` cleared, interleave 1, no `TE` or block DMA in `TRIG_CTRL`, no `protected-clocks` on `dispcc`, and the panel module loaded straight after `msm`. Which of these are strictly needed hasn't been tested one by one.
 
 Sources: registers the bootloader left running (read from `/dev/mem`), the stock kernel's
 `techpack/display/msm/samsung/S6TUUM3_AMSA24VU01`, and Linux v7.3 `drivers/gpu/drm/msm`.
