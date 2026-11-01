@@ -22,7 +22,7 @@ Last updated 2026-11-01.
 - [x] `alsa-restore` wrote saved values over the amp DSP controls at boot, which sounded bitcrushed: masked, audio confirmed by ear
 - [x] `linux-firmware-cirrus` overwrote the Samsung amp firmware; restored and excluded with `NoExtract`
 - [ ] Run `depmod` after copying modules: kmod ignores a hand-made `modules.dep`
-- [ ] Remove Alpine once Arch is confirmed
+- [x] Alpine removed
 
 ### Audio (next)
 
@@ -45,7 +45,7 @@ Last updated 2026-11-01.
 
 - Panel init runs without errors, frames are sent, but the screen shows full stripes
 - Ruled out: TE, lane rate, PPS content (2 bytes differ from stock)
-- Next suspects: DSC slice layout, missing stock commands, DPU 2-DSC mode
+- Research in `docs/display.md`; driver updated from it, not tested on the panel yet
 - Fixes GNOME tearing and stutter, brightness, screen off
 - [ ] Follow the rules: stages, 20s auto power-off, cold boot between tests
 - Work in progress: `display-wip.dts.txt`, `panel-samsung-s6tuum3.c.wip`
