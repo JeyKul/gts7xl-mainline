@@ -91,9 +91,10 @@ Decision: Linux or Android, not both. An installer in the boot image starts when
 
 - [x] Stage 1 shows a touch interface through the native display, built by `rootfs/stage1/assemble.sh`
 - [ ] Confirm touch, Wi-Fi join and reboot from the installer
-- [ ] Download a signed Alpine installer into RAM and switch to it
+- [x] Download the Alpine installer into RAM, check its hash, switch to it
 - [x] Wi-Fi: networks are listed from the initramfs
-- [ ] Format `userdata`, download and unpack Arch, create the user, extract firmware
+- [x] Format `userdata`, download and unpack Arch, create the user, extract firmware
+- [ ] Confirm the installed system reaches GNOME on the first boot
 - [ ] Options, region and device information
 - [ ] Waydroid: enable binder in the kernel
 - [ ] `f2fs` as root filesystem, optional

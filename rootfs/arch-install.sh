@@ -7,12 +7,12 @@ set -euo pipefail
 TARBALL=$(realpath "$1"); MODULES=$(realpath "$2"); OUT=$(realpath -m "$3")
 HERE=$(dirname "$(realpath "$0")")
 A=$(mktemp -d /var/tmp/gts7xl-rootfs.XXXXXX)
-trap 'umount -R "$A/proc" "$A/sys" "$A/dev" 2>/dev/null || true; rm -rf --one-file-system "$A"' EXIT
+trap 'for d in proc sys dev; do umount -l "$A/$d" 2>/dev/null || true; done; rm -rf --one-file-system "$A"' EXIT
 
 bsdtar -xpf "$TARBALL" -C "$A"
 mount -t proc proc "$A/proc"
-mount --rbind /sys "$A/sys"
-mount --rbind /dev "$A/dev"
+mount --bind /sys "$A/sys"
+mount --bind /dev "$A/dev"
 rm -f "$A/etc/resolv.conf"; cp -L /etc/resolv.conf "$A/etc/resolv.conf"
 
 sed -i 's/^CheckSpace/#CheckSpace/' "$A/etc/pacman.conf"
@@ -36,6 +36,6 @@ chroot "$A" /usr/bin/gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/nul
 rm -f "$A/tmp/arch-setup.sh" "$A/etc/resolv.conf"
 rm -rf "$A"/var/cache/pacman/pkg/* "$A"/etc/ssh/ssh_host_*
 
-umount -R "$A/proc" "$A/sys" "$A/dev"
+for d in proc sys dev; do umount "$A/$d" || umount -l "$A/$d"; done
 tar --numeric-owner --xattrs --acls -C "$A" -czf "$OUT" .
 echo "Wrote $OUT"

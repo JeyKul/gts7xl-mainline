@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -53,9 +53,16 @@ jobs:
           make O=build olddefconfig
           test "$(make -s O=build kernelrelease)" = 7.3.0-gts7xl
           make -s O=build -j"$(nproc)" modules qcom/sm8250-samsung-gts7xlwifi.dtb
+          make -s O=build INSTALL_MOD_PATH="$PWD/../modroot" INSTALL_MOD_STRIP=1 modules_install
+          tar -C ../modroot -czf ../modules.tar.gz lib
           ../rootfs/stage1/assemble.sh build "$INITRAMFS"
+          # The boot image only accepts the installer built with it
+          ../rootfs/stage2/build.sh "$INITRAMFS/s1/s1ui" ../modules.tar.gz ../stage2.tar.gz
+          TAG="installer-${GITHUB_RUN_ID}"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+          echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/stage2.tar.gz" > "$INITRAMFS/s1/stage2.url"
+          sha256sum ../stage2.tar.gz | cut -d' ' -f1 > "$INITRAMFS/s1/stage2.sha256"
           make -s O=build -j"$(nproc)" Image
-          make -s O=build INSTALL_MOD_PATH="$PWD/../modroot" modules_install
 
       - name: Package
         run: |
@@ -66,8 +73,16 @@ jobs:
           python3 mkbootimg-src/mkbootimg.py --header_version 1 --pagesize 2048 --base 0x10000000 \
             --kernel_offset 0x00008000 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 \
             --kernel kernel-dtb --ramdisk rd -o artifact/boot.img
-          tar -C modroot -czf artifact/modules-7.3.0-gts7xl.tar.gz lib
+          cp modules.tar.gz artifact/modules-7.3.0-gts7xl.tar.gz
           (cd artifact && sha256sum boot.img modules-7.3.0-gts7xl.tar.gz > SHA256SUMS)
+
+      - name: Publish the RAM installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$TAG" stage2.tar.gz --prerelease \
+            --title "Installer $TAG" \
+            --notes "Downloaded by the boot image built in this run. Contains no Samsung or Qualcomm device firmware beyond the open linux-firmware files."
 
       - uses: actions/upload-artifact@v4
         with:
