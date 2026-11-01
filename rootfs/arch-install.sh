@@ -28,6 +28,7 @@ tar -xzf "$MODULES" -C "$A/usr" --strip-components=0 lib/modules 2>/dev/null || 
 install -m755 "$HERE/arch-setup.sh" "$A/tmp/arch-setup.sh"
 printf "NEW_USER=user\nNEW_PASS=user\n" > "$A/tmp/gts7xl-user"
 chroot "$A" /bin/bash /tmp/arch-setup.sh
+chroot "$A" /usr/bin/gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null || true
 rm -f "$A/tmp/arch-setup.sh" "$A/etc/resolv.conf"
 rm -rf "$A"/var/cache/pacman/pkg/* "$A"/etc/ssh/ssh_host_*
 
