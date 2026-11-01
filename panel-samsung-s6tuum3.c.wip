@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/regulator/consumer.h>
+#include <linux/workqueue.h>
 
 #include <drm/display/drm_dsc.h>
 #include <drm/display/drm_dsc_helper.h>
@@ -17,6 +18,8 @@
 #include <drm/drm_modes.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_probe_helper.h>
+
+#include <video/mipi_display.h>
 
 /* Top of the stock normal range, wrdisbv 0xdd8 */
 #define S6TUUM3_MAX_BRIGHTNESS	3544
@@ -30,6 +33,10 @@ struct s6tuum3 {
 	struct drm_dsc_config dsc;
 	bool first_on_done;
 	bool enabled;
+	struct gpio_desc *disp_det;
+	struct delayed_work diag;
+	struct delayed_work on_work;
+	int diag_left;
 };
 
 static const u8 s6tuum3_pps[] = {
@@ -42,6 +49,10 @@ static const u8 s6tuum3_pps[] = {
 	0xf8, 0x1a, 0x38, 0x1a, 0x78, 0x1a, 0xb6, 0x2a, 0xf6, 0x2b, 0x34, 0x2b,
 	0x74, 0x3b, 0x74, 0x63, 0xf4
 };
+
+/* Bring-up: keep the panel state the bootloader left and only send frames */
+static bool skip_init;
+module_param(skip_init, bool, 0444);
 
 static inline struct s6tuum3 *to_s6tuum3(struct drm_panel *panel)
 {
@@ -58,6 +69,12 @@ static int s6tuum3_prepare(struct drm_panel *panel)
 	if (ret)
 		return ret;
 	msleep(10);
+
+	if (skip_init) {
+		dev_info(&ctx->dsi->dev, "skipping reset and init\n");
+		ctx->dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
+		return 0;
+	}
 
 	gpiod_set_value_cansleep(ctx->reset, 1);
 	usleep_range(1000, 2000);
@@ -132,13 +149,32 @@ static int s6tuum3_set_brightness(struct mipi_dsi_device *dsi, u16 level)
 	return dsi_ctx.accum_err;
 }
 
-static int s6tuum3_enable(struct drm_panel *panel)
+/* Bring-up: report what the panel itself sees */
+static void s6tuum3_diag(struct work_struct *work)
 {
-	struct s6tuum3 *ctx = to_s6tuum3(panel);
-	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
+	struct s6tuum3 *ctx = container_of(work, struct s6tuum3, diag.work);
+	u8 pwr = 0xff, sig = 0xff, err = 0xff;
+	int r1, r2, r3;
 
-	dsi_ctx.accum_err = s6tuum3_set_brightness(ctx->dsi,
-						   backlight_get_brightness(panel->backlight));
+	ctx->dsi->mode_flags |= MIPI_DSI_MODE_LPM;
+	r1 = mipi_dsi_dcs_read(ctx->dsi, MIPI_DCS_GET_POWER_MODE, &pwr, 1);
+	r2 = mipi_dsi_dcs_read(ctx->dsi, MIPI_DCS_GET_SIGNAL_MODE, &sig, 1);
+	r3 = mipi_dsi_dcs_read(ctx->dsi, MIPI_DCS_GET_ERROR_COUNT_ON_DSI, &err, 1);
+	ctx->dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
+	dev_info(&ctx->dsi->dev, "diag: tcon=%d det=%d pwr=%02x(%d) sig=%02x(%d) err=%02x(%d)\n",
+		 gpiod_get_value_cansleep(ctx->tcon_ready),
+		 ctx->disp_det ? gpiod_get_value_cansleep(ctx->disp_det) : -1,
+		 pwr, r1, sig, r2, err, r3);
+
+	if (--ctx->diag_left > 0)
+		schedule_delayed_work(&ctx->diag, msecs_to_jiffies(500));
+}
+
+/* Stock sends display on after the first frame has gone out */
+static void s6tuum3_display_on(struct work_struct *work)
+{
+	struct s6tuum3 *ctx = container_of(work, struct s6tuum3, on_work.work);
+	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
 
 	mipi_dsi_dcs_set_display_on_multi(&dsi_ctx);
 	mipi_dsi_msleep(&dsi_ctx, 17);
@@ -154,9 +190,28 @@ static int s6tuum3_enable(struct drm_panel *panel)
 		ctx->first_on_done = true;
 	}
 
+	dev_info(&ctx->dsi->dev, "display on sent: %d\n", dsi_ctx.accum_err);
 	ctx->enabled = !dsi_ctx.accum_err;
 
-	return dsi_ctx.accum_err;
+	ctx->diag_left = 24;
+	schedule_delayed_work(&ctx->diag, msecs_to_jiffies(100));
+}
+
+static int s6tuum3_enable(struct drm_panel *panel)
+{
+	struct s6tuum3 *ctx = to_s6tuum3(panel);
+	int ret;
+
+	if (skip_init) {
+		ctx->diag_left = 24;
+		schedule_delayed_work(&ctx->diag, msecs_to_jiffies(100));
+		return 0;
+	}
+
+	ret = s6tuum3_set_brightness(ctx->dsi, backlight_get_brightness(panel->backlight));
+	schedule_delayed_work(&ctx->on_work, msecs_to_jiffies(200));
+
+	return ret;
 }
 
 static int s6tuum3_unprepare(struct drm_panel *panel)
@@ -164,6 +219,8 @@ static int s6tuum3_unprepare(struct drm_panel *panel)
 	struct s6tuum3 *ctx = to_s6tuum3(panel);
 	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
 
+	cancel_delayed_work_sync(&ctx->on_work);
+	cancel_delayed_work_sync(&ctx->diag);
 	ctx->enabled = false;
 	mipi_dsi_dcs_set_display_off_multi(&dsi_ctx);
 	mipi_dsi_dcs_enter_sleep_mode_multi(&dsi_ctx);
@@ -218,7 +275,7 @@ static const struct backlight_ops s6tuum3_bl_ops = {
 
 static const struct backlight_properties s6tuum3_bl_props = {
 	.type = BACKLIGHT_RAW,
-	.brightness = 100,
+	.brightness = 800,
 	.max_brightness = S6TUUM3_MAX_BRIGHTNESS,
 };
 
@@ -244,6 +301,12 @@ static int s6tuum3_probe(struct mipi_dsi_device *dsi)
 	ctx->tcon_ready = devm_gpiod_get(dev, "tcon-ready", GPIOD_IN);
 	if (IS_ERR(ctx->tcon_ready))
 		return dev_err_probe(dev, PTR_ERR(ctx->tcon_ready), "failed to get tcon-ready\n");
+
+	ctx->disp_det = devm_gpiod_get_optional(dev, "disp-det", GPIOD_IN);
+	if (IS_ERR(ctx->disp_det))
+		return dev_err_probe(dev, PTR_ERR(ctx->disp_det), "failed to get disp-det\n");
+	INIT_DELAYED_WORK(&ctx->diag, s6tuum3_diag);
+	INIT_DELAYED_WORK(&ctx->on_work, s6tuum3_display_on);
 
 	ctx->dsi = dsi;
 	mipi_dsi_set_drvdata(dsi, ctx);
