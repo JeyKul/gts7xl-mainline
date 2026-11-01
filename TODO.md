@@ -17,7 +17,9 @@ Last updated 2026-11-01.
 
 ### Arch Linux base
 
-- [ ] Install in `/arch` on userdata with `rootfs/arch-install.sh`, boot with `/.arch`; remove `/.arch` from TWRP to return to Alpine
+- [x] Installed in `/arch` on userdata with `rootfs/arch-install.sh`, boots with `/.arch`; remove `/.arch` from TWRP to return to Alpine
+- [ ] Limiter is `swh-plugins` fast lookahead, not ZaMaximX2 as on Alpine; confirm by ear
+- [ ] Run `depmod` after copying modules: kmod ignores a hand-made `modules.dep`
 - [ ] Remove Alpine once Arch is confirmed
 
 ### Audio (next)

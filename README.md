@@ -96,7 +96,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 ## Root filesystem
 
-The system lives on `userdata` (formatted ext4, which erases Android data). `rootfs/twrp-setup.sh` and `rootfs/rootcfg.sh` set up Alpine; `rootfs/arch-install.sh` builds Arch Linux ARM in `/arch` from there, and an `/.arch` marker on `userdata` boots it. The move to Arch is in progress.
+The system lives on `userdata` (formatted ext4, which erases Android data). `rootfs/twrp-setup.sh` and `rootfs/rootcfg.sh` set up Alpine; `rootfs/arch-install.sh` builds Arch Linux ARM in `/arch` from there, and an `/.arch` marker on `userdata` boots it. Arch is the current base; Alpine remains as a fallback.
 
 ## GPU
 
