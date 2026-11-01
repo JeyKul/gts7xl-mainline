@@ -25,6 +25,8 @@ Last updated 2026-11-01.
 - [x] First sound and music, speed and pitch correct
 - [x] Autoloads at boot, PulseAudio sink `speakers`, amps capped at -15 dB
 - [ ] Distortion at high volume remains with protection on, not confirmed better
+- [ ] Amp mailbox pause/resume fails (`-ENOMSG`) when the stream restarts; DSP state still reads running
+- [ ] Sink now S24 with an equalizer sink (`qpaeq`, launcher `Equalizer`); effect on distortion not confirmed
 - [ ] `CAL_AMBIENT` reads back 0, stored value 29; unexplained
 - [x] 4.0 output, one TDM slot per speaker; positions confirmed by ear
 - [ ] Keep the -15 dB cap until distortion and `CAL_AMBIENT` are explained
