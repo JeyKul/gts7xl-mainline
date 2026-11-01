@@ -20,44 +20,15 @@ grep -q '^DisableSandbox' "$A/etc/pacman.conf" || sed -i '/^\[options\]/a Disabl
 # linux-firmware ships a generic amp firmware at the same path as the tablet's own
 sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/lib/firmware/cirrus/cs35l41-dsp1-spk-prot.*|' "$A/etc/pacman.conf"
 
-cat > "$A/tmp/in.sh" <<'C'
-set -euo pipefail
-pacman-key --init
-pacman-key --populate archlinuxarm
-pacman -Rdd --noconfirm linux-aarch64 || true
-pacman -Syu --noconfirm --needed --overwrite '/etc/dconf/*' \
-  gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console \
-  gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome \
-  adwaita-fonts networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils \
-  alsa-utils mesa swh-plugins sudo psmisc python linux-firmware
-userdel -r alarm 2>/dev/null || true
-useradd -m -G wheel,video,input,audio,tty,network -s /bin/bash user
-echo 'user:user' | chpasswd
-passwd -l root
-echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
-echo gts7xl > /etc/hostname
-echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen; locale-gen; echo LANG=en_US.UTF-8 > /etc/locale.conf
-systemctl disable systemd-networkd systemd-resolved sshd 2>/dev/null || true
-systemctl mask alsa-restore alsa-state
-systemctl enable NetworkManager gdm bluetooth systemd-timesyncd \
-  gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log
-systemctl set-default graphical.target
-sed -i 's/^load-module module-suspend-on-idle/#&/' /etc/pulse/default.pa
-sed -i 's/^#\?AutoEnable=.*/AutoEnable=true/' /etc/bluetooth/main.conf
-mkdir -p /etc/udev/rules.d; ln -sf /dev/null /etc/udev/rules.d/90-alsa-restore.rules
-cp -a /etc/skel/.local /home/user/
-chown -R user:user /home/user
-dconf update
-depmod -a 7.3.0-gts7xl
-C
-
 # The tablet's config must exist before services are enabled
 cp -a "$HERE/overlay/." "$A/"
 chmod 755 "$A"/usr/local/sbin/* "$A/usr/lib/systemd/system-sleep/gts7xl-bluetooth"
 mkdir -p "$A/usr/lib/modules"
 tar -xzf "$MODULES" -C "$A/usr" --strip-components=0 lib/modules 2>/dev/null || tar -xzf "$MODULES" -C "$A"
-chroot "$A" /bin/bash /tmp/in.sh
-rm -f "$A/tmp/in.sh" "$A/etc/resolv.conf"
+install -m755 "$HERE/arch-setup.sh" "$A/tmp/arch-setup.sh"
+printf "NEW_USER=user\nNEW_PASS=user\n" > "$A/tmp/gts7xl-user"
+chroot "$A" /bin/bash /tmp/arch-setup.sh
+rm -f "$A/tmp/arch-setup.sh" "$A/etc/resolv.conf"
 rm -rf "$A"/var/cache/pacman/pkg/* "$A"/etc/ssh/ssh_host_*
 
 umount -R "$A/proc" "$A/sys" "$A/dev"

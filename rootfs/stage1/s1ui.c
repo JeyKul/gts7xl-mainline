@@ -314,9 +314,9 @@ static const char *const rows[2][4] = {
 };
 
 /* Returns 1 with the text in out, 0 if cancelled. Characters are never logged. */
-static int keyboard(const char *title, char *out, int max)
+static int keyboard(const char *title, const char *ok, int show, char *out, int max)
 {
-	int shift = 0, show = 0, len = 0;
+	int shift = 0, len = 0;
 	const int kw = 200, kh = 170, x0 = 100, y0 = 380;
 	struct btn bshift = { x0, y0 + 4 * kh, 300, kh - 10 }, bspace = { x0 + 310, y0 + 4 * kh, 800, kh - 10 };
 	struct btn bback = { x0 + 1120, y0 + 4 * kh, 300, kh - 10 }, bshow = { x0 + 1430, y0 + 4 * kh, 300, kh - 10 };
@@ -331,7 +331,7 @@ static int keyboard(const char *title, char *out, int max)
 		shown[len < 100 ? len : 100] = 0;
 		rect(90, 220, fbw - 180, 110, BTN);
 		text(120, 250, shown, FG);
-		button(&bok, "Connect", ACC);
+		button(&bok, ok, ACC);
 		button(&bcancel, "Back", BTN);
 		for (int r = 0; r < 4; r++) {
 			const char *row = rows[shift][r];
@@ -417,9 +417,178 @@ static int wifi_connect(const struct net *n, const char *pw)
 	return 0;
 }
 
-int main(void)
+static const char *const REBOOT[] = { "reboot", "-f", NULL };
+
+static void close_screen(void)
+{
+	close(drm_fd);
+	drm_fd = -1;
+	if (touch_fd >= 0)
+		close(touch_fd);
+	touch_fd = -1;
+}
+
+/* Download the installer built with this boot image, then hand the screen to it */
+static int fetch_installer(void)
+{
+	static char *fetch[] = { "sh", "/fetch.sh", NULL };
+	static char *go[] = { "sh", "/s2start.sh", NULL };
+
+	rect(0, 0, fbw, fbh, BG);
+	text(100, 60, "Galaxy Tab S7+ Linux installer", FG);
+	text(100, 160, "Downloading the installer...", FG);
+	present();
+	int r = run(fetch);
+	if (r) {
+		snprintf(status, sizeof(status), r == 2 ? "Installer download is damaged" : "Could not download the installer");
+		return r;
+	}
+	close_screen();
+	run(go);
+	open_fb();
+	open_touch();
+	snprintf(status, sizeof(status), "Installer stopped");
+	return 1;
+}
+
+static int ask(const char *a, const char *b, const char *c, const char *yes, const char *no, unsigned yes_col)
+{
+	const struct btn by = { fbw - 900, fbh - 220, 800, 170 }, bn = { 100, fbh - 220, 600, 170 };
+
+	rect(0, 0, fbw, fbh, BG);
+	text(100, 60, "Galaxy Tab S7+ Linux installer", FG);
+	if (a) text(100, 220, a, FG);
+	if (b) text(100, 320, b, FG);
+	if (c) text(100, 420, c, FG);
+	button(&by, yes, yes_col);
+	if (no) button(&bn, no, BTN);
+	for (;;) {
+		int x, y;
+		wait_tap(&x, &y, 0);
+		if (hit(&by, x, y)) return 1;
+		if (no && hit(&bn, x, y)) return 0;
+	}
+}
+
+static int valid_user(const char *u)
+{
+	if (!*u || !((*u >= 'a' && *u <= 'z') || *u == '_') || strlen(u) > 31)
+		return 0;
+	for (; *u; u++)
+		if (!((*u >= 'a' && *u <= 'z') || (*u >= '0' && *u <= '9') || *u == '_' || *u == '-'))
+			return 0;
+	return 1;
+}
+
+static int stage2(void)
+{
+	static char user[33], p1[64], p2[64], line[160];
+
+	open_fb();
+	open_touch();
+	if (touch_fd < 0)
+		return 2;
+	for (;;) {
+		if (ask("This installs Arch Linux with GNOME.", "Your firmware is copied from this tablet on first boot.",
+			"You need Wi-Fi for the whole install, about 3 GB.", "Continue", "Reboot", ACC))
+			break;
+		sync();
+		run((char *const *)REBOOT);
+	}
+	for (;;) {
+		if (!keyboard("Choose a user name: lowercase and digits", "Next", 1, user, sizeof(user)))
+			continue;
+		char copy[33];
+		snprintf(copy, sizeof(copy), "%s", user);
+		if (strcmp(copy, "root") && valid_user(copy))
+			break;
+		ask("That name is not allowed.", "Use lowercase letters, digits, - and _.", "It must start with a letter.", "Try again", NULL, ACC);
+	}
+	for (;;) {
+		if (!keyboard("Choose a password", "Next", 0, p1, sizeof(p1)) || !*p1)
+			continue;
+		if (!keyboard("Type the password again", "Next", 0, p2, sizeof(p2)))
+			continue;
+		if (!strcmp(p1, p2))
+			break;
+		ask("The passwords did not match.", NULL, NULL, "Try again", NULL, ACC);
+	}
+	memset(p2, 0, sizeof(p2));
+	if (access("/dry", F_OK)) {
+		snprintf(line, sizeof(line), "User: %s", user);
+		if (!ask("THIS ERASES EVERYTHING ON THIS TABLET'S DATA PARTITION.", "Android apps, photos and files on it will be gone.", line,
+			 "Erase and install", "Reboot", WARN)) {
+			sync();
+			run((char *const *)REBOOT);
+		}
+	}
+	FILE *f = fopen("/tmp/choices", "w");
+	if (!f)
+		return 3;
+	chmod("/tmp/choices", 0600);
+	fprintf(f, "NEW_USER=%s\nNEW_PASS='", user);
+	for (const char *c = p1; *c; c++) {
+		if (*c == '\'')
+			fputs("'\\''", f);
+		else
+			fputc(*c, f);
+	}
+	fputs("'\n", f);
+	fclose(f);
+	memset(p1, 0, sizeof(p1));
+
+	pid_t pid = fork();
+	if (!pid) {
+		int n = open("/tmp/install.log", O_WRONLY | O_CREAT | O_APPEND, 0600);
+		dup2(n, 1); dup2(n, 2);
+		execl("/bin/sh", "sh", "/install.sh", NULL);
+		_exit(127);
+	}
+	int st = 0, done = 0, spin = 0;
+	while (!done) {
+		char step[120] = "Starting";
+		f = fopen("/tmp/step", "r");
+		if (f) {
+			if (!fgets(step, sizeof(step), f))
+				step[0] = 0;
+			fclose(f);
+			step[strcspn(step, "\n")] = 0;
+		}
+		rect(0, 0, fbw, fbh, BG);
+		text(100, 60, "Installing. Keep the tablet plugged in if you can.", FG);
+		text(100, 220, step, FG);
+		rect(100, 340, 100 + (spin++ % 20) * 100, 30, ACC);
+		present();
+		for (int i = 0; i < 30; i++) {
+			flush_frame();
+			usleep(33000);
+		}
+		if (waitpid(pid, &st, WNOHANG) == pid)
+			done = 1;
+	}
+	if (WIFEXITED(st) && !WEXITSTATUS(st)) {
+		ask("Done. The tablet will start Arch after you reboot.", "The first start copies firmware and takes longer.", NULL, "Reboot", NULL, ACC);
+	} else {
+		char step[120] = "Install failed";
+		f = fopen("/tmp/step", "r");
+		if (f) {
+			if (!fgets(step, sizeof(step), f))
+				step[0] = 0;
+			fclose(f);
+			step[strcspn(step, "\n")] = 0;
+		}
+		ask(step, "Log: /tmp/install.log in the USB shell.", "Rebooting returns to this installer.", "Reboot", NULL, WARN);
+	}
+	sync();
+	run((char *const *)REBOOT);
+	return 0;
+}
+
+int main(int argc, char **argv)
 {
 	setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1);
+	if (argc > 1 && !strcmp(argv[1], "--stage2"))
+		return stage2();
 	static char pw[64];
 	static char *rb[] = { "reboot", "-f", NULL };
 
@@ -477,7 +646,7 @@ int main(void)
 			char title[100];
 			pw[0] = 0;
 			snprintf(title, sizeof(title), "Password: %.60s", nets[i].ssid);
-			if (!nets[i].open && !keyboard(title, pw, sizeof(pw)))
+			if (!nets[i].open && !keyboard(title, "Connect", 0, pw, sizeof(pw)))
 				break;
 			rect(0, 0, fbw, fbh, BG);
 			text(100, 160, "Connecting...", FG);
@@ -487,6 +656,8 @@ int main(void)
 			if (r == -2) snprintf(status, sizeof(status), "Could not join. Wrong password?");
 			else if (r == -3) snprintf(status, sizeof(status), "Joined, but got no address");
 			else if (r) snprintf(status, sizeof(status), "Connection failed (%d)", r);
+			else if (!r)
+				fetch_installer();
 			break;
 		}
 	}
