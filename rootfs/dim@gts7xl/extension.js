@@ -3,7 +3,7 @@ import Clutter from 'gi://Clutter';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
-const DIM = 115; /* 0 = off, 255 = black; edit and log out to change */
+const DIM = 0; /* Real brightness comes from the panel now; overlay only blacks out when idle */
 const IDLE_MS = 60000; /* fully black after this long without input */
 
 export default class DimExtension extends Extension {

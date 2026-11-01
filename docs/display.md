@@ -31,6 +31,12 @@ Sources: registers the bootloader left running (read from `/dev/mem`), the stock
 
 With `mdss` enabled in the device tree, loading `msm` wipes the bootloader's display setup: DSC registers read 0 and `CTL_TOP` changes from `0x20000` to `0x1f00`. The panel then keeps showing its last frame while GNOME runs unseen. So the firmware framebuffer and an enabled `mdss` can't be used together: the native driver must take over in the same boot, or the image must go back to `out/direct-simplefb-arch.img`.
 
+## Controlling the bootloader's display
+
+The bootloader leaves its pipeline running: auto refresh on, planes scanning out `0x9c000000`, and the DSI link enabled. `kmod/gts7xl-panel-ctl` sends panel commands over that link without any reset or takeover: command format as in the msm driver, `DMA_BASE`, `DMA_LEN`, `TRIG_DMA`. Brightness is confirmed by eye. This doesn't replace a native driver, but needs no `mdss` in the device tree.
+
+Plan: swap plane addresses during the blank period using `INTF_TEAR_INT_COUNT_VAL` as the position, which should stop tearing.
+
 ## Test results
 
 | Run | Result |
