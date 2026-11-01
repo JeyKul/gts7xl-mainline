@@ -1,7 +1,7 @@
 From 3d44da78039364f26d719344a72d45dcc1fe464b Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sun, 1 Nov 2026 13:07:58 +0100
-Subject: [PATCH 07/14] gts7xlwifi: report the panel as a built-in DSI display
+Subject: [PATCH 07/15] gts7xlwifi: report the panel as a built-in DSI display
  for GNOME
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

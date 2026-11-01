@@ -1,0 +1,125 @@
+From 18cdb8f7b819c2b6a39e3ef6eb8a39ba10b8e45b Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sun, 1 Nov 2026 14:40:22 +0100
+Subject: [PATCH 15/15] gts7xlwifi: give each speaker its own TDM slot for 4.0
+ output
+
+Amp positions were mapped by ear.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts  | 16 ++++++++--------
+ sound/soc/qcom/sm8250.c                          | 11 +++++++----
+ 2 files changed, 15 insertions(+), 12 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 4fa10cc02..50cc9191e 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -398,7 +398,7 @@ &i2c11 {
+ 	pinctrl-0 = <&qup_i2c11_default>, <&amp_default>;
+ 	status = "okay";
+ 
+-	cs35l41_fr: speaker-amp@40 {
++	cs35l41_fl: speaker-amp@40 {
+ 		compatible = "cirrus,cs35l41";
+ 		reg = <0x40>;
+ 		interrupt-parent = <&tlmm>;
+@@ -409,11 +409,11 @@ cs35l41_fr: speaker-amp@40 {
+ 		cirrus,asp-sdout-hiz = <3>;
+ 		cirrus,gpio2-src-select = <2>;
+ 		cirrus,gpio2-output-enable;
+-		sound-name-prefix = "FR";
++		sound-name-prefix = "FL";
+ 		#sound-dai-cells = <1>;
+ 	};
+ 
+-	cs35l41_fl: speaker-amp@41 {
++	cs35l41_rl: speaker-amp@41 {
+ 		compatible = "cirrus,cs35l41";
+ 		reg = <0x41>;
+ 		interrupt-parent = <&tlmm>;
+@@ -424,11 +424,11 @@ cs35l41_fl: speaker-amp@41 {
+ 		cirrus,asp-sdout-hiz = <3>;
+ 		cirrus,gpio2-src-select = <2>;
+ 		cirrus,gpio2-output-enable;
+-		sound-name-prefix = "FL";
++		sound-name-prefix = "RL";
+ 		#sound-dai-cells = <1>;
+ 	};
+ 
+-	cs35l41_rr: speaker-amp@42 {
++	cs35l41_fr: speaker-amp@42 {
+ 		compatible = "cirrus,cs35l41";
+ 		reg = <0x42>;
+ 		interrupt-parent = <&tlmm>;
+@@ -439,11 +439,11 @@ cs35l41_rr: speaker-amp@42 {
+ 		cirrus,asp-sdout-hiz = <3>;
+ 		cirrus,gpio2-src-select = <2>;
+ 		cirrus,gpio2-output-enable;
+-		sound-name-prefix = "RR";
++		sound-name-prefix = "FR";
+ 		#sound-dai-cells = <1>;
+ 	};
+ 
+-	cs35l41_rl: speaker-amp@43 {
++	cs35l41_rr: speaker-amp@43 {
+ 		compatible = "cirrus,cs35l41";
+ 		reg = <0x43>;
+ 		interrupt-parent = <&tlmm>;
+@@ -454,7 +454,7 @@ cs35l41_rl: speaker-amp@43 {
+ 		cirrus,asp-sdout-hiz = <3>;
+ 		cirrus,gpio2-src-select = <2>;
+ 		cirrus,gpio2-output-enable;
+-		sound-name-prefix = "RL";
++		sound-name-prefix = "RR";
+ 		#sound-dai-cells = <1>;
+ 	};
+ };
+diff --git a/sound/soc/qcom/sm8250.c b/sound/soc/qcom/sm8250.c
+index 4483b8673..dd94d7b11 100644
+--- a/sound/soc/qcom/sm8250.c
++++ b/sound/soc/qcom/sm8250.c
+@@ -74,6 +74,7 @@ static int sm8250_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ 	snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);
+ 
+ 	if (snd_soc_rtd_to_cpu(rtd, 0)->id == PRIMARY_TDM_RX_0) {
++		channels->min = channels->max = TDM_SLOTS;
+ 		snd_mask_none(fmt);
+ 		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S32_LE);
+ 	}
+@@ -84,7 +85,8 @@ static int sm8250_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ static int sm8250_snd_hw_params(struct snd_pcm_substream *substream,
+ 				struct snd_pcm_hw_params *params)
+ {
+-	static const unsigned int chmap[] = { 0, 4 };
++	/* Byte offset of each channel within the frame */
++	static const unsigned int chmap[] = { 0, 4, 8, 12 };
+ 	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
+ 	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
+ 	struct snd_soc_dai *dai;
+@@ -93,7 +95,7 @@ static int sm8250_snd_hw_params(struct snd_pcm_substream *substream,
+ 	if (cpu_dai->id != PRIMARY_TDM_RX_0)
+ 		return 0;
+ 
+-	ret = snd_soc_dai_set_tdm_slot(cpu_dai, 0, 0x3, TDM_SLOTS, TDM_SLOT_WIDTH);
++	ret = snd_soc_dai_set_tdm_slot(cpu_dai, 0, 0xf, TDM_SLOTS, TDM_SLOT_WIDTH);
+ 	if (ret)
+ 		return ret;
+ 
+@@ -101,9 +103,10 @@ static int sm8250_snd_hw_params(struct snd_pcm_substream *substream,
+ 	if (ret)
+ 		return ret;
+ 
+-	/* Front and rear amps on one side share the left or right slot */
++	/* Each amp takes one slot, named by its prefix: FL, FR, RL, RR */
+ 	for_each_rtd_codec_dais(rtd, i, dai) {
+-		unsigned int slot = dai->component->name_prefix[1] == 'R' ? 1 : 0;
++		const char *prefix = dai->component->name_prefix;
++		unsigned int slot = (prefix[0] == 'R' ? 2 : 0) + (prefix[1] == 'R' ? 1 : 0);
+ 
+ 		ret = snd_soc_dai_set_channel_map(dai, 0, NULL, 1, &slot);
+ 		if (ret)
+-- 
+2.56.0
+

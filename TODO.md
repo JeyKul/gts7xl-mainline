@@ -11,7 +11,7 @@ Last updated 2026-11-01.
 - Keyboard, until the trackpad is touched
 - Battery reading; charging is slow on PC USB
 - Emergency reboot: Power + Vol Up + Vol Down, release
-- Krita
+- Krita, VLC
 
 ## In progress
 
@@ -23,10 +23,10 @@ Last updated 2026-11-01.
 - [ ] Amp firmware from vendor: `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning `.bin`
 - [x] Sound card registers: Primary TDM, 4 slots, 48kHz (loaded with `/usr/local/sbin/audio-up`)
 - [x] First sound and music, speed and pitch correct
-- [x] Autoloads at boot, PulseAudio sink `speakers`, amps capped at -24 dB
-- [ ] Crackle (cause unknown; suspects: TDM timing, no tuning)
-- [x] Left and right work; each of the 4 amps not checked alone
-- [ ] Load `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning; lift the -24 dB cap only after that
+- [x] Autoloads at boot, PulseAudio sink `speakers`, amps capped at -15 dB
+- [ ] Crackle: user reports it sounds fine now, recheck with music
+- [x] 4.0 output, one TDM slot per speaker; positions mapped by ear, remap not reconfirmed
+- [ ] Load `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning; lift the -15 dB cap only after that
 
 ### Native display (paused)
 
