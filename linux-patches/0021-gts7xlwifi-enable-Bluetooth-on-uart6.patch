@@ -1,0 +1,49 @@
+From a714e9c2836961205c8982ea7d3b05e18640ffbd Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 1 Nov 2026 20:47:58 +0100
+Subject: [PATCH] gts7xlwifi: enable Bluetooth on uart6
+
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 19 +++++++++++++++++++
+ 1 file changed, 19 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 7bb849807..591d9fd24 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -20,6 +20,10 @@ / {
+ 	qcom,msm-id = <356 0x20001>;
+ 	qcom,board-id = <8 6>;
+ 
++	aliases {
++		serial1 = &uart6;
++	};
++
+ 	/* Stock limits are 4.38V and 3.15A; stay conservative during bring-up */
+ 	battery: battery {
+ 		compatible = "simple-battery";
+@@ -328,6 +332,21 @@ &qupv3_id_0 {
+ 	status = "okay";
+ };
+ 
++&uart6 {
++	status = "okay";
++
++	bluetooth {
++		compatible = "qcom,qca6390-bt";
++
++		vddrfacmn-supply = <&vreg_pmu_rfa_cmn>;
++		vddaon-supply = <&vreg_pmu_aon_0p59>;
++		vddbtcmx-supply = <&vreg_pmu_btcmx_0p85>;
++		vddrfa0p8-supply = <&vreg_pmu_rfa_0p8>;
++		vddrfa1p2-supply = <&vreg_pmu_rfa_1p2>;
++		vddrfa1p7-supply = <&vreg_pmu_rfa_1p7>;
++	};
++};
++
+ &apps_rsc {
+ 	regulators-1 {
+ 		compatible = "qcom,pm8150l-rpmh-regulators";
+-- 
+2.56.0
+

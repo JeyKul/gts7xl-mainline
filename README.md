@@ -61,7 +61,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Hardware | State | Notes |
 |---|---|---|
 | Wi-Fi: QCA6390 | ✅ | |
-| Bluetooth: QCA6390 | ⬜ | |
+| Bluetooth: QCA6390 | 🟡 | Firmware loads on `uart6`, controller up; pairing and audio not tested |
 | GPS | ⬜ | |
 | USB gadget (serial, network) | ✅ | |
 | USB host | ⬜ | |
