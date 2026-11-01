@@ -85,6 +85,8 @@ else
 	rm -f /tmp/fw.tar
 fi
 cp -a /gts7xl/overlay/. $A/
+# A copy of the overlay root also sets the owner of / and system folders
+(cd /gts7xl/overlay && find . -print0) | (cd $A && xargs -0 chown -h 0:0)
 mkdir -p $A/usr/lib/firmware
 cp -a /gts7xl/firmware/. $A/usr/lib/firmware/
 chmod 755 $A/usr/local/sbin/* $A/usr/lib/systemd/system-sleep/gts7xl-bluetooth
