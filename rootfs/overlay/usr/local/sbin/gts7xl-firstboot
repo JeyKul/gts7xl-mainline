@@ -1,0 +1,132 @@
+#!/usr/bin/env python3
+"""Copy this tablet's own firmware and calibration from its stock partitions.
+
+Nothing here is redistributed: every file comes from the device it runs on, and
+the source partitions are only ever mounted read-only.
+"""
+import glob,os,shutil,struct,subprocess,sys,tempfile
+
+DEST=os.environ.get('GTS7XL_DEST','/usr/lib/firmware')
+ETC=os.environ.get('GTS7XL_ETC','/etc/gts7xl')
+PL='/dev/disk/by-partlabel/'
+AMPS={'0040':'_r','0041':'','0042':'_br','0043':'_b'}
+PARTS=[]
+
+def run(*a):
+    return subprocess.run(a,check=True,capture_output=True,text=True).stdout
+
+class Ro:
+    """Mount a block device read-only for the length of a with block."""
+    def __init__(s,dev,fs=None,opts='ro'):
+        s.dev,s.fs,s.opts=dev,fs,opts
+    def __enter__(s):
+        s.d=tempfile.mkdtemp(prefix='gts7xl-')
+        a=['mount','-o',s.opts]+(['-t',s.fs] if s.fs else [])+[s.dev,s.d]
+        run(*a)
+        return s.d
+    def __exit__(s,*x):
+        run('umount',s.d); os.rmdir(s.d)
+
+def super_extents(name):
+    """Sector extents of a logical partition, from the LP metadata in super."""
+    with open(PL+'super','rb') as f:
+        f.seek(4096); g=f.read(4096)
+        if g[:4]!=b'gDla': raise RuntimeError('super has no LP geometry')
+        meta_max,slots=struct.unpack_from('<II',g,40)
+        for off in [4096*3+i*meta_max for i in range(slots)]:
+            f.seek(off); h=f.read(256)
+            if h[:4]!=b'0PLA': continue
+            hsize,=struct.unpack_from('<I',h,8)
+            tsize,=struct.unpack_from('<I',h,44)
+            f.seek(off); h=f.read(hsize); t=f.read(tsize)
+            def desc(o):
+                return struct.unpack_from('<III',h,o)
+            po,pn,pe=desc(80); eo,en,ee=desc(92)
+            for i in range(pn):
+                e=t[po+i*pe:po+(i+1)*pe]
+                n=e[:36].split(b'\0')[0].decode()
+                if n in (name,name+'_a'):
+                    _,first,count,_=struct.unpack_from('<IIII',e,36)
+                    r=[]
+                    for j in range(first,first+count):
+                        ex=t[eo+j*ee:eo+(j+1)*ee]
+                        ns,tt,data,_=struct.unpack_from('<QIQI',ex,0)
+                        if tt!=0: raise RuntimeError('unexpected extent type')
+                        r.append((ns,data))
+                    if r: return r
+    raise RuntimeError(name+' not found in super')
+
+def copy(src,dst):
+    os.makedirs(os.path.dirname(dst),exist_ok=True)
+    shutil.copyfile(src,dst)
+
+def need(path):
+    if not os.path.exists(path):
+        raise RuntimeError('missing '+path)
+    return path
+
+def apnhlos():
+    with Ro(PL+'apnhlos','vfat','ro,shortname=lower') as m:
+        img=m+'/image'
+        if not os.path.isdir(img): raise RuntimeError('apnhlos has no image directory')
+        need(img+'/adsp.mdt')
+        out=DEST+'/qcom/sm8250/gts7xl/'
+        os.makedirs(out,exist_ok=True)
+        for f in sorted(glob.glob(img+'/adsp.*')):
+            b=os.path.basename(f)
+            copy(f,out+('adsp.mbn' if b=='adsp.mdt' else b))
+        zap=sorted(glob.glob(img+'/a650_zap.*'))
+        if not zap: raise RuntimeError('no a650_zap in apnhlos')
+        for f in zap:
+            b=os.path.basename(f)
+            copy(f,DEST+'/qcom/sm8250/'+('a650_zap.mbn' if b=='a650_zap.mdt' else b))
+
+def vendor():
+    ext=super_extents('vendor')
+    if len(ext)>1:
+        raise RuntimeError('vendor is split into %d pieces, not supported yet'%len(ext))
+    sectors,start=ext[0]
+    dev=run('losetup','--find','--show','--read-only','--offset',str(start*512),
+            '--sizelimit',str(sectors*512),os.path.realpath(PL+'super')).strip()
+    try:
+        # Stock vendor is EROFS, other ROMs may use ext4
+        with Ro(dev,None,'ro') as m:
+            for e in ('.wmfw','.bin'):
+                copy(need(m+'/firmware/cs35l40-spk-dsp1-spk-prot'+e),DEST+'/cirrus/cs35l41-dsp1-spk-prot'+e)
+    finally:
+        run('losetup','--detach',dev)
+
+def num(path):
+    return int(open(path,'rb').read().split(b'\0')[0])
+
+def calibration():
+    with Ro(PL+'sec_efs','ext4','ro,noload') as m:
+        c=m+'/cirrus/'
+        temp=num(need(c+'temp_cal'))
+        for addr,s in AMPS.items():
+            v=[num(need(c+'rdc_cal'+s)),temp,num(need(c+'vsc_cal'+s)),num(need(c+'isc_cal'+s))]
+            if not 5000<v[0]<15000:
+                raise RuntimeError('implausible speaker resistance for amp '+addr)
+            os.makedirs(DEST+'/cirrus',exist_ok=True)
+            open(DEST+'/cirrus/cs35l41-cal-11-%s.bin'%addr,'wb').write(struct.pack('<4I',*v))
+
+def btaddr():
+    with Ro(PL+'efs','ext4','ro,noload') as m:
+        a=open(need(m+'/bluetooth/bt_addr')).read().strip().upper()
+    os.makedirs(ETC,exist_ok=True)
+    p=ETC+'/bt_addr'
+    open(p,'w').write(a+'\n'); os.chmod(p,0o600)
+
+def main():
+    failed=[]
+    for name,fn,needed in (('audio DSP and GPU, apnhlos',apnhlos,True),('amp firmware, vendor',vendor,True),
+                           ('speaker calibration, sec_efs',calibration,False),('Bluetooth address, efs',btaddr,False)):
+        try:
+            fn(); print('ok:',name,flush=True)
+        except Exception as e:
+            print('FAILED:',name,'-',e,flush=True)
+            if needed: failed.append(name)
+    return 1 if failed else 0
+
+if __name__=='__main__':
+    sys.exit(main())

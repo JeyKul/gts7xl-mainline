@@ -23,7 +23,8 @@ ip addr add 172.16.42.1/24 dev usb0 2>/dev/null; ip link set usb0 up 2>/dev/null
 # Hand over to the system on userdata when it is present
 mkdir -p /mnt/r
 for i in 1 2 3 4 5 6 7 8 9 10; do [ -b /dev/sda36 ] && break; sleep 1; done
-mount -t ext4 -o rw,noatime /dev/sda36 /mnt/r
+# Users may format data as either filesystem from TWRP
+mount -t ext4 -o rw,noatime /dev/sda36 /mnt/r 2>/dev/null || mount -t f2fs -o rw,noatime /dev/sda36 /mnt/r
 # Bring-up: a marker file keeps us in the initramfs for one test
 if [ -e /mnt/r/.noswitch ]; then
 	umount /mnt/r
