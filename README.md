@@ -134,3 +134,9 @@ aren't published because a live dump contains device identifiers.
 ## Keyboard notes
 
 Touching the trackpad makes the MCU send a few valid frames, then stop, with gpio43 bouncing about 10 times a second. Typing alone is fine. Unsolicited I2C polling also upsets the MCU, so don't poll it. The pin overrides tried earlier made no difference.
+
+## License and credit
+
+Free to use, change and share; just mention [JeyKul](https://github.com/JeyKul). See [LICENSE](LICENSE) (MIT).
+
+Exceptions: `linux-patches/` and `panel-samsung-s6tuum3.c.wip` change or build on Linux, so they stay under GPL-2.0. `uefi/` builds on Mu-Silicium and follows its license.

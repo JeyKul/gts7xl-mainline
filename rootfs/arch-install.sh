@@ -17,7 +17,7 @@ set -e
 pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -Rdd --noconfirm linux-aarch64 || true
-pacman -Syu --noconfirm --needed gnome networkmanager pulseaudio pulseaudio-alsa alsa-utils vlc krita mesa zam-plugins sudo python-pyqt5 psmisc
+pacman -Syu --noconfirm --needed gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome adwaita-fonts networkmanager pulseaudio pulseaudio-alsa alsa-utils vlc krita mesa swh-plugins sudo python-pyqt5 psmisc
 userdel -r alarm 2>/dev/null || true
 id user 2>/dev/null || useradd -m -G wheel,video,input,audio,tty,network -s /bin/bash user
 passwd -d user; passwd -d root
@@ -49,6 +49,7 @@ printf '[Login]\nHandlePowerKey=ignore\n' > $A/etc/systemd/logind.conf.d/power.c
 sed -e '/audio-up/d' /etc/local.d/gpu.start > $A/usr/local/sbin/gts7xl-hw
 chmod 755 $A/usr/local/sbin/gts7xl-hw
 sed -i 's/pidof pulseaudio | cut -d" " -f1/pgrep -o -u user pulseaudio/' $A/usr/local/sbin/audio-up
+sed -i 's/plugin=ZaMaximX2-ladspa label=ZaMaximX2 control=25,-6,-6/plugin=fast_lookahead_limiter_1913 label=fastLookaheadLimiter control=0,-6,0.025/' $A/usr/local/sbin/audio-up
 cat > $A/etc/systemd/system/gts7xl-hw.service <<'U'
 [Unit]
 Description=Tablet GPU and Wi-Fi modules
