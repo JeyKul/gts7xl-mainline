@@ -1,0 +1,30 @@
+From 3f7837a83aab0ffd83af3348b16e555f471f54cc Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 2 Nov 2026 00:57:06 +0100
+Subject: [PATCH] ASoC: q6afe: keep the codec DMA channel mask
+
+A mask set through set_channel_map was never copied to the port config, so the DSP got 0 and refused the port.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ sound/soc/qcom/qdsp6/q6afe.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/qcom/qdsp6/q6afe.c b/sound/soc/qcom/qdsp6/q6afe.c
+index f0ff1350e..614cd95b9 100644
+--- a/sound/soc/qcom/qdsp6/q6afe.c
++++ b/sound/soc/qcom/qdsp6/q6afe.c
+@@ -1695,8 +1695,8 @@ void q6afe_cdc_dma_port_prepare(struct q6afe_port *port,
+ 	dma_cfg->bit_width = cfg->bit_width;
+ 	dma_cfg->data_format = cfg->data_format;
+ 	dma_cfg->num_channels = cfg->num_channels;
+-	if (!cfg->active_channels_mask)
+-		dma_cfg->active_channels_mask = (1 << cfg->num_channels) - 1;
++	dma_cfg->active_channels_mask = cfg->active_channels_mask ?:
++					(1 << cfg->num_channels) - 1;
+ }
+ EXPORT_SYMBOL_GPL(q6afe_cdc_dma_port_prepare);
+ /**
+-- 
+2.56.0
+

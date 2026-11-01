@@ -3,3 +3,4 @@
 *.bin
 backup/
 dt-dump/
+__pycache__/

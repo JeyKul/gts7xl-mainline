@@ -1,11 +1,8 @@
 # Galaxy Tab S7+ Wi-Fi (SM-T970, gts7xlwifi) mainline Linux
 
-Linux v7.3 on the Snapdragon 865 Tab S7+, booted directly from the Samsung bootloader
-(v1 boot image, gzip kernel, appended DTB) or through
-[Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium) UEFI. The UEFI approach follows
-[r8q-arch](https://github.com/Itzkristis/r8q-arch) for the Galaxy S20 FE.
+Linux v7.3 and Arch Linux ARM on the Snapdragon 865 Tab S7+, booted directly from the Samsung bootloader (v1 boot image, gzip kernel, appended DTB).
 
-Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition first.
+Experimental. It's Linux or Android, not both: installing replaces `boot` and `dtbo` and erases `userdata`, so back up every partition first.
 
 ## Status
 
@@ -53,7 +50,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Hardware | State | Notes |
 |---|---|---|
 | 4 speakers, CS35L41 amps | ✅ | 4.0, protection firmware and factory calibration loaded; stock gain, software limiter in front |
-| Microphones | ⬜ | |
+| Microphones | 🟡 | Sub mic works, main mic reads zero |
 | USB-C headphones | ⬜ | |
 
 ### Connectivity
@@ -73,7 +70,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 |---|---|---|
 | Battery, fuel gauge: MAX77705 | ✅ | |
 | Charging: MAX77705 | ✅ | 900mA without USB-PD |
-| Fast charging | 🟡 | 9V USB-PD, about 15W, through `rootfs/gts7xl-charge-control`; replug not fully tested. Higher power not done |
+| Fast charging | 🟡 | 9V USB-PD, about 15W, through `gts7xl-charge-control`, renegotiated after a replug. Higher power not done |
 
 ### Sensors
 
@@ -96,26 +93,25 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 ## Installing
 
-Tested on one tablet with an installer served locally; the published build has not been tested yet. Requires an unlocked bootloader and TWRP. This erases all data on the tablet.
+Every build is a prerelease under [Releases](https://github.com/JeyKul/gts7xl-mainline/releases), named `installer-<run>`. Requires an unlocked bootloader and TWRP. This erases all data on the tablet. So far this was tested on one tablet with a locally served installer; the published build has not been tested end to end.
 
-The boot image contains a small installer. It starts when no system is found, and when volume up is held at power on. It joins Wi-Fi, downloads the rest into RAM, and installs Arch with a desktop you choose. Only GNOME has been tested so far.
+**With the installer, needs Wi-Fi:**
 
-1. In TWRP: Wipe, Format Data, then reboot to recovery. `ext4` is the tested filesystem; `f2fs` is supported by the kernel but not tested as the root filesystem.
-2. Flash `gts7xlwifi-arch-twrp.zip` and reboot to system.
-3. The first boot copies firmware and calibration from this tablet's own partitions. Log: `/var/log/gts7xl-firstboot.log`.
-4. Log in as `user`, password `user`, and change the password.
+1. In TWRP: Wipe, Format Data, then reboot to recovery. `ext4` is the tested filesystem.
+2. Flash `gts7xlwifi-arch-twrp.zip` for the complete system, or write `gts7xlwifi-boot.img` to `boot` to get only the installer. With the image alone, zero `boot` first, blank the first 4KB of `dtbo` and clear byte 0 of `param`; the zip does this for you.
+3. Reboot to system.
 
-`gts7xlwifi-boot-odin.tar.md5` holds only `boot` and a blank `dtbo`, for going back to the kernel from download mode without reinstalling.
+The boot image contains a small installer. It starts when no system is found, and when volume up is held at power on. It joins Wi-Fi, downloads the rest into RAM, and installs Arch with the desktop you choose: GNOME, KDE or KDE Mobile. KDE Mobile runs but is laggy. A `Reinstall` app on the desktop returns to it.
+
+The zip contains GNOME. Log in as `user`, password `user`, and change the password. The first boot copies firmware and calibration from this tablet's own partitions. Log: `/var/log/gts7xl-firstboot.log`.
+
+`gts7xlwifi-boot-odin.tar.md5` holds only `boot` and a blank `dtbo`, for going back to the kernel from download mode without reinstalling. Not tested yet.
 
 Android: restore `boot`, `dtbo` and `cache` from your backup, then format `userdata`.
 
 ## Firmware and legal notice
 
 The installer downloads GPU, audio DSP and amplifier firmware from the `Installer` release of this repository, and first boot falls back to the tablet's own `apnhlos` and `vendor` partitions. Those firmware files belong to Samsung and Qualcomm, are not covered by this project's license, and are not relicensed by being hosted here. Speaker calibration and the Bluetooth address are specific to each tablet and always come from that tablet.
-
-## GPU
-
-`msm` is a module with `separate_gpu_kms=1 r8q_zap_dyn=1 r8q_zap_secvid=0`, loaded from `/etc/local.d/gpu.start` and never by udev. It needs the Samsung-signed `a650_zap` files from your own `apnhlos` partition in `/lib/firmware/qcom/sm8250/` (the `.mdt` renamed to `a650_zap.mbn`), which aren't published here. The module must match the running kernel.
 
 ## Emergency reboot
 
@@ -125,19 +121,13 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 
 - `linux-patches/`: apply to Linux v7.3
 - `config/gts7xl_defconfig`: full kernel configuration
-- `.github/workflows/build.yml`: manual build of the boot image and modules
-- `uefi/`: copy over a Mu-Silicium checkout
-- `initramfs/init`: bring-up init, add a static aarch64 busybox as `bin/busybox`
+- `.github/workflows/build.yml`: manual build of everything, published as a prerelease
+- `rootfs/`: Arch setup, tablet support files, the installer (`stage1`, `stage2`) and packaging
+- `docs/display.md`: what the native display needs
+- `initramfs/init`: first code to run, picks the system or the installer
+- `kmod/`: panel register tool used for display research
 - `tools/`: serial shell helper, USB deploy, test programs
-
-## Not included
-
-The UEFI build also expects `Binaries/gts7xlwifi`: a copy of the S20 FE blobs (`Binaries/r8q`) with the board drivers replaced by ones from your own `xbl`, extracted with `tools/fvx.py`. Vendor firmware isn't published here.
-
-
-The UEFI build needs `Resources/DTBs/gts7xlwifi.dtb`, a dump of your own device's running
-tree (`dtc -I fs /sys/firmware/devicetree/base`), and the kernel DTB in `FdtBlob/`. These
-aren't published because a live dump contains device identifiers.
+- `uefi/`: earlier Mu-Silicium attempt, not used; copy over a Mu-Silicium checkout. It needs blobs and a dump of your own device tree, which aren't published because they contain device identifiers
 
 ## Findings
 
@@ -155,4 +145,4 @@ Touching the trackpad makes the MCU send a few valid frames, then stop, with gpi
 
 Free to use, change and share; just mention [JeyKul](https://github.com/JeyKul). See [LICENSE](LICENSE) (MIT).
 
-Exceptions: `linux-patches/` and `panel-samsung-s6tuum3.c.wip` change or build on Linux, so they stay under GPL-2.0. `uefi/` builds on Mu-Silicium and follows its license.
+Exceptions: `linux-patches/` and `kmod/` change or build on Linux, so they stay under GPL-2.0. `uefi/` builds on Mu-Silicium and follows its license.
