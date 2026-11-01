@@ -44,7 +44,7 @@ Last updated 2026-11-01.
 ### Native display
 
 - [x] Works at 60Hz through `msm` and `panel-samsung-s6tuum3`; details in `docs/display.md`
-- [ ] 120Hz
+- [x] 120Hz and 60Hz, selectable in GNOME; 120Hz reported fine by the user
 - [ ] Screen off when idle (the overlay only draws black)
 - [ ] Retry suspend with the native driver
 - [ ] Remove the unneeded link changes, then try sending the `msm` patch upstream

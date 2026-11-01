@@ -29,7 +29,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| Display: 2800x1752 AMOLED, S6TUUM3 | ✅ | Native DSC command mode driver at 60Hz; 120Hz not working yet |
+| Display: 2800x1752 AMOLED, S6TUUM3 | ✅ | Native DSC command mode driver, 120Hz and 60Hz modes |
 | Backlight, brightness | ✅ | Panel backlight control |
 | Touchscreen | ✅ | Multitouch |
 | S Pen digitizer | 🟡 | Position and pressure work, range hand-calibrated; side button, hover, tilt unconfirmed |
