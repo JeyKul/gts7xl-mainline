@@ -5,9 +5,9 @@
  */
 #include <dirent.h>
 #include <fcntl.h>
-#include <linux/fb.h>
+#include <drm/drm.h>
+#include <drm/drm_mode.h>
 #include <linux/input.h>
-#include <linux/kd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,7 +32,6 @@
 #define IFACE "wlan0"
 
 static unsigned char *fb;
-static int fb_fd = -1;
 static int fbw, fbh, stride;
 static int touch_fd = -1, ax_min, ax_max, ay_min, ay_max;
 static char status[160];
@@ -44,19 +43,22 @@ static int hit(const struct btn *b, int x, int y)
 }
 
 static int fb_size;
+static int drm_fd = -1;
+static unsigned char *scanout;
+static unsigned int fb_id;
 
 /* Drawing happens in private memory; only finished pictures reach the screen */
-static void present(void)
-{
-	if (pwrite(fb_fd, fb, fb_size, 0) < 0)
-		return;
-}
-
-/* The panel loses its picture without frames, and a write is what sends one */
 static void flush_frame(void)
 {
-	if (pwrite(fb_fd, fb, stride, 0) < 0)
-		return;
+	struct drm_mode_fb_dirty_cmd d = { .fb_id = fb_id };
+
+	ioctl(drm_fd, DRM_IOCTL_MODE_DIRTYFB, &d);
+}
+
+static void present(void)
+{
+	memcpy(scanout, fb, fb_size);
+	flush_frame();
 }
 
 static void rect(int x, int y, int w, int h, unsigned c)
@@ -122,23 +124,87 @@ static int capture(char *const argv[], char *out, int max)
 	return n;
 }
 
+/* Drive the panel through DRM, the same path a desktop uses */
+static int setup_card(const char *path)
+{
+	struct drm_mode_card_res res = { 0 };
+	unsigned int conns[8], crtcs[8], encs[8];
+	int fd = open(path, O_RDWR);
+
+	if (fd < 0 || ioctl(fd, DRM_IOCTL_SET_MASTER, 0) || ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES, &res) ||
+	    !res.count_connectors || res.count_connectors > 8 || res.count_crtcs > 8 || res.count_encoders > 8)
+		goto fail;
+	res.connector_id_ptr = (unsigned long)conns;
+	res.crtc_id_ptr = (unsigned long)crtcs;
+	res.encoder_id_ptr = (unsigned long)encs;
+	res.count_fbs = 0;
+	if (ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES, &res))
+		goto fail;
+
+	for (unsigned i = 0; i < res.count_connectors; i++) {
+		struct drm_mode_get_connector c = { .connector_id = conns[i] };
+		struct drm_mode_modeinfo modes[8];
+		if (ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &c) || !c.count_modes || c.connection != 1)
+			continue;
+		if (c.count_modes > 8)
+			c.count_modes = 8;
+		unsigned nm = c.count_modes;
+		c.modes_ptr = (unsigned long)modes;
+		c.count_props = 0;
+		c.count_encoders = 0;
+		if (ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &c) || c.count_modes < nm)
+			continue;
+		/* 60Hz is the mode tested the most on this panel */
+		struct drm_mode_modeinfo *m = &modes[0];
+		for (unsigned j = 0; j < nm; j++)
+			if (modes[j].vrefresh == 60)
+				m = &modes[j];
+		struct drm_mode_create_dumb cr = { .height = m->vdisplay, .width = m->hdisplay, .bpp = 32 };
+		if (ioctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &cr))
+			goto fail;
+		struct drm_mode_fb_cmd fc = { .width = cr.width, .height = cr.height, .pitch = cr.pitch,
+					      .bpp = 32, .depth = 24, .handle = cr.handle };
+		if (ioctl(fd, DRM_IOCTL_MODE_ADDFB, &fc))
+			goto fail;
+		struct drm_mode_map_dumb mp = { .handle = cr.handle };
+		if (ioctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mp))
+			goto fail;
+		scanout = mmap(NULL, cr.size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, mp.offset);
+		if (scanout == MAP_FAILED)
+			goto fail;
+		memset(scanout, 0, cr.size);
+		struct drm_mode_crtc sc = { .set_connectors_ptr = (unsigned long)&conns[i], .count_connectors = 1,
+					    .crtc_id = crtcs[0], .fb_id = fc.fb_id, .mode_valid = 1, .mode = *m };
+		if (ioctl(fd, DRM_IOCTL_MODE_SETCRTC, &sc))
+			goto fail;
+		drm_fd = fd; fb_id = fc.fb_id;
+		fbw = cr.width; fbh = cr.height; stride = cr.pitch;
+		return 1;
+	}
+fail:
+	if (fd >= 0)
+		close(fd);
+	return 0;
+}
+
 static void open_fb(void)
 {
-	struct fb_var_screeninfo v;
-	struct fb_fix_screeninfo f;
-	int fd = open("/dev/fb0", O_RDWR);
-	if (fd < 0 || ioctl(fd, FBIOGET_VSCREENINFO, &v) || ioctl(fd, FBIOGET_FSCREENINFO, &f))
-		exit(10);
-	fbw = v.xres; fbh = v.yres; stride = f.line_length;
-	fb_fd = fd;
+	/* The driver can arrive a little after this program starts */
+	for (int t = 0; t < 20; t++) {
+		for (int i = 0; i < 4; i++) {
+			char p[32];
+			snprintf(p, sizeof(p), "/dev/dri/card%d", i);
+			if (setup_card(p))
+				goto found;
+		}
+		sleep(1);
+	}
+	exit(10);
+found:
 	fb_size = stride * fbh;
 	fb = malloc(fb_size);
 	if (!fb)
 		exit(11);
-	/* Keep the kernel console off the screen */
-	int tty = open("/dev/tty0", O_RDWR);
-	if (tty >= 0)
-		ioctl(tty, KDSETMODE, KD_GRAPHICS);
 }
 
 static void open_touch(void)
@@ -183,8 +249,8 @@ static int wait_tap(int *sx, int *sy, int timeout_ms)
 			}
 		}
 		flush_frame();
-		usleep(16000);
-		waited += 16;
+		usleep(30000);
+		waited += 30;
 		if (timeout_ms && waited >= timeout_ms)
 			return 0;
 	}
@@ -353,11 +419,12 @@ static int wifi_connect(const struct net *n, const char *pw)
 
 int main(void)
 {
+	setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1);
 	static char pw[64];
-	const struct btn bscan = { 100, fbh - 200, 500, 150 }, breboot = { fbw - 600, fbh - 200, 500, 150 };
 	static char *rb[] = { "reboot", "-f", NULL };
 
 	open_fb();
+	const struct btn bscan = { 100, fbh - 200, 500, 150 }, breboot = { fbw - 600, fbh - 200, 500, 150 };
 	open_touch();
 	rect(0, 0, fbw, fbh, BG);
 	text(100, 60, "Galaxy Tab S7+ Linux installer", FG);
