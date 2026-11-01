@@ -69,6 +69,7 @@ Last updated 2026-11-01.
 - [ ] Bluetooth: build RFCOMM, BNEP, HID modules
 - [x] Fast charging: 9V through the MAX77705 mailbox (`rootfs/gts7xl-charge-control`), stock limits
 - [ ] Fast charging: test replug and other chargers, check `current_now` scale, then higher power
+- [ ] Fast charging: at least 25W, user's goal
 - [ ] Battery reads 27.1C from the fuel gauge, which is fake; `batt_thm` is the real value
 - [ ] Sleep
 
