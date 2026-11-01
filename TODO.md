@@ -60,7 +60,8 @@ Last updated 2026-11-01.
 - [ ] Charging: 500mA limit, barely gains on PC USB
 - [ ] `reboot-recovery` failed once; emergency combo is the reliable path
 - [ ] Clock has no saved time, needs Wi-Fi after boot
-- [ ] Brightness: only a software dim overlay (`dim@gts7xl`, set in extension.js) until native display works
+- [x] Real brightness through `kmod/gts7xl-panel-ctl`
+- [ ] Fix tearing by swapping plane addresses during blank
 
 ## Not started
 
