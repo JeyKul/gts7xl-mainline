@@ -44,7 +44,8 @@ Last updated 2026-11-01.
 ### Native display
 
 - [x] Works at 60Hz through `msm` and `panel-samsung-s6tuum3`; details in `docs/display.md`
-- [x] 120Hz and 60Hz, selectable in GNOME; 120Hz reported fine by the user
+- [x] 120Hz and 60Hz modes offered to GNOME
+- [ ] Confirm 120Hz: the last live check still showed 60Hz in use
 - [ ] Screen off when idle (the overlay only draws black)
 - [ ] Retry suspend with the native driver
 - [ ] Remove the unneeded link changes, then try sending the `msm` patch upstream
@@ -61,6 +62,12 @@ Last updated 2026-11-01.
 - [ ] Clock has no saved time, needs Wi-Fi after boot
 - [x] Real brightness through `kmod/gts7xl-panel-ctl`
 - [ ] Fix tearing by swapping plane addresses during blank
+
+## Next targets
+
+- [ ] Bluetooth: QCA6390 on `uart6`
+- [ ] Fast charging
+- [ ] Sleep
 
 ## Not started
 
