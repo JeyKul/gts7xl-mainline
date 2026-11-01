@@ -27,6 +27,15 @@ mount -t ext4 -o rw,noatime /dev/sda36 /mnt/r
 # Bring-up: a marker file keeps us in the initramfs for one test
 if [ -e /mnt/r/.noswitch ]; then
 	umount /mnt/r
+elif [ -e /mnt/r/.arch ] && [ -e /mnt/r/arch/usr/lib/systemd/systemd ]; then
+	# Arch lives in a directory; removing /.arch from TWRP returns to Alpine
+	echo "gts7xlwifi: switching to arch" > /dev/kmsg
+	umount /sys/kernel/config 2>/dev/null
+	umount /dev/pts 2>/dev/null
+	mkdir -p /mnt/a
+	mount --bind /mnt/r/arch /mnt/a
+	mount --move /dev /mnt/a/dev; mount --move /proc /mnt/a/proc; mount --move /sys /mnt/a/sys
+	exec switch_root /mnt/a /usr/lib/systemd/systemd
 elif [ -x /mnt/r/sbin/init ]; then
 	echo "gts7xlwifi: switching to userdata" > /dev/kmsg
 	umount /sys/kernel/config 2>/dev/null
