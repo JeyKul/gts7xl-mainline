@@ -65,14 +65,13 @@ Last updated 2026-11-01.
 
 ## Next targets
 
-- [ ] Bluetooth: QCA6390 on `uart6`
+- [ ] Bluetooth: controller works on `uart6`; test pairing and audio
 - [ ] Fast charging
 - [ ] Sleep
 
 ## Not started
 
 - [ ] Sensors (SLPI DSP, rotation)
-- [ ] Bluetooth
 - [ ] USB host mode
 - [ ] Suspend: wakes, but the screen stays black until reboot on the firmware framebuffer; targets masked on Arch
 - [ ] Cameras
