@@ -17,9 +17,11 @@ Last updated 2026-11-01.
 
 ### Audio (next)
 
-- [ ] Map `cs35l41` amps (i2c11, 0x40-0x43), rails, reset and TDM wiring
-- [ ] Get ADSP and amp firmware from the tablet's own partitions
-- [ ] Bring up ADSP, then amp probe, then machine driver
+- [x] Reserved memory map matches stock (mainline's was wrong for Samsung)
+- [x] ADSP firmware boots (loaded by hand, `qcom_q6v5_pas`)
+- [ ] Amp boost values from stock, then amp probe (i2c11, 0x40-0x43, reset gpio69, irq gpio84)
+- [ ] Machine driver: Primary TDM, 4 slots, 48kHz
+- [ ] Autoload ADSP at boot
 - [ ] Start at low volume; bad amp tuning can harm speakers
 
 ### Native display (paused)
@@ -47,6 +49,7 @@ Last updated 2026-11-01.
 - [ ] USB host mode
 - [ ] Suspend (disabled; reset risk reported on S20 FE, untested here)
 - [ ] Cameras
+- [ ] Retest GPU zap without the dynamic buffer hack, now that the memory map is right
 
 ## Cleanup
 

@@ -1,0 +1,87 @@
+From e333263ff1b6f4919d92c8f7c3d2db31555cbc17 Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sun, 1 Nov 2026 13:58:06 +0100
+Subject: [PATCH 10/10] gts7xlwifi: use Samsung reserved memory map and enable
+ ADSP
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 62 +++++++++++++++++++
+ 1 file changed, 62 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index f799ab08b..0a2598b09 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -160,6 +160,68 @@ wifi@0 {
+ 	};
+ };
+ 
++/* Samsung moves these carveouts; values are from the stock device tree */
++&removed_mem {
++	reg = <0x0 0x80b00000 0x0 0x7900000>;
++};
++
++&slpi_mem {
++	reg = <0x0 0x89200000 0x0 0x1500000>;
++};
++
++&adsp_mem {
++	reg = <0x0 0x8a700000 0x0 0x2c00000>;
++};
++
++&spss_mem {
++	reg = <0x0 0x8d300000 0x0 0x100000>;
++};
++
++&npu_mem {
++	reg = <0x0 0x8d400000 0x0 0x500000>;
++};
++
++&video_mem {
++	reg = <0x0 0x8d900000 0x0 0x500000>;
++};
++
++&cvp_mem {
++	reg = <0x0 0x8de00000 0x0 0x500000>;
++};
++
++&cdsp_mem {
++	reg = <0x0 0x8e300000 0x0 0x1a00000>;
++};
++
++&camera_mem {
++	reg = <0x0 0x8fd00000 0x0 0x500000>;
++};
++
++&wlan_mem {
++	reg = <0x0 0x90200000 0x0 0x100000>;
++};
++
++&ipa_fw_mem {
++	reg = <0x0 0x90300000 0x0 0x10000>;
++};
++
++&ipa_gsi_mem {
++	reg = <0x0 0x90310000 0x0 0xa000>;
++};
++
++&gpu_mem {
++	reg = <0x0 0x9031a000 0x0 0x2000>;
++};
++
++&cdsp_secure_heap {
++	reg = <0x0 0x90400000 0x0 0x600000>;
++};
++
++&adsp {
++	firmware-name = "qcom/sm8250/gts7xl/adsp.mbn";
++	status = "okay";
++};
++
+ &framebuffer {
+ 	panel = <&fb_panel>;
+ 
+-- 
+2.56.0
+
