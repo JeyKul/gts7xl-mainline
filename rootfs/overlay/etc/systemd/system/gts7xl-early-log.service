@@ -1,0 +1,10 @@
+[Unit]
+Description=Early kernel log on userdata
+DefaultDependencies=no
+After=local-fs-pre.target
+Before=gts7xl-hw.service
+[Service]
+ExecStart=/bin/sh -c 'mkdir -p /var/log/early; cd /var/log/early; ls -t | tail -n +11 | xargs -r rm -f; f=$(date +%%s)-$$.log; dmesg -w >> "$f" & while :; do sleep 2; sync "$f"; done'
+Restart=no
+[Install]
+WantedBy=sysinit.target

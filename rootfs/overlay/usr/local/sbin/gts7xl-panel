@@ -1,0 +1,4 @@
+#!/bin/sh
+# Native display: load the panel straight after msm so the display path is never left idle
+[ -e /sys/firmware/devicetree/base/soc@0/display-subsystem@ae00000/dsi@ae94000/panel@0 ] || exit 0
+modprobe panel-samsung-s6tuum3

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Log charger and battery state every 5s to /var/log/charge/
+mkdir -p /var/log/charge
+f=/var/log/charge/$(date +%Y%m%d-%H%M%S).csv
+echo "time,uptime,chg_status,chg_online,chg_type,input_limit_ua,charge_limit_ua,bat_ua,bat_uv,bat_pct" > "$f"
+C=/sys/class/power_supply/max77705-charger; B=/sys/class/power_supply/max170xx_battery
+while :; do
+	echo "$(date +%T),$(cut -d' ' -f1 /proc/uptime),$(cat $C/status),$(cat $C/online),$(cat $C/type),$(cat $C/input_current_limit),$(cat $C/constant_charge_current),$(cat $B/current_now),$(cat $B/voltage_now),$(cat $B/capacity)" >> "$f"
+	sleep 5
+done

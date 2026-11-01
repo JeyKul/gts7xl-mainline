@@ -1,0 +1,13 @@
+[Unit]
+Description=Copy this tablet's firmware from its stock partitions
+DefaultDependencies=no
+After=local-fs.target systemd-udevd.service
+Before=gts7xl-hw.service gts7xl-bt-addr.service
+ConditionPathExists=!/var/lib/gts7xl/firstboot-done
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/usr/bin/udevadm settle --timeout=30
+ExecStart=/bin/sh -c '/usr/local/sbin/gts7xl-firstboot >/var/log/gts7xl-firstboot.log 2>&1 && mkdir -p /var/lib/gts7xl && touch /var/lib/gts7xl/firstboot-done'
+[Install]
+WantedBy=sysinit.target
