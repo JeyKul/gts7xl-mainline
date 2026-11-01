@@ -25,8 +25,17 @@ mkdir -p /mnt/r
 for i in 1 2 3 4 5 6 7 8 9 10; do [ -b /dev/sda36 ] && break; sleep 1; done
 # Users may format data as either filesystem from TWRP
 mount -t ext4 -o rw,noatime /dev/sda36 /mnt/r 2>/dev/null || mount -t f2fs -o rw,noatime /dev/sda36 /mnt/r
+# The installer marker removes itself, so any reboot returns to the installed system
+S1=0
+if [ -e /mnt/r/.installer ]; then
+	rm -f /mnt/r/.installer
+	sync
+	S1=1
+fi
 # Bring-up: a marker file keeps us in the initramfs for one test
-if [ -e /mnt/r/.noswitch ]; then
+if [ "$S1" = 1 ]; then
+	umount /mnt/r
+elif [ -e /mnt/r/.noswitch ]; then
 	umount /mnt/r
 elif [ -e /mnt/r/.arch ] && [ -e /mnt/r/arch/usr/lib/systemd/systemd ]; then
 	# Arch lives in a directory; removing /.arch from TWRP returns to Alpine
@@ -45,7 +54,16 @@ elif [ -x /mnt/r/sbin/init ]; then
 	exec switch_root /mnt/r /sbin/init
 fi
 (while :; do setsid -c sh -c 'stty -F /dev/ttyGS0 sane -echo 2>/dev/null; exec sh </dev/ttyGS0 >/dev/ttyGS0 2>&1'; sleep 1; done) &
+if [ "$S1" = 1 ]; then
+	dmesg -n 1
+	sh /mods/load.sh >/dev/kmsg 2>&1
+	sleep 4
+	for d in proc sys dev; do mkdir -p /s1/$d; mount --bind /$d /s1/$d; done
+	mkdir -p /s1/tmp /s1/run
+	(while :; do chroot /s1 /s1ui; sleep 2; done) &
+else
 (while :; do setsid -c sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'; sleep 1; done) &
+fi
 echo "gts7xlwifi bring-up: udc=$udc" > /dev/kmsg
 mount -t debugfs d /sys/kernel/debug
 # conn sampler: log edge counts so the onset of bouncing is visible
