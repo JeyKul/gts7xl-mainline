@@ -1,0 +1,155 @@
+From a9a34019e7f7e691dd2f1813f60f21e7c61bc680 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 2 Nov 2026 00:57:06 +0100
+Subject: [PATCH] gts7xlwifi: add the sub microphone through the VA macro
+
+DMIC3 on the second DMIC pair, powered from L5C, captured through MultiMedia2. Data pins need input-enable as on stock.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 77 +++++++++++++++++++
+ sound/soc/qcom/sm8250.c                       | 15 ++++
+ 2 files changed, 92 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 90870c77e..e0507a2fb 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -243,6 +243,30 @@ cpu {
+ 		};
+ 	};
+ 
++	mm2-dai-link {
++		link-name = "MultiMedia2";
++
++		cpu {
++			sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA2>;
++		};
++	};
++
++	mic-dai-link {
++		link-name = "Mic";
++
++		cpu {
++			sound-dai = <&q6afedai VA_CODEC_DMA_TX_0>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&vamacro 0>;
++		};
++	};
++
+ 	speakers-dai-link {
+ 		link-name = "Speakers";
+ 
+@@ -261,10 +285,54 @@ codec {
+ 	};
+ };
+ 
++/* Sub mic: DMIC3 through DEC0. The main mic, DMIC1, reads zero so far */
++&vamacro {
++	pinctrl-0 = <&dmic01_active>, <&dmic23_active>;
++	pinctrl-names = "default";
++	vdd-micb-supply = <&vreg_l5c_1p8>;
++	qcom,dmic-sample-rate = <2400000>;
++	status = "okay";
++};
++
++/* Pin settings as stock: without input-enable the data line reads zero */
++&dmic01_active {
++	clk-pins {
++		drive-strength = <2>;
++	};
++
++	data-pins {
++		drive-strength = <2>;
++		input-enable;
++	};
++};
++
++&lpass_tlmm {
++	dmic23_active: dmic23-active-state {
++		clk-pins {
++			pins = "gpio8";
++			function = "dmic2_clk";
++			drive-strength = <2>;
++			output-high;
++		};
++
++		data-pins {
++			pins = "gpio9";
++			function = "dmic2_data";
++			drive-strength = <2>;
++			input-enable;
++		};
++	};
++};
++
+ &q6asmdai {
+ 	dai@0 {
+ 		reg = <0>;
+ 	};
++
++	dai@1 {
++		reg = <1>;
++		direction = <Q6ASM_DAI_TX>;
++	};
+ };
+ 
+ &q6afedai {
+@@ -353,6 +421,15 @@ regulators-1 {
+ 		compatible = "qcom,pm8150l-rpmh-regulators";
+ 		qcom,pmic-id = "c";
+ 
++		/* Stock pm8150a_l5: rail of the digital mics, 1.8V to 2.8V */
++		vreg_l5c_1p8: ldo5 {
++			regulator-name = "vreg_l5c_1p8";
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <1800000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			regulator-always-on;
++		};
++
+ 		vreg_s8c_1p35: smps8 {
+ 				regulator-name = "vreg_s8c_1p35";
+ 				regulator-min-microvolt = <1350000>;
+diff --git a/sound/soc/qcom/sm8250.c b/sound/soc/qcom/sm8250.c
+index dd94d7b11..cd932c191 100644
+--- a/sound/soc/qcom/sm8250.c
++++ b/sound/soc/qcom/sm8250.c
+@@ -73,6 +73,9 @@ static int sm8250_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
+ 	channels->min = channels->max = 2;
+ 	snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);
+ 
++	if (snd_soc_rtd_to_cpu(rtd, 0)->id == VA_CODEC_DMA_TX_0)
++		channels->min = channels->max = 1;
++
+ 	if (snd_soc_rtd_to_cpu(rtd, 0)->id == PRIMARY_TDM_RX_0) {
+ 		channels->min = channels->max = TDM_SLOTS;
+ 		snd_mask_none(fmt);
+@@ -92,6 +95,18 @@ static int sm8250_snd_hw_params(struct snd_pcm_substream *substream,
+ 	struct snd_soc_dai *dai;
+ 	int i, ret;
+ 
++	/* The DSP port only captures the channels the VA macro marks active */
++	if (cpu_dai->id == VA_CODEC_DMA_TX_0) {
++		unsigned int tx_num = 0, rx_num = 0, tx_ch = 0, rx_ch = 0;
++
++		ret = snd_soc_dai_get_channel_map(snd_soc_rtd_to_codec(rtd, 0), &tx_num,
++						  &tx_ch, &rx_num, &rx_ch);
++		if (ret)
++			return ret;
++
++		return snd_soc_dai_set_channel_map(cpu_dai, tx_num, &tx_ch, 0, NULL);
++	}
++
+ 	if (cpu_dai->id != PRIMARY_TDM_RX_0)
+ 		return 0;
+ 
+-- 
+2.56.0
+

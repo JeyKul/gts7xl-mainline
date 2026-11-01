@@ -1,17 +1,10 @@
 # Tab S7+ port TODO
 
-Last updated 2026-11-01.
+Last updated 2026-11-02.
 
 ## Working
 
-- Boot, UFS, USB serial and network
-- GNOME 48 on Alpine, GPU (Adreno 650), Wi-Fi
-- Touchscreen with multitouch
-- S Pen: position and pressure
-- Keyboard, until the trackpad is touched
-- Battery reading; charging is slow on PC USB
-- Emergency reboot: Power + Vol Up + Vol Down, release
-- Krita, VLC
+See the status tables in `README.md`.
 
 ## In progress
 
@@ -80,7 +73,10 @@ Last updated 2026-11-01.
 ## Next hardware
 
 - [x] Flashlight, with a `Flashlight` app
-- [ ] Microphones
+- [x] Microphone: sub mic (DMIC3) through the VA macro, +24 dB, PulseAudio source `mic`; voice recording confirmed by the user. DMIC2 only mirrors it, no second mic there
+- [ ] Main mic (DMIC1) reads zero: pins, clock and L5C on, cause unknown
+- [ ] L5C mic rail is always on; tie it to capture
+- [ ] Check UFS `ufshcd_query_attr` errors and `DSI PLL lock failed` warning seen at boot during mic work
 - [ ] Cameras
 
 ## Not started
@@ -125,7 +121,6 @@ Decision: Linux or Android, not both. An installer in the boot image starts when
 - [ ] Remove or keep `gts7xl-early-log`, which writes the kernel log to `/var/log/early`
 - [ ] Decide `i2c9` speed (100kHz test value still set)
 - [ ] Package the Krita `lcms2` link properly
-- [ ] Update README for direct boot as the main path
 
 ## Restoring Android
 

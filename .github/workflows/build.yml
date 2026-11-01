@@ -119,6 +119,14 @@ jobs:
       - name: Package for TWRP and Odin
         run: rootfs/package.sh artifact/boot.img rootfs.tar.gz out
 
+      - name: Add the flash files to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp artifact/boot.img out/gts7xlwifi-boot.img
+          (cd out && sha256sum gts7xlwifi-* > SHA256SUMS)
+          gh release upload "installer-${GITHUB_RUN_ID}" out/* --repo "$GITHUB_REPOSITORY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: gts7xlwifi-flash
