@@ -1,0 +1,4 @@
+#!/bin/sh
+# Boot into the installer once. Nothing is erased until the installer's own warning is accepted.
+[ "$(id -u)" = 0 ] || exec pkexec "$0"
+touch /.installer && sync && reboot

@@ -11,11 +11,17 @@ esac
 pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -Rdd --noconfirm linux-aarch64 || true
-pacman -Syu --noconfirm --needed --overwrite '/etc/dconf/*' \
-  gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console \
-  gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome \
-  adwaita-fonts networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils \
-  alsa-utils mesa swh-plugins sudo psmisc python linux-firmware
+DESKTOP=${DESKTOP:-gnome}
+BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils alsa-utils mesa swh-plugins sudo psmisc python linux-firmware"
+GNOME="gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome adwaita-fonts"
+case "$DESKTOP" in
+gnome) PKGS="$GNOME"; DM=gdm ;;
+kde) PKGS="plasma-desktop plasma-nm plasma-pa kscreen konsole dolphin sddm"; DM=sddm ;;
+kde-mobile) PKGS="plasma-mobile plasma-keyboard plasma-nm plasma-pa konsole dolphin sddm"; DM=sddm ;;
+phosh) PKGS="phosh phoc squeekboard gdm gnome-control-center gnome-console nautilus gnome-keyring adwaita-fonts"; DM=gdm ;;
+*) echo "unknown desktop $DESKTOP"; exit 1 ;;
+esac
+pacman -Syu --noconfirm --needed --overwrite '/etc/dconf/*' $BASE $PKGS
 userdel -r alarm 2>/dev/null || true
 useradd -m -G wheel,video,input,audio,tty,network -s /bin/bash "$NEW_USER"
 printf '%s:%s\n' "$NEW_USER" "$NEW_PASS" | chpasswd
@@ -23,12 +29,23 @@ unset NEW_PASS
 passwd -l root
 echo '%wheel ALL=(ALL:ALL) ALL' > /etc/sudoers.d/wheel
 sed -i "s/^AutomaticLogin=.*/AutomaticLogin=$NEW_USER/" /etc/gdm/custom.conf
+case "$DESKTOP" in
+kde|kde-mobile)
+	mkdir -p /etc/sddm.conf.d
+	if [ "$DESKTOP" = kde ]; then SESSION=plasma; else SESSION=plasma-mobile; fi
+	printf '[Autologin]\nUser=%s\nSession=%s\n' "$NEW_USER" "$SESSION" > /etc/sddm.conf.d/autologin.conf
+	;;
+phosh)
+	mkdir -p /var/lib/AccountsService/users
+	printf '[User]\nSession=phosh\n' > "/var/lib/AccountsService/users/$NEW_USER"
+	;;
+esac
 sed -i "s/-u user /-u $NEW_USER /; s/su user /su $NEW_USER /g" /usr/local/sbin/audio-up
 echo gts7xl > /etc/hostname
 echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen; locale-gen; echo LANG=en_US.UTF-8 > /etc/locale.conf
 systemctl disable systemd-networkd systemd-resolved sshd 2>/dev/null || true
 systemctl mask alsa-restore alsa-state
-systemctl enable NetworkManager gdm bluetooth systemd-timesyncd \
+systemctl enable NetworkManager "$DM" bluetooth systemd-timesyncd \
   gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log
 systemctl set-default graphical.target
 sed -i 's/^load-module module-suspend-on-idle/#&/' /etc/pulse/default.pa

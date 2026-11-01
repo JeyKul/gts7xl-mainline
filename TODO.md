@@ -96,6 +96,11 @@ Decision: Linux or Android, not both. An installer in the boot image starts when
 - [x] Format `userdata`, download and unpack Arch, create the user, extract firmware
 - [ ] Confirm the installed system reaches GNOME on the first boot
 - [ ] Options, region and device information
+- [ ] Desktop choice: GNOME, KDE, KDE Mobile, Phosh; only GNOME has been tested on this tablet
+- [ ] Reinstall from the desktop
+- [ ] ztOS (github.com/Zerone-Laboratories/ztOS, GPL-3.0): build its GSI in CI and write a device layer for this tablet; listed in the installer as not ready
+- [ ] Wake and reinstall without a desktop: key combination into the installer at boot
+- [ ] Installer progress bars and rounded UI: test on the tablet
 - [ ] Waydroid: enable binder in the kernel
 - [ ] `f2fs` as root filesystem, optional
 

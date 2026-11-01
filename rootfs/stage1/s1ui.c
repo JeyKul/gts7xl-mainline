@@ -24,6 +24,7 @@
 #define CW (8 * SCALE)
 #define CH (16 * SCALE)
 #define BG 0x101820
+#define CARD 0x1b2a35
 #define FG 0xf0f0f0
 #define BTN 0x2f4858
 #define ACC 0x1f8a70
@@ -81,9 +82,23 @@ static void text(int x, int y, const char *s, unsigned c)
 	}
 }
 
+/* Filled rectangle with round corners, drawn against the background colour */
+static void rrect(int x, int y, int w, int h, int r, unsigned c)
+{
+	if (r > h / 2) r = h / 2;
+	rect(x, y + r, w, h - 2 * r, c);
+	for (int j = 0; j < r; j++) {
+		int dy = r - j, in = 0;
+		while ((in * in + dy * dy) < r * r) in++;
+		int cut = r - in;
+		rect(x + cut, y + j, w - 2 * cut, 1, c);
+		rect(x + cut, y + h - 1 - j, w - 2 * cut, 1, c);
+	}
+}
+
 static void button(const struct btn *b, const char *s, unsigned c)
 {
-	rect(b->x, b->y, b->w, b->h, c);
+	rrect(b->x, b->y, b->w, b->h, 28, c);
 	int len = strlen(s);
 	text(b->x + (b->w - len * CW) / 2, b->y + (b->h - CH) / 2, s, FG);
 }
@@ -437,6 +452,25 @@ static int wifi_connect(const struct net *n, const char *pw)
 
 static const char *const REBOOT[] = { "reboot", "-f", NULL };
 
+static void header(const char *title)
+{
+	rect(0, 0, fbw, fbh, BG);
+	text(100, 60, title, FG);
+	rect(100, 125, fbw - 200, 4, ACC);
+}
+
+static void progress_bar(int y, int percent)
+{
+	char t[16];
+	if (percent < 0) percent = 0;
+	if (percent > 100) percent = 100;
+	rrect(100, y, fbw - 200, 70, 35, CARD);
+	if (percent)
+		rrect(100, y, 70 + (fbw - 270) * percent / 100, 70, 35, ACC);
+	snprintf(t, sizeof(t), "%d%%", percent);
+	text(fbw / 2 - (int)strlen(t) * CW / 2, y + 11, t, FG);
+}
+
 static void close_screen(void)
 {
 	ioctl(drm_fd, DRM_IOCTL_DROP_MASTER, 0);
@@ -453,11 +487,32 @@ static int fetch_installer(void)
 	static char *fetch[] = { "sh", "/fetch.sh", NULL };
 	static char *go[] = { "sh", "/s2start.sh", NULL };
 
-	rect(0, 0, fbw, fbh, BG);
-	text(100, 60, "Galaxy Tab S7+ Linux installer", FG);
-	text(100, 160, "Downloading the installer...", FG);
-	present();
-	int r = run(fetch);
+	long want = 0;
+	FILE *sz = fopen("/stage2.size", "r");
+	if (sz) {
+		if (fscanf(sz, "%ld", &want) != 1)
+			want = 0;
+		fclose(sz);
+	}
+	pid_t pid = fork();
+	if (!pid) {
+		execvp(fetch[0], fetch);
+		_exit(127);
+	}
+	int st = 0, r = -1;
+	for (;;) {
+		struct stat f;
+		long have = stat("/s2/stage2.tar.gz", &f) ? 0 : f.st_size;
+		header("Galaxy Tab S7+ Linux installer");
+		text(100, 220, "Downloading the installer", FG);
+		progress_bar(340, want ? (int)(have * 100 / want) : 0);
+		present();
+		usleep(300000);
+		if (waitpid(pid, &st, WNOHANG) == pid) {
+			r = WIFEXITED(st) ? WEXITSTATUS(st) : 1;
+			break;
+		}
+	}
 	if (r) {
 		snprintf(status, sizeof(status), r == 2 ? "Installer download is damaged" : "Could not download the installer");
 		return r;
@@ -474,8 +529,7 @@ static int ask(const char *a, const char *b, const char *c, const char *yes, con
 {
 	const struct btn by = { fbw - 900, fbh - 220, 800, 170 }, bn = { 100, fbh - 220, 600, 170 };
 
-	rect(0, 0, fbw, fbh, BG);
-	text(100, 60, "Galaxy Tab S7+ Linux installer", FG);
+	header("Galaxy Tab S7+ Linux installer");
 	if (a) text(100, 220, a, FG);
 	if (b) text(100, 320, b, FG);
 	if (c) text(100, 420, c, FG);
@@ -499,6 +553,38 @@ static int valid_user(const char *u)
 	return 1;
 }
 
+static const struct { const char *id, *name, *about; } desktops[] = {
+	{ "gnome", "GNOME", "Tested on this tablet. Recommended." },
+	{ "kde", "KDE Plasma", "Classic desktop. Not tested on this tablet yet." },
+	{ "kde-mobile", "KDE Plasma Mobile", "Touch first. Not tested on this tablet yet." },
+	{ "phosh", "Phosh", "GNOME based, touch first. Not tested on this tablet yet." },
+	{ NULL, "ztOS", "Windows Phone style, on Arch. Port not ready yet." },
+};
+
+static const char *choose_desktop(void)
+{
+	const int n = sizeof(desktops) / sizeof(desktops[0]);
+	struct btn b[5];
+
+	header("Choose a desktop");
+	for (int i = 0; i < n; i++) {
+		char l[120];
+		unsigned name = desktops[i].id ? FG : 0x6c7a85;
+		b[i] = (struct btn){ 100, 160 + i * 310, fbw - 200, 285 };
+		rrect(b[i].x, b[i].y, b[i].w, b[i].h, 36, CARD);
+		text(150, b[i].y + 70, desktops[i].name, name);
+		snprintf(l, sizeof(l), "%s", desktops[i].about);
+		text(150, b[i].y + 160, l, desktops[i].id ? 0xa8b8c4 : 0x6c7a85);
+	}
+	for (;;) {
+		int x, y;
+		wait_tap(&x, &y, 0);
+		for (int i = 0; i < n; i++)
+			if (desktops[i].id && hit(&b[i], x, y))
+				return desktops[i].id;
+	}
+}
+
 static int stage2(void)
 {
 	static char user[33], p1[64], p2[64], line[160];
@@ -508,12 +594,14 @@ static int stage2(void)
 	if (touch_fd < 0)
 		return 2;
 	for (;;) {
-		if (ask("This installs Arch Linux with GNOME.", "Your firmware is copied from this tablet on first boot.",
-			"You need Wi-Fi for the whole install, about 3 GB.", "Continue", "Reboot", ACC))
+		if (ask("This installs Arch Linux on this tablet.", "Your firmware is copied from this tablet on first boot.",
+			"You need Wi-Fi for the whole install, about 2 GB.", "Continue", "Reboot", ACC))
 			break;
 		sync();
 		run((char *const *)REBOOT);
 	}
+	const char *desktop = choose_desktop();
+
 	for (;;) {
 		if (!keyboard("Choose a user name: lowercase and digits", "Next", 1, user, sizeof(user)))
 			continue;
@@ -545,7 +633,7 @@ static int stage2(void)
 	if (!f)
 		return 3;
 	chmod("/tmp/choices", 0600);
-	fprintf(f, "NEW_USER=%s\nNEW_PASS='", user);
+	fprintf(f, "DESKTOP=%s\nNEW_USER=%s\nNEW_PASS='", desktop, user);
 	for (const char *c = p1; *c; c++) {
 		if (*c == '\'')
 			fputs("'\\''", f);
@@ -563,9 +651,10 @@ static int stage2(void)
 		execl("/bin/sh", "sh", "/install.sh", NULL);
 		_exit(127);
 	}
-	int st = 0, done = 0, spin = 0;
+	int st = 0, done = 0;
 	while (!done) {
 		char step[120] = "Starting";
+		int percent = 0;
 		f = fopen("/tmp/step", "r");
 		if (f) {
 			if (!fgets(step, sizeof(step), f))
@@ -573,12 +662,18 @@ static int stage2(void)
 			fclose(f);
 			step[strcspn(step, "\n")] = 0;
 		}
-		rect(0, 0, fbw, fbh, BG);
-		text(100, 60, "Installing. Keep the tablet plugged in if you can.", FG);
+		f = fopen("/tmp/percent", "r");
+		if (f) {
+			if (fscanf(f, "%d", &percent) != 1)
+				percent = 0;
+			fclose(f);
+		}
+		header("Installing");
 		text(100, 220, step, FG);
-		rect(100, 340, 100 + (spin++ % 20) * 100, 30, ACC);
+		progress_bar(340, percent);
+		text(100, 470, "You can leave the tablet alone. Keep it charged if you can.", 0xa8b8c4);
 		present();
-		for (int i = 0; i < 30; i++) {
+		for (int i = 0; i < 15; i++) {
 			flush_frame();
 			usleep(33000);
 		}
