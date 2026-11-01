@@ -1,3 +1,13 @@
+From 6f55feba91fad0f29fd18b1a569956ad65b87696 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 1 Nov 2026 20:29:17 +0100
+Subject: [PATCH 17/19] drm/msm/dsi: match the Tab S7+ bootloader link setup
+ for DSC command mode
+
+---
+ drivers/gpu/drm/msm/dsi/dsi_host.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
 diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
 index b292dfd26..2c13b3318 100644
 --- a/drivers/gpu/drm/msm/dsi/dsi_host.c
@@ -42,3 +52,6 @@ index b292dfd26..2c13b3318 100644
  	data |= DSI_CTRL_ENABLE;
  
  	dsi_write(msm_host, REG_DSI_CTRL, data);
+-- 
+2.56.0
+

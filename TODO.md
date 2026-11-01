@@ -41,14 +41,13 @@ Last updated 2026-11-01.
 - [x] 4.0 output, one TDM slot per speaker; positions confirmed by ear
 - [ ] Cap removed at user request: stock gain (Analog 17, Digital 817); `CAL_AMBIENT` still unexplained
 
-### Native display (paused)
+### Native display
 
-- Panel init runs without errors, frames are sent, but the screen shows full stripes
-- Ruled out: TE, lane rate, PPS content (2 bytes differ from stock)
-- Research in `docs/display.md`; driver updated from it, not tested on the panel yet
-- Fixes GNOME tearing and stutter, brightness, screen off
-- [ ] Follow the rules: stages, 20s auto power-off, cold boot between tests
-- Work in progress: `display-wip.dts.txt`, `panel-samsung-s6tuum3.c.wip`
+- [x] Works at 60Hz through `msm` and `panel-samsung-s6tuum3`; details in `docs/display.md`
+- [ ] 120Hz
+- [ ] Screen off when idle (the overlay only draws black)
+- [ ] Retry suspend with the native driver
+- [ ] Remove the unneeded link changes, then try sending the `msm` patch upstream
 
 ## Open bugs
 

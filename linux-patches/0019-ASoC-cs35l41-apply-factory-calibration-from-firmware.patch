@@ -1,3 +1,13 @@
+From 5292896dce94379cf68f62ca1ec1b911c4585911 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 1 Nov 2026 20:29:18 +0100
+Subject: [PATCH 19/19] ASoC: cs35l41: apply factory calibration from firmware
+ files
+
+---
+ sound/soc/codecs/cs35l41.c | 41 +++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 40 insertions(+), 1 deletion(-)
+
 diff --git a/sound/soc/codecs/cs35l41.c b/sound/soc/codecs/cs35l41.c
 index b2a076706..ecc09c920 100644
 --- a/sound/soc/codecs/cs35l41.c
@@ -65,3 +75,6 @@ index b2a076706..ecc09c920 100644
  
  		ret = regmap_read(cs35l41->regmap, CS35L41_DSP_MBOX_2, &fw_status);
  		if (ret < 0) {
+-- 
+2.56.0
+

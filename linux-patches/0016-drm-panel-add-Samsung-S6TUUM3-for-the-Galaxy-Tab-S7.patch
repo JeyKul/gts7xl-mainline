@@ -1,0 +1,375 @@
+From 037da19d97c04aaa5cc80a75602d671d0bdc4685 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 1 Nov 2026 20:29:17 +0100
+Subject: [PATCH 16/19] drm/panel: add Samsung S6TUUM3 for the Galaxy Tab S7+
+
+---
+ drivers/gpu/drm/panel/Kconfig                 |   9 +
+ drivers/gpu/drm/panel/Makefile                |   1 +
+ drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 325 ++++++++++++++++++
+ 3 files changed, 335 insertions(+)
+ create mode 100644 drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+
+diff --git a/drivers/gpu/drm/panel/Kconfig b/drivers/gpu/drm/panel/Kconfig
+index cbdf7b8f7..d68491756 100644
+--- a/drivers/gpu/drm/panel/Kconfig
++++ b/drivers/gpu/drm/panel/Kconfig
+@@ -962,6 +962,15 @@ config DRM_PANEL_SAMSUNG_LTL106HL02
+ 	  To compile this driver as a module, choose M here: the module
+ 	  will be called panel-samsung-ltl106hl02.
+ 
++config DRM_PANEL_SAMSUNG_S6TUUM3
++	tristate "Samsung S6TUUM3 panel driver"
++	depends on OF
++	depends on DRM_MIPI_DSI
++	depends on BACKLIGHT_CLASS_DEVICE
++	select DRM_DISPLAY_DSC_HELPER
++	help
++	  Samsung S6TUUM3 DSC command mode panel in the Galaxy Tab S7+.
++
+ config DRM_PANEL_SAMSUNG_S6E3FA7
+ 	tristate "Samsung S6E3FA7 panel driver"
+ 	depends on OF
+diff --git a/drivers/gpu/drm/panel/Makefile b/drivers/gpu/drm/panel/Makefile
+index 3b523cf37..19c9e6a80 100644
+--- a/drivers/gpu/drm/panel/Makefile
++++ b/drivers/gpu/drm/panel/Makefile
+@@ -137,3 +137,4 @@ obj-$(CONFIG_DRM_PANEL_VISIONOX_VTDR6130) += panel-visionox-vtdr6130.o
+ obj-$(CONFIG_DRM_PANEL_VISIONOX_R66451) += panel-visionox-r66451.o
+ obj-$(CONFIG_DRM_PANEL_WIDECHIPS_WS2401) += panel-widechips-ws2401.o
+ obj-$(CONFIG_DRM_PANEL_XINPENG_XPP055C272) += panel-xinpeng-xpp055c272.o
++obj-$(CONFIG_DRM_PANEL_SAMSUNG_S6TUUM3) += panel-samsung-s6tuum3.o
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+new file mode 100644
+index 000000000..884204409
+--- /dev/null
++++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+@@ -0,0 +1,325 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Samsung S6TUUM3 (AMSA24VU01) panel, Galaxy Tab S7+.
++ * Command sequences come from the stock device tree.
++ */
++
++#include <linux/backlight.h>
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/regulator/consumer.h>
++#include <linux/workqueue.h>
++
++#include <drm/display/drm_dsc.h>
++#include <drm/display/drm_dsc_helper.h>
++#include <drm/drm_mipi_dsi.h>
++#include <drm/drm_modes.h>
++#include <drm/drm_panel.h>
++#include <drm/drm_probe_helper.h>
++
++/* Top of the stock normal range, wrdisbv 0xdd8 */
++#define S6TUUM3_MAX_BRIGHTNESS	3544
++
++struct s6tuum3 {
++	struct drm_panel panel;
++	struct mipi_dsi_device *dsi;
++	struct regulator *vddio;
++	struct gpio_desc *reset;
++	struct gpio_desc *tcon_ready;
++	struct drm_dsc_config dsc;
++	bool first_on_done;
++	bool enabled;
++	struct delayed_work on_work;
++};
++
++static const u8 s6tuum3_pps[] = {
++	0x9e, 0x11, 0x01, 0x00, 0x89, 0x30, 0x80, 0x06, 0xd8, 0x0a, 0xf0, 0x00,
++	0x0c, 0x05, 0x78, 0x05, 0x78, 0x02, 0x00, 0x03, 0xbd, 0x00, 0x20, 0x01,
++	0x9c, 0x00, 0x13, 0x00, 0x0c, 0x08, 0xbb, 0x03, 0x45, 0x18, 0x00, 0x10,
++	0xf0, 0x03, 0x0c, 0x20, 0x00, 0x06, 0x0b, 0x0b, 0x33, 0x0e, 0x1c, 0x2a,
++	0x38, 0x46, 0x54, 0x62, 0x69, 0x70, 0x77, 0x79, 0x7b, 0x7d, 0x7e, 0x01,
++	0x02, 0x01, 0x00, 0x09, 0x40, 0x09, 0xbe, 0x19, 0xfc, 0x19, 0xfa, 0x19,
++	0xf8, 0x1a, 0x38, 0x1a, 0x78, 0x1a, 0xb6, 0x2a, 0xf6, 0x2b, 0x34, 0x2b,
++	0x74, 0x3b, 0x74, 0x63, 0xf4
++};
++
++static inline struct s6tuum3 *to_s6tuum3(struct drm_panel *panel)
++{
++	return container_of(panel, struct s6tuum3, panel);
++}
++
++static int s6tuum3_prepare(struct drm_panel *panel)
++{
++	struct s6tuum3 *ctx = to_s6tuum3(panel);
++	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
++	int i, ret;
++
++	ret = regulator_enable(ctx->vddio);
++	if (ret)
++		return ret;
++	msleep(10);
++
++	gpiod_set_value_cansleep(ctx->reset, 1);
++	usleep_range(1000, 2000);
++	gpiod_set_value_cansleep(ctx->reset, 0);
++
++	/* The bootloader log shows the TCON raising this within about 350ms */
++	for (i = 0; i < 100 && !gpiod_get_value_cansleep(ctx->tcon_ready); i++)
++		msleep(10);
++	dev_info(&ctx->dsi->dev, "tcon ready after %d ms: %d\n", i * 10,
++		 gpiod_get_value_cansleep(ctx->tcon_ready));
++
++	/* Exactly the stock on sequence: no sleep out or tear on */
++	ctx->dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xd3, 0x4d);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x98, 0x00);
++	/* Stock wqxga60hs; the bootloader's tear check also points to 60Hz */
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x60, 0x00);
++	mipi_dsi_msleep(&dsi_ctx, 50);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x08);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x78, 0x30);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x39);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x78, 0x3c);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x3e);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x78, 0x3c);
++	mipi_dsi_compression_mode_multi(&dsi_ctx, true);
++	mipi_dsi_dcs_write_buffer_multi(&dsi_ctx, s6tuum3_pps, sizeof(s6tuum3_pps));
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x9a, 0x00);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x55, 0x02);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x0f);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb8, 0x55);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x11);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb8, 0x7f);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x28);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x68, 0xe0, 0x00, 0x0c, 0xc1, 0x1a, 0x1a);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x68, 0x14);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0xc3);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb3, 0x0c);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x86, 0x0a, 0x6b);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x19);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xc5, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x14);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xd7, 0x4c, 0x5c);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x08);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x5d, 0x00);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x79, 0x02);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x0e);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x8d, 0x01);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x62);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x8d, 0x01);
++	if (dsi_ctx.accum_err) {
++		dev_err(&ctx->dsi->dev, "panel init failed: %d\n", dsi_ctx.accum_err);
++		gpiod_set_value_cansleep(ctx->reset, 1);
++		regulator_disable(ctx->vddio);
++		return dsi_ctx.accum_err;
++	}
++
++	return 0;
++}
++
++static int s6tuum3_set_brightness(struct mipi_dsi_device *dsi, u16 level)
++{
++	struct mipi_dsi_multi_context dsi_ctx = { .dsi = dsi };
++	u8 bl[] = { 0x51, level & 0xff, level >> 8 };
++
++	/* Stock gamma_mode2_normal: 51h takes the low byte first */
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x68, 0x19, 0x20, 0x00, 0x14);
++	mipi_dsi_dcs_write_buffer_multi(&dsi_ctx, bl, sizeof(bl));
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x53, 0x20);
++
++	return dsi_ctx.accum_err;
++}
++
++/* Stock sends display on after the first frame has gone out */
++static void s6tuum3_display_on(struct work_struct *work)
++{
++	struct s6tuum3 *ctx = container_of(work, struct s6tuum3, on_work.work);
++	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
++
++	mipi_dsi_dcs_set_display_on_multi(&dsi_ctx);
++	mipi_dsi_msleep(&dsi_ctx, 17);
++	/* UPI sync 70us */
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x78);
++	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xcb, 0x70, 0x33);
++
++	/* Stock clears these status bits 18ms after the first display on */
++	if (!ctx->first_on_done) {
++		mipi_dsi_msleep(&dsi_ctx, 18);
++		mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xf8, 0x58, 0x00, 0xd0, 0x1d);
++		mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xf9, 0x00, 0x00, 0x00, 0x00);
++		ctx->first_on_done = true;
++	}
++
++	if (!dsi_ctx.accum_err)
++		dsi_ctx.accum_err = s6tuum3_set_brightness(ctx->dsi,
++							   backlight_get_brightness(ctx->panel.backlight));
++
++	ctx->enabled = !dsi_ctx.accum_err;
++}
++
++static int s6tuum3_enable(struct drm_panel *panel)
++{
++	struct s6tuum3 *ctx = to_s6tuum3(panel);
++
++	/* Stay dark until valid frames are flowing; brightness comes last */
++	schedule_delayed_work(&ctx->on_work, msecs_to_jiffies(800));
++
++	return 0;
++}
++
++static int s6tuum3_unprepare(struct drm_panel *panel)
++{
++	struct s6tuum3 *ctx = to_s6tuum3(panel);
++	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
++
++	cancel_delayed_work_sync(&ctx->on_work);
++	ctx->enabled = false;
++	mipi_dsi_dcs_set_display_off_multi(&dsi_ctx);
++	mipi_dsi_dcs_enter_sleep_mode_multi(&dsi_ctx);
++	mipi_dsi_msleep(&dsi_ctx, 100);
++	gpiod_set_value_cansleep(ctx->reset, 1);
++	regulator_disable(ctx->vddio);
++
++	return 0;
++}
++
++static const struct drm_display_mode s6tuum3_mode = {
++	.clock = (2800 + 224 + 320 + 212) * (1752 + 224 + 320 + 212) * 60 / 1000,
++	.hdisplay = 2800,
++	.hsync_start = 2800 + 224,
++	.hsync_end = 2800 + 224 + 320,
++	.htotal = 2800 + 224 + 320 + 212,
++	.vdisplay = 1752,
++	.vsync_start = 1752 + 224,
++	.vsync_end = 1752 + 224 + 320,
++	.vtotal = 1752 + 224 + 320 + 212,
++	.width_mm = 267,
++	.height_mm = 167,
++	.type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED,
++};
++
++static int s6tuum3_get_modes(struct drm_panel *panel, struct drm_connector *connector)
++{
++	return drm_connector_helper_get_modes_fixed(connector, &s6tuum3_mode);
++}
++
++static const struct drm_panel_funcs s6tuum3_funcs = {
++	.prepare = s6tuum3_prepare,
++	.enable = s6tuum3_enable,
++	.unprepare = s6tuum3_unprepare,
++	.get_modes = s6tuum3_get_modes,
++};
++
++static int s6tuum3_bl_update(struct backlight_device *bl)
++{
++	struct s6tuum3 *ctx = mipi_dsi_get_drvdata(bl_get_data(bl));
++
++	/* The link is down until enable, which sends the level itself */
++	if (!ctx->enabled)
++		return 0;
++
++	return s6tuum3_set_brightness(ctx->dsi, backlight_get_brightness(bl));
++}
++
++static const struct backlight_ops s6tuum3_bl_ops = {
++	.update_status = s6tuum3_bl_update,
++};
++
++static const struct backlight_properties s6tuum3_bl_props = {
++	.type = BACKLIGHT_RAW,
++	.brightness = 800,
++	.max_brightness = S6TUUM3_MAX_BRIGHTNESS,
++};
++
++static int s6tuum3_probe(struct mipi_dsi_device *dsi)
++{
++	struct device *dev = &dsi->dev;
++	struct s6tuum3 *ctx;
++	int ret;
++
++	ctx = devm_drm_panel_alloc(dev, struct s6tuum3, panel, &s6tuum3_funcs,
++				   DRM_MODE_CONNECTOR_DSI);
++	if (IS_ERR(ctx))
++		return PTR_ERR(ctx);
++
++	ctx->vddio = devm_regulator_get(dev, "vddio");
++	if (IS_ERR(ctx->vddio))
++		return dev_err_probe(dev, PTR_ERR(ctx->vddio), "failed to get vddio\n");
++
++	ctx->reset = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
++	if (IS_ERR(ctx->reset))
++		return dev_err_probe(dev, PTR_ERR(ctx->reset), "failed to get reset\n");
++
++	ctx->tcon_ready = devm_gpiod_get(dev, "tcon-ready", GPIOD_IN);
++	if (IS_ERR(ctx->tcon_ready))
++		return dev_err_probe(dev, PTR_ERR(ctx->tcon_ready), "failed to get tcon-ready\n");
++
++	INIT_DELAYED_WORK(&ctx->on_work, s6tuum3_display_on);
++
++	ctx->dsi = dsi;
++	mipi_dsi_set_drvdata(dsi, ctx);
++
++	dsi->lanes = 4;
++	dsi->format = MIPI_DSI_FMT_RGB888;
++	/* The bootloader sends one packet per line: word count 2801, register 0x3911 */
++	dsi->mode_flags = MIPI_DSI_MODE_DSC_ALL_SLICES_IN_PKT |
++			  MIPI_DSI_CLOCK_NON_CONTINUOUS; /* Bootloader leaves no HS force request */
++
++	ctx->panel.prepare_prev_first = true;
++
++	ctx->panel.backlight = devm_backlight_device_register(dev, dev_name(dev), dev, dsi,
++							      &s6tuum3_bl_ops, &s6tuum3_bl_props);
++	if (IS_ERR(ctx->panel.backlight))
++		return dev_err_probe(dev, PTR_ERR(ctx->panel.backlight), "failed to register backlight\n");
++
++	drm_panel_add(&ctx->panel);
++
++	ctx->dsc.dsc_version_major = 1;
++	ctx->dsc.dsc_version_minor = 1;
++	ctx->dsc.pic_width = 2800;
++	ctx->dsc.pic_height = 1752;
++	ctx->dsc.slice_width = 1400;
++	ctx->dsc.slice_height = 12;
++	ctx->dsc.slice_count = 2;
++	ctx->dsc.bits_per_component = 8;
++	ctx->dsc.bits_per_pixel = 8 << 4;
++	ctx->dsc.block_pred_enable = true;
++	dsi->dsc = &ctx->dsc;
++
++	ret = mipi_dsi_attach(dsi);
++	if (ret < 0) {
++		drm_panel_remove(&ctx->panel);
++		return dev_err_probe(dev, ret, "failed to attach to DSI host\n");
++	}
++
++	return 0;
++}
++
++static void s6tuum3_remove(struct mipi_dsi_device *dsi)
++{
++	struct s6tuum3 *ctx = mipi_dsi_get_drvdata(dsi);
++
++	mipi_dsi_detach(dsi);
++	drm_panel_remove(&ctx->panel);
++}
++
++static const struct of_device_id s6tuum3_of_match[] = {
++	{ .compatible = "samsung,s6tuum3" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, s6tuum3_of_match);
++
++static struct mipi_dsi_driver s6tuum3_driver = {
++	.probe = s6tuum3_probe,
++	.remove = s6tuum3_remove,
++	.driver = {
++		.name = "panel-samsung-s6tuum3",
++		.of_match_table = s6tuum3_of_match,
++	},
++};
++module_mipi_dsi_driver(s6tuum3_driver);
++
++MODULE_DESCRIPTION("Samsung S6TUUM3 panel driver");
++MODULE_LICENSE("GPL");
+-- 
+2.56.0
+
