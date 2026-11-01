@@ -55,8 +55,10 @@ elif [ -x /mnt/r/sbin/init ]; then
 fi
 (while :; do setsid -c sh -c 'stty -F /dev/ttyGS0 sane -echo 2>/dev/null; exec sh </dev/ttyGS0 >/dev/ttyGS0 2>&1'; sleep 1; done) &
 if [ "$S1" = 1 ]; then
+	echo 0 > /sys/module/printk/parameters/ignore_loglevel
 	dmesg -n 1
 	sh /mods/load.sh >/dev/kmsg 2>&1
+	for v in /sys/class/vtconsole/vtcon*/bind; do echo 0 > "$v" 2>/dev/null; done
 	sleep 4
 	for d in proc sys dev; do mkdir -p /s1/$d; mount --bind /$d /s1/$d; done
 	mkdir -p /s1/tmp /s1/run
