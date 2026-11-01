@@ -1,0 +1,42 @@
+From aa45fd518e644c0186069f13dc3f6064c74773f7 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 1 Nov 2026 23:58:49 +0100
+Subject: [PATCH] drm/panel: s6tuum3: prefer the 60Hz mode
+
+---
+ drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+index bad54e7ab..95fd69444 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+@@ -203,6 +203,7 @@ static int s6tuum3_unprepare(struct drm_panel *panel)
+ 	return 0;
+ }
+ 
++/* 60Hz is the well tested mode, so desktops start there; 120Hz can be selected */
+ static const struct drm_display_mode s6tuum3_modes[] = {
+ 	{
+ 		.clock = (2800 + 64 + 64 + 48) * (1752 + 48 + 64 + 48) * 120 / 1000,
+@@ -216,7 +217,7 @@ static const struct drm_display_mode s6tuum3_modes[] = {
+ 		.vtotal = 1752 + 48 + 64 + 48,
+ 		.width_mm = 267,
+ 		.height_mm = 167,
+-		.type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED,
++		.type = DRM_MODE_TYPE_DRIVER,
+ 	}, {
+ 		.clock = (2800 + 224 + 320 + 212) * (1752 + 224 + 320 + 212) * 60 / 1000,
+ 		.hdisplay = 2800,
+@@ -229,7 +230,7 @@ static const struct drm_display_mode s6tuum3_modes[] = {
+ 		.vtotal = 1752 + 224 + 320 + 212,
+ 		.width_mm = 267,
+ 		.height_mm = 167,
+-		.type = DRM_MODE_TYPE_DRIVER,
++		.type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED,
+ 	},
+ };
+ 
+-- 
+2.56.0
+
