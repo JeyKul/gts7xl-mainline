@@ -52,7 +52,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| 4 speakers, CS35L41 amps | ✅ | 4.0, protection firmware and factory calibration loaded; gain at -15 dB, software limiter in front |
+| 4 speakers, CS35L41 amps | ✅ | 4.0, protection firmware and factory calibration loaded; gain at -12 dB, software limiter and 150 Hz high-pass in front |
 | Microphones | ⬜ | |
 | USB-C headphones | ⬜ | |
 
