@@ -1,5 +1,5 @@
 diff --git a/drivers/gpu/drm/msm/dsi/dsi_host.c b/drivers/gpu/drm/msm/dsi/dsi_host.c
-index b292dfd26..5aed9a2d7 100644
+index b292dfd26..2c13b3318 100644
 --- a/drivers/gpu/drm/msm/dsi/dsi_host.c
 +++ b/drivers/gpu/drm/msm/dsi/dsi_host.c
 @@ -853,6 +853,8 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
@@ -11,7 +11,25 @@ index b292dfd26..5aed9a2d7 100644
  		dsi_write(msm_host, REG_DSI_CMD_CFG0, data);
  
  		data = DSI_CMD_CFG1_WR_MEM_START(MIPI_DCS_WRITE_MEMORY_START) |
-@@ -930,6 +932,12 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+@@ -881,13 +883,15 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
+ 
+ 	data = 0;
+ 	/* Always assume dedicated TE pin */
+-	data |= DSI_TRIG_CTRL_TE;
++	/* The bootloader syncs in the tear check block, not on the DSI trigger */
++	if (!msm_host->dsc)
++		data |= DSI_TRIG_CTRL_TE;
+ 	data |= DSI_TRIG_CTRL_MDP_TRIGGER(TRIGGER_NONE);
+ 	data |= DSI_TRIG_CTRL_DMA_TRIGGER(TRIGGER_SW);
+ 	data |= DSI_TRIG_CTRL_STREAM(msm_host->channel);
+ 	if ((cfg_hnd->major == MSM_DSI_VER_MAJOR_6G) &&
+ 		(cfg_hnd->minor >= MSM_DSI_6G_VER_MINOR_V1_2))
+-		data |= DSI_TRIG_CTRL_BLOCK_DMA_WITHIN_FRAME;
++		data |= msm_host->dsc ? 0 : DSI_TRIG_CTRL_BLOCK_DMA_WITHIN_FRAME;
+ 	dsi_write(msm_host, REG_DSI_TRIG_CTRL, data);
+ 
+ 	data = DSI_CLKOUT_TIMING_CTRL_T_CLK_POST(phy_shared_timings->clk_post) |
+@@ -930,6 +934,12 @@ static void dsi_ctrl_enable(struct msm_dsi_host *msm_host,
  			lane_ctrl | DSI_LANE_CTRL_CLKLN_HS_FORCE_REQUEST);
  	}
  
