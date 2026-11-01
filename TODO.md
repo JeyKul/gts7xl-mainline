@@ -15,6 +15,11 @@ Last updated 2026-11-01.
 
 ## In progress
 
+### Arch Linux base
+
+- [ ] Install in `/arch` on userdata with `rootfs/arch-install.sh`, boot with `/.arch`; remove `/.arch` from TWRP to return to Alpine
+- [ ] Remove Alpine once Arch is confirmed
+
 ### Audio (next)
 
 - [x] Reserved memory map matches stock (mainline's was wrong for Samsung)
@@ -42,6 +47,8 @@ Last updated 2026-11-01.
 - Work in progress: `display-wip.dts.txt`, `panel-samsung-s6tuum3.c.wip`
 
 ## Open bugs
+
+- [ ] Tablet powered off at 2% battery (UPower action); Arch keeps the default, Alpine has it disabled
 
 - [ ] Trackpad touch crashes the keyboard MCU (stock survives it; not fixed by the memory map change)
 - [ ] Pen: side button and hover unconfirmed; range is hand-calibrated
