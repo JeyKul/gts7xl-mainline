@@ -49,6 +49,9 @@ while read -r p; do
 done < "$T/pkgs"
 rm -rf "$ROOT/s1/usr/share/apk" "$ROOT/s1/usr/lib/engines-3"
 
+install -m755 "$HERE/fetch.sh" "$ROOT/s1/fetch.sh"
+install -m755 "$HERE/s2start.sh" "$ROOT/s1/s2start.sh"
+
 # Touch program
 "$CC" -static -Os -o "$ROOT/s1/s1ui" "$HERE/s1ui.c"
 "$STRIP" "$ROOT/s1/s1ui"
