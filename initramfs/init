@@ -32,6 +32,8 @@ if [ -e /mnt/r/.installer ]; then
 	sync
 	S1=1
 fi
+# Holding volume up at power on opens the installer
+[ -x /s1/s1ui ] && /s1/s1ui --volup && S1=1
 # Bring-up: a marker file keeps us in the initramfs for one test
 if [ "$S1" = 1 ]; then
 	umount /mnt/r

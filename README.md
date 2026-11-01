@@ -109,7 +109,7 @@ Android: restore `boot`, `dtbo` and `cache` from your backup, then format `userd
 
 ## Firmware and legal notice
 
-The installer prefers each tablet's own firmware. GPU, audio DSP and amplifier firmware, plus speaker calibration and the Bluetooth address, are copied at first boot from the tablet's own `apnhlos`, `vendor`, `sec_efs` and `efs` partitions, which are only read. If `apnhlos` or `vendor` lack the files, for example on another ROM, first boot downloads them from the `Installer` release of this repository. Those firmware files belong to Samsung and Qualcomm, are not covered by this project's license, and are not relicensed by being hosted here. Speaker calibration and the Bluetooth address are specific to each tablet and always come from that tablet.
+The installer downloads GPU, audio DSP and amplifier firmware from the `Installer` release of this repository, and first boot falls back to the tablet's own `apnhlos` and `vendor` partitions. Those firmware files belong to Samsung and Qualcomm, are not covered by this project's license, and are not relicensed by being hosted here. Speaker calibration and the Bluetooth address are specific to each tablet and always come from that tablet.
 
 ## GPU
 
