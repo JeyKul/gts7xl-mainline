@@ -44,8 +44,10 @@ esac
 sed -i "s/-u user /-u $NEW_USER /; s/su user /su $NEW_USER /g" /usr/local/sbin/audio-up
 echo gts7xl > /etc/hostname
 echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen; locale-gen; echo LANG=en_US.UTF-8 > /etc/locale.conf
-systemctl disable systemd-networkd systemd-resolved sshd 2>/dev/null || true
+systemctl disable systemd-networkd sshd 2>/dev/null || true
 systemctl mask alsa-restore alsa-state
+# /etc/resolv.conf points at systemd-resolved, and NetworkManager feeds it
+systemctl enable systemd-resolved
 systemctl enable NetworkManager "$DM" bluetooth systemd-timesyncd \
   gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log
 systemctl set-default graphical.target

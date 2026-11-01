@@ -126,7 +126,9 @@ W=$!
 chroot $A /bin/bash /tmp/arch-setup.sh >> /tmp/install.log 2>&1 || { kill $W 2>/dev/null; fail "package setup failed"; }
 kill $W 2>/dev/null || true
 pct 98
-rm -f $A/tmp/arch-setup.sh $A/etc/resolv.conf $A/var/cache/pacman/pkg/* 2>/dev/null || true
+rm -f $A/tmp/arch-setup.sh $A/var/cache/pacman/pkg/* 2>/dev/null || true
+rm -f $A/etc/resolv.conf
+ln -s ../run/systemd/resolve/stub-resolv.conf $A/etc/resolv.conf
 
 # Arch key setup leaves gpg-agent running, which keeps /dev busy
 chroot $A /usr/bin/gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null || true
