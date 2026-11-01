@@ -123,6 +123,7 @@ def btaddr():
     p=ETC+'/bt_addr'
     open(p,'w').write(a+'\n'); os.chmod(p,0o600)
 
+# Not called yet: joining Wi-Fi with this address failed on the first test
 def wifimac():
     """Use the tablet's real Wi-Fi address, so routers keep giving it the same IP."""
     with Ro(PL+'efs','ext4','ro,noload') as m:
@@ -137,8 +138,7 @@ def wifimac():
 def main():
     failed=[]
     for name,fn,needed in (('audio DSP and GPU, apnhlos',apnhlos,True),('amp firmware, vendor',vendor,True),
-                           ('speaker calibration, sec_efs',calibration,False),('Bluetooth address, efs',btaddr,False),
-                           ('Wi-Fi address, efs',wifimac,False)):
+                           ('speaker calibration, sec_efs',calibration,False),('Bluetooth address, efs',btaddr,False)):
         try:
             fn(); print('ok:',name,flush=True)
         except Exception as e:
