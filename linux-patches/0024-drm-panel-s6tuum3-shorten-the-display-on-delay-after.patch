@@ -1,0 +1,27 @@
+From ed0198a6f1fdf4da2df3d7f4de134ed06b1ce027 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 1 Nov 2026 21:21:02 +0100
+Subject: [PATCH] drm/panel: s6tuum3: shorten the display on delay after the
+ first boot
+
+---
+ drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+index da10b0dbb..bad54e7ab 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+@@ -181,7 +181,8 @@ static int s6tuum3_enable(struct drm_panel *panel)
+ 	struct s6tuum3 *ctx = to_s6tuum3(panel);
+ 
+ 	/* Stay dark until valid frames are flowing; brightness comes last */
+-	schedule_delayed_work(&ctx->on_work, msecs_to_jiffies(800));
++	schedule_delayed_work(&ctx->on_work,
++			      msecs_to_jiffies(ctx->first_on_done ? 200 : 800));
+ 
+ 	return 0;
+ }
+-- 
+2.56.0
+
