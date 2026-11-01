@@ -11,6 +11,9 @@ jobs:
   build:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
+    env:
+      # Empty on purpose: otherwise the kernel release gets a + suffix
+      LOCALVERSION: ""
     steps:
       - uses: actions/checkout@v4
 
