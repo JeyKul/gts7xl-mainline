@@ -56,7 +56,11 @@ step "Installing packages, this takes a while"
 chroot $A /bin/bash /tmp/arch-setup.sh >> /tmp/install.log 2>&1 || fail "package setup failed"
 rm -f $A/tmp/arch-setup.sh $A/etc/resolv.conf $A/var/cache/pacman/pkg/* 2>/dev/null || true
 
-for d in dev sys proc; do umount $A/$d; done
+# Arch key setup leaves gpg-agent running, which keeps /dev busy
+chroot $A /usr/bin/gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null || true
+fuser -k $A/dev 2>/dev/null || true
+sleep 1
+for d in dev sys proc; do umount $A/$d || umount -l $A/$d; done
 sync
 [ -e /dry ] && { du -sh $A > /tmp/dry-size; umount $A; }
 [ -e /dry ] || umount $A
