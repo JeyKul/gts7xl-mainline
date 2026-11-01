@@ -36,6 +36,10 @@ while read -r p; do
 	tar -xzf "$T/$p" -C "$R" --no-same-owner --exclude='.SIGN*' --exclude='.PKGINFO' \
 		--exclude='.pre-*' --exclude='.post-*' --exclude='.trigger' 2>/dev/null
 done < "$T/pkgs"
+# GPU firmware from linux-firmware: Arch's packages don't provide these two here
+LFW=https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/qcom
+mkdir -p "$R/gts7xl/firmware/qcom"
+for f in a650_sqe.fw a650_gmu.bin; do curl -fsSL -o "$R/gts7xl/firmware/qcom/$f" "$LFW/$f"; done
 install -m755 "$UI" "$R/s1ui"
 install -m755 "$HERE/install.sh" "$R/install.sh"
 cp -a "$HERE/../overlay" "$R/gts7xl/overlay"

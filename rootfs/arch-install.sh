@@ -22,6 +22,10 @@ sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/lib/firmware/cirrus/cs35l41-dsp1-sp
 
 # The tablet's config must exist before services are enabled
 cp -a "$HERE/overlay/." "$A/"
+# GPU firmware from linux-firmware: Arch's packages don't provide these two here
+LFW=https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/qcom
+mkdir -p "$A/usr/lib/firmware/qcom"
+for f in a650_sqe.fw a650_gmu.bin; do curl -fsSL -o "$A/usr/lib/firmware/qcom/$f" "$LFW/$f"; done
 chmod 755 "$A"/usr/local/sbin/* "$A/usr/lib/systemd/system-sleep/gts7xl-bluetooth"
 mkdir -p "$A/usr/lib/modules"
 tar -xzf "$MODULES" -C "$A/usr" --strip-components=0 lib/modules 2>/dev/null || tar -xzf "$MODULES" -C "$A"
