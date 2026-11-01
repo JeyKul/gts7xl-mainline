@@ -573,9 +573,9 @@ static int valid_user(const char *u)
 
 static const struct { const char *id, *name, *about; } desktops[] = {
 	{ "gnome", "GNOME", "Tested on this tablet. Recommended." },
-	{ "kde", "KDE Plasma", "Classic desktop. Not tested on this tablet yet." },
-	{ "kde-mobile", "KDE Plasma Mobile", "Touch first. Not tested on this tablet yet." },
-	{ "phosh", "Phosh", "GNOME based, touch first. Not tested on this tablet yet." },
+	{ "kde", "KDE Plasma", "Classic desktop." },
+	{ "kde-mobile", "KDE Plasma Mobile", "Touch first. Can feel slow." },
+	{ NULL, "Phosh", "GNOME based, touch first. Crashes on this tablet for now." },
 	{ NULL, "ztOS", "Windows Phone style, on Arch. Port not ready yet." },
 };
 

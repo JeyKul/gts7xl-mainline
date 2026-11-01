@@ -101,7 +101,9 @@ Decision: Linux or Android, not both. An installer in the boot image starts when
 - [x] Format `userdata`, download and unpack Arch, create the user, extract firmware
 - [x] Full wipe and install from the installer reaches GNOME, tested on the tablet with a locally served installer
 - [ ] Options, region and device information
-- [ ] Desktop choice: GNOME tested; KDE, KDE Mobile and Phosh being tested
+- [x] Desktop choice: GNOME, KDE and KDE Mobile run on the tablet
+- [ ] KDE Mobile feels laggy: find out why
+- [ ] Phosh: shell exits with Wayland protocol error 71 after start, at 60Hz and 120Hz; not offered by the installer
 - [ ] Reinstall from the desktop
 - [ ] ztOS (github.com/Zerone-Laboratories/ztOS, GPL-3.0): build its GSI in CI and write a device layer for this tablet; listed in the installer as not ready
 - [ ] Hold volume up at power on to open the installer: test it
