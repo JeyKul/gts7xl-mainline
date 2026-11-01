@@ -93,7 +93,8 @@ static int s6tuum3_prepare(struct drm_panel *panel)
 	mipi_dsi_dcs_set_tear_on_multi(&dsi_ctx, MIPI_DSI_DCS_TEAR_MODE_VBLANK);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xd3, 0x4d);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x98, 0x00);
-	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x60, 0x20);
+	/* Stock wqxga60hs; the bootloader's tear check also points to 60Hz */
+	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x60, 0x00);
 	mipi_dsi_msleep(&dsi_ctx, 50);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xb0, 0x00, 0x08);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x78, 0x30);
@@ -232,15 +233,15 @@ static int s6tuum3_unprepare(struct drm_panel *panel)
 }
 
 static const struct drm_display_mode s6tuum3_mode = {
-	.clock = (2800 + 64 + 64 + 48) * (1752 + 48 + 64 + 48) * 120 / 1000,
+	.clock = (2800 + 224 + 320 + 212) * (1752 + 224 + 320 + 212) * 60 / 1000,
 	.hdisplay = 2800,
-	.hsync_start = 2800 + 64,
-	.hsync_end = 2800 + 64 + 64,
-	.htotal = 2800 + 64 + 64 + 48,
+	.hsync_start = 2800 + 224,
+	.hsync_end = 2800 + 224 + 320,
+	.htotal = 2800 + 224 + 320 + 212,
 	.vdisplay = 1752,
-	.vsync_start = 1752 + 48,
-	.vsync_end = 1752 + 48 + 64,
-	.vtotal = 1752 + 48 + 64 + 48,
+	.vsync_start = 1752 + 224,
+	.vsync_end = 1752 + 224 + 320,
+	.vtotal = 1752 + 224 + 320 + 212,
 	.width_mm = 267,
 	.height_mm = 167,
 	.type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED,
@@ -314,7 +315,8 @@ static int s6tuum3_probe(struct mipi_dsi_device *dsi)
 	dsi->lanes = 4;
 	dsi->format = MIPI_DSI_FMT_RGB888;
 	/* The bootloader sends one packet per line: word count 2801, register 0x3911 */
-	dsi->mode_flags = MIPI_DSI_MODE_DSC_ALL_SLICES_IN_PKT;
+	dsi->mode_flags = MIPI_DSI_MODE_DSC_ALL_SLICES_IN_PKT |
+			  MIPI_DSI_CLOCK_NON_CONTINUOUS; /* Bootloader leaves no HS force request */
 
 	ctx->panel.prepare_prev_first = true;
 
