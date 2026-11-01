@@ -39,6 +39,7 @@ cp -a /etc/modprobe.d/. $A/etc/modprobe.d/
 cp -a /etc/udev/rules.d/. $A/etc/udev/rules.d/
 mkdir -p $A/etc/NetworkManager/system-connections $A/etc/NetworkManager/conf.d
 cp -a /etc/NetworkManager/system-connections/. $A/etc/NetworkManager/system-connections/
+sed -i '/^interface-name=/d' $A/etc/NetworkManager/system-connections/*
 printf '[keyfile]\nunmanaged-devices=interface-name:usb0\n' > $A/etc/NetworkManager/conf.d/usb0.conf
 mkdir -p $A/etc/gdm $A/etc/dconf/db/local.d $A/etc/dconf/profile
 cp -a /etc/gdm/custom.conf $A/etc/gdm/custom.conf
