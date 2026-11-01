@@ -21,7 +21,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
-            device-tree-compiler mkbootimg busybox-static cpio kmod
+            device-tree-compiler busybox-static cpio kmod
+          # Ubuntu's mkbootimg package is missing its gki module
+          git clone --depth 1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg-src
 
       - name: Fetch Linux v7.3 and apply patches
         run: |
@@ -59,7 +61,7 @@ jobs:
           gzip -9c linux/build/arch/arm64/boot/Image > kernel.gz
           cat kernel.gz linux/build/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dtb > kernel-dtb
           printf '\0' > rd
-          mkbootimg --header_version 1 --pagesize 2048 --base 0x10000000 \
+          python3 mkbootimg-src/mkbootimg.py --header_version 1 --pagesize 2048 --base 0x10000000 \
             --kernel_offset 0x00008000 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 \
             --kernel kernel-dtb --ramdisk rd -o artifact/boot.img
           tar -C modroot -czf artifact/modules-7.3.0-gts7xl.tar.gz lib
