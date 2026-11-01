@@ -22,7 +22,8 @@ else
 		fi
 	done
 	[ -n "$D" ] && [ -b "$D" ] || fail "userdata partition not found"
-	mkfs.ext4 -F -q -L userdata "$D"
+	# TWRP's older kernel can't write to orphan_file, which recovery fixes would need
+	mkfs.ext4 -F -q -L userdata -O ^orphan_file "$D"
 	mount -t ext4 -o rw,noatime "$D" $A
 fi
 
