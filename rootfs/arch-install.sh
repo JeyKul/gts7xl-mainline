@@ -53,7 +53,7 @@ sed -e '/audio-up/d' /etc/local.d/gpu.start > $A/usr/local/sbin/gts7xl-hw
 chmod 755 $A/usr/local/sbin/gts7xl-hw
 sed -i 's/pidof pulseaudio | cut -d" " -f1/pgrep -o -u user pulseaudio/' $A/usr/local/sbin/audio-up
 sed -i 's|^for a in FL FR RL RR; do|for d in /sys/bus/i2c/devices/11-004[0-3]; do echo on > $d/power/control; done\n&|' $A/usr/local/sbin/audio-up
-sed -i '/ZaMaximX2/d' $A/usr/local/sbin/audio-up
+sed -i 's/plugin=ZaMaximX2-ladspa label=ZaMaximX2 control=25,-6,-6/plugin=fast_lookahead_limiter_1913 label=fastLookaheadLimiter control=0,-6,0.025/' $A/usr/local/sbin/audio-up
 cat > $A/etc/systemd/system/gts7xl-hw.service <<'U'
 [Unit]
 Description=Tablet GPU and Wi-Fi modules

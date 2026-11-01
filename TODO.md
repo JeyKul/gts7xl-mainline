@@ -18,7 +18,7 @@ Last updated 2026-11-01.
 ### Arch Linux base
 
 - [x] Installed in `/arch` on userdata with `rootfs/arch-install.sh`, boots with `/.arch`; remove `/.arch` from TWRP to return to Alpine
-- [ ] Audio on Arch sounded broken with the `swh-plugins` limiter at stock gain; limiter removed, amps at -15 dB, retest. ZaMaximX2 is not packaged for Arch ARM
+- [ ] Limiter back on Arch with `swh-plugins` (ZaMaximX2 is not packaged for Arch ARM); earlier bad sound was `alsa-restore`, not the limiter; confirm by ear
 - [x] `alsa-restore` wrote saved values over the amp DSP controls at boot, which sounded bitcrushed: masked, audio confirmed by ear
 - [x] `linux-firmware-cirrus` overwrote the Samsung amp firmware; restored and excluded with `NoExtract`
 - [ ] Run `depmod` after copying modules: kmod ignores a hand-made `modules.dep`
