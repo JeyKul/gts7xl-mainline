@@ -1,0 +1,70 @@
+name: Build kernel
+
+# Started by hand from the Actions tab or with: gh workflow run build.yml
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
+            device-tree-compiler mkbootimg busybox-static cpio kmod
+
+      - name: Fetch Linux v7.3 and apply patches
+        run: |
+          git clone --depth 1 --branch v7.3 \
+            https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git linux
+          cd linux
+          git config user.name ci
+          git config user.email ci@example.invalid
+          git am ../linux-patches/*.patch
+
+      - name: Assemble the initramfs
+        run: |
+          I="$PWD/initramfs-root"
+          mkdir -p "$I"/bin "$I"/dev "$I"/proc "$I"/sys "$I"/tmp "$I"/mnt
+          install -m755 initramfs/init "$I"/init
+          install -m755 /bin/busybox "$I"/bin/busybox
+          gcc -static -O2 -o "$I"/bin/usbroute tools/usbroute.c
+          gcc -static -O2 -o "$I"/bin/reboot-recovery tools/rr.c
+          echo "INITRAMFS=$I" >> "$GITHUB_ENV"
+
+      - name: Configure and build
+        run: |
+          cd linux
+          cp ../config/gts7xl_defconfig arch/arm64/configs/gts7xl_defconfig
+          make O=build gts7xl_defconfig
+          scripts/config --file build/.config --set-str INITRAMFS_SOURCE "$INITRAMFS"
+          make O=build olddefconfig
+          test "$(make -s O=build kernelrelease)" = 7.3.0-gts7xl
+          make -s O=build -j"$(nproc)" Image modules qcom/sm8250-samsung-gts7xlwifi.dtb
+          make -s O=build INSTALL_MOD_PATH="$PWD/../modroot" modules_install
+
+      - name: Package
+        run: |
+          mkdir -p artifact
+          gzip -9c linux/build/arch/arm64/boot/Image > kernel.gz
+          cat kernel.gz linux/build/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dtb > kernel-dtb
+          printf '\0' > rd
+          mkbootimg --header_version 1 --pagesize 2048 --base 0x10000000 \
+            --kernel_offset 0x00008000 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 \
+            --kernel kernel-dtb --ramdisk rd -o artifact/boot.img
+          tar -C modroot -czf artifact/modules-7.3.0-gts7xl.tar.gz lib
+          cp -r rootfs artifact/rootfs
+          (cd artifact && sha256sum boot.img modules-7.3.0-gts7xl.tar.gz > SHA256SUMS)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gts7xlwifi-boot
+          path: artifact
+          retention-days: 90

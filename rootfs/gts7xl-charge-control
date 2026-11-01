@@ -36,6 +36,7 @@ def log(m):
 
 def main():
     f=mbox(); fast=False; hot=False; was=None
+    retry=0
     setlim(SAFE)
     while True:
         online=rs(CH+'online')=='1'
@@ -46,7 +47,7 @@ def main():
             time.sleep(3); continue
         if not online:
             if was: setlim(SAFE); log('unplugged')
-            fast=False; hot=False
+            fast=False; hot=False; retry=0
         else:
             if b>=HOT_BATT or c>=HOT_CHG:
                 hot=True
@@ -56,17 +57,19 @@ def main():
                 time.sleep(3) # let PD finish after plugging in
             if hot and fast:
                 setlim(500000); req(f,1); setlim(SAFE); fast=False; log('too hot, 5V')
-            elif not hot and not fast:
+            elif not hot and not fast and time.monotonic()>=retry:
                 try:
                     sel,n,p=caps(f); idx=nine_volt(p)
                 except OSError:
                     idx=0
+                if not idx:
+                    retry=time.monotonic()+15
                 if idx:
                     setlim(500000); time.sleep(0.5); req(f,idx)
                     if caps(f)[0]==idx:
                         setlim(1650000,2650000); fast=True; log('9V')
                     else:
-                        setlim(SAFE); log('9V refused')
+                        setlim(SAFE); log('9V refused'); retry=time.monotonic()+60
         was=online
         time.sleep(3)
 
