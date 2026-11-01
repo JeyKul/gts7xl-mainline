@@ -58,6 +58,28 @@ rm -f ArchLinuxARM-aarch64-latest.tar.gz
 
 pct 42
 step "Adding tablet support"
+# The project's firmware archive, while there is a network. First boot falls back to
+# the tablet's own partitions for anything that isn't here.
+FW=https://github.com/JeyKul/gts7xl-mainline/releases/download/Installer/tabs7p.tar
+FWSUM=a23600ef20e314ecceef0bc605bffedcea07658bb09f6044f0b6a3c8e3047267
+if curl -fsSL -o /tmp/fw.tar "$FW" && [ "$(sha256sum /tmp/fw.tar | cut -d' ' -f1)" = "$FWSUM" ]; then
+	mkdir -p /tmp/fw $A/usr/lib/firmware/qcom/sm8250/gts7xl $A/usr/lib/firmware/cirrus
+	tar -xf /tmp/fw.tar -C /tmp/fw
+	for f in /tmp/fw/files/image/adsp.*; do
+		b=${f##*/}; [ "$b" = adsp.mdt ] && b=adsp.mbn
+		cp "$f" "$A/usr/lib/firmware/qcom/sm8250/gts7xl/$b"
+	done
+	for f in /tmp/fw/files/image/a650_zap.*; do
+		b=${f##*/}; [ "$b" = a650_zap.mdt ] && b=a650_zap.mbn
+		cp "$f" "$A/usr/lib/firmware/qcom/sm8250/$b"
+	done
+	cp /tmp/fw/files/firmware/cs35l40-spk-dsp1-spk-prot.wmfw $A/usr/lib/firmware/cirrus/cs35l41-dsp1-spk-prot.wmfw
+	cp /tmp/fw/files/firmware/cs35l40-spk-dsp1-spk-prot.bin $A/usr/lib/firmware/cirrus/cs35l41-dsp1-spk-prot.bin
+	rm -rf /tmp/fw /tmp/fw.tar
+else
+	echo "firmware archive unavailable, first boot uses the tablet's partitions"
+	rm -f /tmp/fw.tar
+fi
 cp -a /gts7xl/overlay/. $A/
 mkdir -p $A/usr/lib/firmware
 cp -a /gts7xl/firmware/. $A/usr/lib/firmware/

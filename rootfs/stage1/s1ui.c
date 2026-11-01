@@ -289,6 +289,24 @@ static int wait_tap(int *sx, int *sy, int timeout_ms)
 	}
 }
 
+/* Is volume up held right now? Used at boot to open the installer on request */
+static int volup_held(void)
+{
+	for (int i = 0; i < 32; i++) {
+		char p[40];
+		unsigned char keys[KEY_MAX / 8 + 1] = { 0 };
+		snprintf(p, sizeof(p), "/dev/input/event%d", i);
+		int fd = open(p, O_RDONLY | O_CLOEXEC);
+		if (fd < 0)
+			continue;
+		int r = ioctl(fd, EVIOCGKEY(sizeof(keys)), keys);
+		close(fd);
+		if (r >= 0 && (keys[KEY_VOLUMEUP / 8] & (1 << (KEY_VOLUMEUP % 8))))
+			return 1;
+	}
+	return 0;
+}
+
 static void wifi_start(void)
 {
 	static char *up[] = { "ip", "link", "set", IFACE, "up", NULL };
@@ -703,6 +721,8 @@ int main(int argc, char **argv)
 	setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1);
 	if (argc > 1 && !strcmp(argv[1], "--stage2"))
 		return stage2();
+	if (argc > 1 && !strcmp(argv[1], "--volup"))
+		return volup_held() ? 0 : 1;
 	static char pw[64];
 	static char *rb[] = { "reboot", "-f", NULL };
 

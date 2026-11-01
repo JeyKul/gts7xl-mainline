@@ -10,9 +10,6 @@ DEST=os.environ.get('GTS7XL_DEST','/usr/lib/firmware')
 ETC=os.environ.get('GTS7XL_ETC','/etc/gts7xl')
 PL='/dev/disk/by-partlabel/'
 AMPS={'0040':'_r','0041':'','0042':'_br','0043':'_b'}
-# Used only when this tablet's own partitions lack the files, for example on other ROMs
-FALLBACK='https://github.com/JeyKul/gts7xl-mainline/releases/download/Installer/tabs7p.tar'
-FALLBACK_SHA='a23600ef20e314ecceef0bc605bffedcea07658bb09f6044f0b6a3c8e3047267'
 PARTS=[]
 
 def run(*a):
@@ -69,6 +66,9 @@ def need(path):
     return path
 
 def apnhlos():
+    # The installer normally brought these from the firmware archive
+    if os.path.exists(DEST+'/qcom/sm8250/gts7xl/adsp.mbn') and os.path.exists(DEST+'/qcom/sm8250/a650_zap.mbn'):
+        return
     with Ro(PL+'apnhlos','vfat','ro,shortname=lower') as m:
         img=m+'/image'
         if not os.path.isdir(img): raise RuntimeError('apnhlos has no image directory')
@@ -85,6 +85,8 @@ def apnhlos():
             copy(f,DEST+'/qcom/sm8250/'+('a650_zap.mbn' if b=='a650_zap.mdt' else b))
 
 def vendor():
+    if os.path.exists(DEST+'/cirrus/cs35l41-dsp1-spk-prot.wmfw') and os.path.exists(DEST+'/cirrus/cs35l41-dsp1-spk-prot.bin'):
+        return
     ext=super_extents('vendor')
     if len(ext)>1:
         raise RuntimeError('vendor is split into %d pieces, not supported yet'%len(ext))
@@ -120,33 +122,6 @@ def btaddr():
     p=ETC+'/bt_addr'
     open(p,'w').write(a+'\n'); os.chmod(p,0o600)
 
-def fallback(what):
-    """Use the project's firmware archive for apnhlos or vendor files."""
-    import hashlib,tarfile,urllib.request
-    t=tempfile.mkdtemp(prefix='gts7xl-fw-')
-    try:
-        p=t+'/fw.tar'
-        urllib.request.urlretrieve(FALLBACK,p)
-        if hashlib.sha256(open(p,'rb').read()).hexdigest()!=FALLBACK_SHA:
-            raise RuntimeError('firmware archive does not match')
-        with tarfile.open(p) as z:
-            z.extractall(t,filter='data')
-        f=t+'/files'
-        if what=='apnhlos':
-            out=DEST+'/qcom/sm8250/gts7xl/'
-            os.makedirs(out,exist_ok=True)
-            for s in glob.glob(f+'/image/adsp.*'):
-                b=os.path.basename(s)
-                copy(s,out+('adsp.mbn' if b=='adsp.mdt' else b))
-            for s in glob.glob(f+'/image/a650_zap.*'):
-                b=os.path.basename(s)
-                copy(s,DEST+'/qcom/sm8250/'+('a650_zap.mbn' if b=='a650_zap.mdt' else b))
-        else:
-            for e in ('.wmfw','.bin'):
-                copy(need(f+'/firmware/cs35l40-spk-dsp1-spk-prot'+e),DEST+'/cirrus/cs35l41-dsp1-spk-prot'+e)
-    finally:
-        shutil.rmtree(t,ignore_errors=True)
-
 def main():
     failed=[]
     for name,fn,needed in (('audio DSP and GPU, apnhlos',apnhlos,True),('amp firmware, vendor',vendor,True),
@@ -154,14 +129,8 @@ def main():
         try:
             fn(); print('ok:',name,flush=True)
         except Exception as e:
-            print('from tablet failed:',name,'-',e,flush=True)
-            if needed:
-                try:
-                    fallback('apnhlos' if fn is apnhlos else 'vendor')
-                    print('ok from archive:',name,flush=True)
-                except Exception as e2:
-                    print('FAILED:',name,'-',e2,flush=True)
-                    failed.append(name)
+            print('FAILED:',name,'-',e,flush=True)
+            if needed: failed.append(name)
     return 1 if failed else 0
 
 if __name__=='__main__':
