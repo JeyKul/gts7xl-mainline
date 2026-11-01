@@ -1,0 +1,2 @@
+# Let desktop users switch the rear LED without a password
+ACTION=="add", SUBSYSTEM=="leds", KERNEL=="white:flash", RUN+="/bin/chgrp video /sys%p/brightness", RUN+="/bin/chmod g+w /sys%p/brightness"

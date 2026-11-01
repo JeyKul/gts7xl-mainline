@@ -89,7 +89,7 @@ cp -a /gts7xl/overlay/. $A/
 (cd /gts7xl/overlay && find . -print0) | (cd $A && xargs -0 chown -h 0:0)
 mkdir -p $A/usr/lib/firmware
 cp -a /gts7xl/firmware/. $A/usr/lib/firmware/
-chmod 755 $A/usr/local/sbin/* $A/usr/lib/systemd/system-sleep/gts7xl-bluetooth
+chmod 755 $A/usr/local/sbin/* $A/usr/local/bin/* $A/usr/lib/systemd/system-sleep/gts7xl-bluetooth
 tar -xzf /gts7xl/modules.tar.gz -C $A/usr
 sed -i 's/^CheckSpace/#CheckSpace/' $A/etc/pacman.conf
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' $A/etc/pacman.conf

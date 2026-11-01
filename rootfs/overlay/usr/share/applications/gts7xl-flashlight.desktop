@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Flashlight
+Comment=Turn the rear LED on or off
+Exec=/usr/local/bin/gts7xl-flashlight
+Icon=weather-clear
+Categories=Utility;

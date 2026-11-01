@@ -27,7 +27,7 @@ cp -a "$HERE/overlay/." "$A/"
 LFW=https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/qcom
 mkdir -p "$A/usr/lib/firmware/qcom"
 for f in a650_sqe.fw a650_gmu.bin; do curl -fsSL -o "$A/usr/lib/firmware/qcom/$f" "$LFW/$f"; done
-chmod 755 "$A"/usr/local/sbin/* "$A/usr/lib/systemd/system-sleep/gts7xl-bluetooth"
+chmod 755 "$A"/usr/local/sbin/* "$A"/usr/local/bin/* "$A/usr/lib/systemd/system-sleep/gts7xl-bluetooth"
 mkdir -p "$A/usr/lib/modules"
 tar -xzf "$MODULES" -C "$A/usr" --strip-components=0 lib/modules 2>/dev/null || tar -xzf "$MODULES" -C "$A"
 install -m755 "$HERE/arch-setup.sh" "$A/tmp/arch-setup.sh"
