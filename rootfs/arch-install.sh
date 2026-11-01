@@ -28,6 +28,7 @@ systemctl disable systemd-networkd systemd-resolved sshd 2>/dev/null || true
 systemctl enable NetworkManager gdm systemd-timesyncd gts7xl-hw gts7xl-serial
 systemctl set-default graphical.target
 systemctl mask alsa-restore alsa-state
+systemctl mask suspend.target sleep.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
 ln -sf /dev/null /etc/udev/rules.d/90-alsa-restore.rules
 dconf update
 C
@@ -43,17 +44,17 @@ mkdir -p $A/etc/NetworkManager/system-connections $A/etc/NetworkManager/conf.d
 cp -a /etc/NetworkManager/system-connections/. $A/etc/NetworkManager/system-connections/
 sed -i '/^interface-name=/d' $A/etc/NetworkManager/system-connections/*
 printf '[keyfile]\nunmanaged-devices=interface-name:usb0\n' > $A/etc/NetworkManager/conf.d/usb0.conf
+printf 'SUBSYSTEM=="sound", KERNEL=="card0", ENV{PULSE_IGNORE}="1"\n' > $A/etc/udev/rules.d/89-gts7xl-pulse-ignore.rules
 mkdir -p $A/etc/gdm $A/etc/dconf/db/local.d $A/etc/dconf/profile
 cp -a /etc/gdm/custom.conf $A/etc/gdm/custom.conf
 cp -a /etc/dconf/db/local.d/. $A/etc/dconf/db/local.d/
 cp -a /etc/dconf/profile/. $A/etc/dconf/profile/
 mkdir -p $A/etc/systemd/logind.conf.d
 printf '[Login]\nHandlePowerKey=ignore\n' > $A/etc/systemd/logind.conf.d/power.conf
+# Confirmed good sound: stock gain with the limiter in front
+install -m755 "$(dirname "$0")/audio-up.arch" $A/usr/local/sbin/audio-up
 sed -e '/audio-up/d' /etc/local.d/gpu.start > $A/usr/local/sbin/gts7xl-hw
 chmod 755 $A/usr/local/sbin/gts7xl-hw
-sed -i 's/pidof pulseaudio | cut -d" " -f1/pgrep -o -u user pulseaudio/' $A/usr/local/sbin/audio-up
-sed -i 's|^for a in FL FR RL RR; do|for d in /sys/bus/i2c/devices/11-004[0-3]; do echo on > $d/power/control; done\n&|' $A/usr/local/sbin/audio-up
-sed -i 's/plugin=ZaMaximX2-ladspa label=ZaMaximX2 control=25,-6,-6/plugin=fast_lookahead_limiter_1913 label=fastLookaheadLimiter control=0,-6,0.025/' $A/usr/local/sbin/audio-up
 cat > $A/etc/systemd/system/gts7xl-hw.service <<'U'
 [Unit]
 Description=Tablet GPU and Wi-Fi modules
