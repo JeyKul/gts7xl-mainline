@@ -27,6 +27,8 @@ echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen; locale-gen; echo LANG=en_US.UTF-8 > 
 systemctl disable systemd-networkd systemd-resolved sshd 2>/dev/null || true
 systemctl enable NetworkManager gdm systemd-timesyncd gts7xl-hw gts7xl-serial
 systemctl set-default graphical.target
+systemctl mask alsa-restore alsa-state
+ln -sf /dev/null /etc/udev/rules.d/90-alsa-restore.rules
 dconf update
 C
 # Carry over the hardware setup
