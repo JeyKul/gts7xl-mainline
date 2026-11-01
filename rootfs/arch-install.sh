@@ -34,6 +34,7 @@ printf "NEW_USER=user\nNEW_PASS=user\n" > "$A/tmp/gts7xl-user"
 chroot "$A" /bin/bash /tmp/arch-setup.sh
 chroot "$A" /usr/bin/gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null || true
 rm -f "$A/tmp/arch-setup.sh" "$A/etc/resolv.conf"
+ln -s ../run/systemd/resolve/stub-resolv.conf "$A/etc/resolv.conf"
 rm -rf "$A"/var/cache/pacman/pkg/* "$A"/etc/ssh/ssh_host_*
 
 for d in proc sys dev; do umount "$A/$d" || umount -l "$A/$d"; done
