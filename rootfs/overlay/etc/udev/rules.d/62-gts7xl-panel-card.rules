@@ -1,0 +1,2 @@
+# The panel and the GPU are separate DRM cards and their numbers can change
+ACTION=="add|change", SUBSYSTEM=="drm", KERNEL=="card[0-9]*", DRIVERS=="msm_dpu", SYMLINK+="dri/panel"

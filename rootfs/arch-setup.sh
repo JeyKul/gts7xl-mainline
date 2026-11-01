@@ -32,6 +32,7 @@ sed -i "s/^AutomaticLogin=.*/AutomaticLogin=$NEW_USER/" /etc/gdm/custom.conf
 case "$DESKTOP" in
 kde|kde-mobile)
 	mkdir -p /etc/sddm.conf.d
+	cat /etc/environment.gts7xl >> /etc/environment
 	if [ "$DESKTOP" = kde ]; then SESSION=plasma; else SESSION=plasma-mobile; fi
 	printf '[Autologin]\nUser=%s\nSession=%s\n' "$NEW_USER" "$SESSION" > /etc/sddm.conf.d/autologin.conf
 	;;
