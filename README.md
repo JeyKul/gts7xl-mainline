@@ -9,26 +9,94 @@ Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition
 
 ## Status
 
-| Part | State |
-|---|---|
-| Boot, screen (firmware framebuffer), UFS | Working |
-| USB gadget (serial + NCM) | Working, connects about 85s after boot with no replug |
-| `reboot recovery` to TWRP | Working |
-| MAX77705 charger, fuel gauge | Working, limited to 500mA / 4.35V |
-| Pogo keyboard | Works until the trackpad is touched |
-| Pogo trackpad | Touch crashes the MCU, under investigation |
-| Touchscreen | Working, multitouch |
-| Sway on Alpine v3.22 (Vulkan renderer) | Installed, replaced by GNOME at boot |
-| Adreno 650 GPU (OpenGL, Vulkan) | Working, `glxgears` about 100 FPS |
-| Wi-Fi (QCA6390, ath11k) | Connected, internet works |
-| GNOME 48 (gdm autologin) | Running; GPU use not confirmed |
-| S Pen (pressure, tilt) | Working, range hand-calibrated |
-| Krita | Runs |
-| Audio, sensors | Not started |
+Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
-## Desktop
+### Core
 
-Alpine and Sway live on `userdata` (formatted ext4, which erases Android data). In TWRP, run `rootfs/twrp-setup.sh` with the packages pushed to `/tmp`, then `rootfs/rootcfg.sh`. The initramfs switches to it at boot, with a fallback shell if it's missing. The serial shell and the `user` account have no password.
+| Hardware | State | Notes |
+|---|---|---|
+| SoC: Snapdragon 865 (SM8250), CPU cores | ✅ | No CPU frequency work confirmed |
+| RAM | ✅ | Reserved memory follows the stock map |
+| Storage: UFS | ✅ | Booting and running from `userdata` |
+| microSD slot | ⬜ | |
+| Suspend | ⬜ | Disabled |
+| Thermal sensors and throttling | ⬜ | |
+| Real-time clock | 🟡 | No saved time, set over Wi-Fi after boot |
+| Hardware buttons: power, volume | ✅ | Emergency reboot combo works |
+| Vibration motor | ⬜ | |
+
+### Display and input
+
+| Hardware | State | Notes |
+|---|---|---|
+| Display: 2800x1752 AMOLED, S6TUUM3 | 🟡 | Firmware framebuffer only, tears; native driver shows stripes |
+| Backlight, brightness | ❌ | Software dim only |
+| Touchscreen | ✅ | Multitouch |
+| S Pen digitizer | 🟡 | Position and pressure work, range hand-calibrated; side button, hover, tilt unconfirmed |
+| S Pen Bluetooth remote | ⬜ | |
+| Fingerprint reader (under display) | ⬜ | |
+| Pogo keyboard | 🟡 | Works until the trackpad is touched |
+| Pogo trackpad | ❌ | Touch crashes the keyboard MCU |
+
+### Graphics and DSPs
+
+| Hardware | State | Notes |
+|---|---|---|
+| GPU: Adreno 650 | ✅ | OpenGL; `glxgears` about 100 FPS |
+| Video decode and encode (Venus) | ⬜ | |
+| Audio DSP (ADSP) | ✅ | |
+| Compute DSP (CDSP) | ⬜ | |
+| Sensor DSP (SLPI) | ⬜ | |
+
+### Audio
+
+| Hardware | State | Notes |
+|---|---|---|
+| 4 speakers, CS35L41 amps | ✅ | 4.0, protection firmware and factory calibration loaded, stock gain, software limiter in front |
+| Microphones | ⬜ | |
+| USB-C headphones | ⬜ | |
+
+### Connectivity
+
+| Hardware | State | Notes |
+|---|---|---|
+| Wi-Fi: QCA6390 | ✅ | |
+| Bluetooth: QCA6390 | ⬜ | |
+| GPS | ⬜ | |
+| USB gadget (serial, network) | ✅ | |
+| USB host | ⬜ | |
+| DisplayPort over USB-C | ⬜ | |
+
+### Power
+
+| Hardware | State | Notes |
+|---|---|---|
+| Battery, fuel gauge: MAX77705 | ✅ | |
+| Charging: MAX77705 | 🟡 | Limited to 500mA, slow on PC USB |
+| Fast charging | ⬜ | |
+
+### Sensors
+
+| Hardware | State | Notes |
+|---|---|---|
+| Accelerometer, auto-rotate | ⬜ | |
+| Gyroscope | ⬜ | |
+| Magnetometer | ⬜ | |
+| Ambient light | ⬜ | |
+| Hall sensor (cover) | ⬜ | |
+
+### Cameras
+
+| Hardware | State | Notes |
+|---|---|---|
+| Rear: 13 MP wide | ⬜ | |
+| Rear: 5 MP ultrawide | ⬜ | |
+| Front: 8 MP | ⬜ | |
+| Flash LED | ⬜ | |
+
+## Root filesystem
+
+The system lives on `userdata` (formatted ext4, which erases Android data). `rootfs/twrp-setup.sh` and `rootfs/rootcfg.sh` set up Alpine; `rootfs/arch-install.sh` builds Arch Linux ARM in `/arch` from there, and an `/.arch` marker on `userdata` boots it. The move to Arch is in progress.
 
 ## GPU
 
