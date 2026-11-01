@@ -1,7 +1,7 @@
 From 79dfaa06601c3a26892ebfc661a91f30c44768d2 Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sun, 1 Nov 2026 13:23:30 +0100
-Subject: [PATCH 8/8] gts7xlwifi: fix Volume Up wiring, add emergency recovery
+Subject: [PATCH 8/9] gts7xlwifi: fix Volume Up wiring, add emergency recovery
  key combo
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>

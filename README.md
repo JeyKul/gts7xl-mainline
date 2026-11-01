@@ -22,7 +22,9 @@ Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition
 | Adreno 650 GPU (OpenGL, Vulkan) | Working, `glxgears` about 100 FPS |
 | Wi-Fi (QCA6390, ath11k) | Connected, internet works |
 | GNOME 48 (gdm autologin) | Running; GPU use not confirmed |
-| Audio | Not started |
+| S Pen (pressure, tilt) | Working, range hand-calibrated |
+| Krita | Runs |
+| Audio, sensors | Not started |
 
 ## Desktop
 

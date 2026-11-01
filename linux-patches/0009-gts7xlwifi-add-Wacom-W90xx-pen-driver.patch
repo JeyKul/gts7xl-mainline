@@ -1,0 +1,263 @@
+From 772f918bda05f5e378ebec21287d6d698527f1ff Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sun, 1 Nov 2026 13:51:59 +0100
+Subject: [PATCH 9/9] gts7xlwifi: add Wacom W90xx pen driver
+
+Protocol from Samsung's driver. Axis range calibrated by hand, because the
+stock device tree values did not match this digitizer.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    |  35 ++++
+ drivers/input/touchscreen/Kconfig             |   6 +
+ drivers/input/touchscreen/Makefile            |   1 +
+ drivers/input/touchscreen/samsung-w90xx.c     | 151 ++++++++++++++++++
+ 4 files changed, 193 insertions(+)
+ create mode 100644 drivers/input/touchscreen/samsung-w90xx.c
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 83cdf8b72..f799ab08b 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -81,6 +81,15 @@ vreg_pmu_pcie_1p8: ldo9 {
+ 		};
+ 	};
+ 
++	vdd_spen: spen-3v3-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "vdd_spen_3p3";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&tlmm 93 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++	};
++
+ 	pogo_vdd: pogo-vdd-regulator {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "pogo_vdd_3v3";
+@@ -249,6 +258,26 @@ touchscreen@49 {
+ 	};
+ };
+ 
++&qupv3_id_2 {
++	status = "okay";
++};
++
++&i2c17 {
++	clock-frequency = <400000>;
++	status = "okay";
++
++	pen@56 {
++		compatible = "samsung,wacom-w90xx";
++		reg = <0x56>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <136 IRQ_TYPE_LEVEL_LOW>;
++		vdd-supply = <&vdd_spen>;
++		fwe-gpios = <&tlmm 6 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&pen_default>;
++	};
++};
++
+ &i2c0 {
+ 	status = "okay";
+ 
+@@ -452,6 +481,12 @@ bt_en_state: bt-en-state {
+ 		bias-disable;
+ 	};
+ 
++	pen_default: pen-default-state {
++		pins = "gpio136";
++		function = "gpio";
++		bias-disable;
++	};
++
+ 	pogo_default: pogo-default-state {
+ 		int-pins {
+ 			pins = "gpio31";
+diff --git a/drivers/input/touchscreen/Kconfig b/drivers/input/touchscreen/Kconfig
+index 18debd544..258124891 100644
+--- a/drivers/input/touchscreen/Kconfig
++++ b/drivers/input/touchscreen/Kconfig
+@@ -1247,6 +1247,12 @@ config TOUCHSCREEN_FTS5CU56A
+ 	  Minimal driver for STM FTS5CU56A and FTS1BA90A touch controllers
+ 	  with Samsung TSP firmware.
+ 
++config TOUCHSCREEN_SAMSUNG_W90XX
++	tristate "Wacom W90xx pen with Samsung firmware"
++	depends on I2C
++	help
++	  Pen digitizer in the Galaxy Tab S7+.
++
+ config TOUCHSCREEN_STMFTS
+ 	tristate "STMicroelectronics STMFTS touchscreen"
+ 	depends on I2C
+diff --git a/drivers/input/touchscreen/Makefile b/drivers/input/touchscreen/Makefile
+index 7912b1238..4d0e3750e 100644
+--- a/drivers/input/touchscreen/Makefile
++++ b/drivers/input/touchscreen/Makefile
+@@ -120,3 +120,4 @@ obj-$(CONFIG_TOUCHSCREEN_IQS5XX)	+= iqs5xx.o
+ obj-$(CONFIG_TOUCHSCREEN_IQS7211)	+= iqs7211.o
+ obj-$(CONFIG_TOUCHSCREEN_ZINITIX)	+= zinitix.o
+ obj-$(CONFIG_TOUCHSCREEN_HIMAX_HX83112B)	+= himax_hx83112b.o
++obj-$(CONFIG_TOUCHSCREEN_SAMSUNG_W90XX)	+= samsung-w90xx.o
+diff --git a/drivers/input/touchscreen/samsung-w90xx.c b/drivers/input/touchscreen/samsung-w90xx.c
+new file mode 100644
+index 000000000..f837fe8ae
+--- /dev/null
++++ b/drivers/input/touchscreen/samsung-w90xx.c
+@@ -0,0 +1,151 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Wacom W90xx pen digitizer with Samsung firmware, Galaxy Tab S7+.
++ * Protocol taken from Samsung's downstream wacom_i2c driver.
++ */
++
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/input.h>
++#include <linux/interrupt.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/regulator/consumer.h>
++
++#define W90XX_COORD_LEN		(16 + 1)
++#define W90XX_COORD_PACKET	1
++#define W90XX_CMD_START		0x31
++#define W90XX_MAX_X		26750
++#define W90XX_MAX_Y		16700
++#define W90XX_MAX_PRESSURE	4095
++#define W90XX_MAX_TILT		63
++
++struct w90xx {
++	struct i2c_client *client;
++	struct input_dev *input;
++	unsigned int tool;
++};
++
++static irqreturn_t w90xx_irq(int irq, void *dev_id)
++{
++	struct w90xx *pen = dev_id;
++	struct input_dev *input = pen->input;
++	u8 d[W90XX_COORD_LEN];
++	bool prox;
++	int pressure, ret;
++
++	ret = i2c_master_recv(pen->client, d, sizeof(d));
++	if (ret != sizeof(d)) {
++		dev_err_ratelimited(&pen->client->dev, "read failed: %d\n", ret);
++		return IRQ_HANDLED;
++	}
++
++	if ((d[0] & 0x0f) != W90XX_COORD_PACKET || !(d[0] & 0x80))
++		return IRQ_HANDLED;
++
++	prox = d[0] & 0x10;
++	pressure = ((d[5] & 0x0f) << 8) | d[6];
++
++	if (prox && !pen->tool)
++		pen->tool = (d[0] & 0x40) ? BTN_TOOL_RUBBER : BTN_TOOL_PEN;
++
++	if (pen->tool) {
++		input_report_abs(input, ABS_X, (d[1] << 8) | d[2]);
++		input_report_abs(input, ABS_Y, (d[3] << 8) | d[4]);
++		input_report_abs(input, ABS_PRESSURE, prox ? pressure : 0);
++		input_report_abs(input, ABS_DISTANCE, d[7]);
++		input_report_abs(input, ABS_TILT_X, (s8)d[8]);
++		input_report_abs(input, ABS_TILT_Y, (s8)d[9]);
++		input_report_key(input, BTN_TOUCH, prox && pressure > 0);
++		input_report_key(input, BTN_STYLUS, prox && (d[0] & 0x20));
++		input_report_key(input, pen->tool, prox);
++		input_sync(input);
++	}
++
++	if (!prox)
++		pen->tool = 0;
++
++	return IRQ_HANDLED;
++}
++
++static int w90xx_probe(struct i2c_client *client)
++{
++	static const u8 start = W90XX_CMD_START;
++	struct device *dev = &client->dev;
++	struct gpio_desc *fwe;
++	struct input_dev *input;
++	struct w90xx *pen;
++	int ret;
++
++	pen = devm_kzalloc(dev, sizeof(*pen), GFP_KERNEL);
++	if (!pen)
++		return -ENOMEM;
++	pen->client = client;
++
++	/* Must stay low or the digitizer enters its firmware update mode */
++	fwe = devm_gpiod_get(dev, "fwe", GPIOD_OUT_LOW);
++	if (IS_ERR(fwe))
++		return dev_err_probe(dev, PTR_ERR(fwe), "failed to get fwe gpio\n");
++
++	ret = devm_regulator_get_enable(dev, "vdd");
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to enable vdd\n");
++	msleep(200);
++
++	input = devm_input_allocate_device(dev);
++	if (!input)
++		return -ENOMEM;
++	pen->input = input;
++
++	input->name = "Wacom W90xx Pen";
++	input->id.bustype = BUS_I2C;
++	__set_bit(INPUT_PROP_DIRECT, input->propbit);
++	input_set_capability(input, EV_KEY, BTN_TOUCH);
++	input_set_capability(input, EV_KEY, BTN_STYLUS);
++	input_set_capability(input, EV_KEY, BTN_TOOL_PEN);
++	input_set_capability(input, EV_KEY, BTN_TOOL_RUBBER);
++	input_set_abs_params(input, ABS_X, 0, W90XX_MAX_X, 4, 0);
++	input_set_abs_params(input, ABS_Y, 0, W90XX_MAX_Y, 4, 0);
++	/* Panel is 273x167mm */
++	input_abs_set_res(input, ABS_X, W90XX_MAX_X / 273);
++	input_abs_set_res(input, ABS_Y, W90XX_MAX_Y / 167);
++	input_set_abs_params(input, ABS_PRESSURE, 0, W90XX_MAX_PRESSURE, 0, 0);
++	input_set_abs_params(input, ABS_DISTANCE, 0, 255, 0, 0);
++	input_set_abs_params(input, ABS_TILT_X, -W90XX_MAX_TILT, W90XX_MAX_TILT, 0, 0);
++	input_set_abs_params(input, ABS_TILT_Y, -W90XX_MAX_TILT, W90XX_MAX_TILT, 0, 0);
++
++	ret = input_register_device(input);
++	if (ret)
++		return ret;
++
++	ret = devm_request_threaded_irq(dev, client->irq, NULL, w90xx_irq,
++					IRQF_ONESHOT, "w90xx", pen);
++	if (ret)
++		return dev_err_probe(dev, ret, "failed to request irq\n");
++
++	ret = i2c_master_send(client, &start, 1);
++	if (ret != 1)
++		return dev_err_probe(dev, ret < 0 ? ret : -EIO, "digitizer not responding\n");
++
++	dev_info(dev, "pen digitizer started\n");
++	return 0;
++}
++
++static const struct of_device_id w90xx_of_match[] = {
++	{ .compatible = "samsung,wacom-w90xx" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, w90xx_of_match);
++
++static struct i2c_driver w90xx_driver = {
++	.driver = {
++		.name = "samsung-w90xx",
++		.of_match_table = w90xx_of_match,
++	},
++	.probe = w90xx_probe,
++};
++module_i2c_driver(w90xx_driver);
++
++MODULE_DESCRIPTION("Wacom W90xx pen digitizer driver");
++MODULE_LICENSE("GPL");
+-- 
+2.56.0
+
