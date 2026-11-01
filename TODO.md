@@ -19,7 +19,8 @@ Last updated 2026-11-01.
 
 - [x] Reserved memory map matches stock (mainline's was wrong for Samsung)
 - [x] ADSP firmware boots (loaded by hand, `qcom_q6v5_pas`)
-- [ ] Amp boost values from stock, then amp probe (i2c11, 0x40-0x43, reset gpio69, irq gpio84)
+- [x] All 4 amps probe (i2c11, 0x40-0x43, 1.0uH, 4100mA, slots FL0 FR1 RL2 RR3), loaded by hand
+- [ ] Amp firmware from vendor: `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning `.bin`
 - [ ] Machine driver: Primary TDM, 4 slots, 48kHz
 - [ ] Autoload ADSP at boot
 - [ ] Start at low volume; bad amp tuning can harm speakers
@@ -35,12 +36,13 @@ Last updated 2026-11-01.
 
 ## Open bugs
 
-- [ ] Trackpad touch crashes the keyboard MCU (stock survives it)
+- [ ] Trackpad touch crashes the keyboard MCU (stock survives it; not fixed by the memory map change)
 - [ ] Pen: side button and hover unconfirmed; range is hand-calibrated
 - [ ] `su -c` fails on the tablet
 - [ ] Charging: 500mA limit, barely gains on PC USB
 - [ ] `reboot-recovery` failed once; emergency combo is the reliable path
 - [ ] Clock has no saved time, needs Wi-Fi after boot
+- [ ] Brightness: only a software dim overlay (`dim@gts7xl`, set in extension.js) until native display works
 
 ## Not started
 

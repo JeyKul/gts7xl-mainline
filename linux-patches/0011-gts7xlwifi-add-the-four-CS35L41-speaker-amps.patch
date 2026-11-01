@@ -1,0 +1,115 @@
+From caf0b6f08bc1ffb301e35fd974c55782c2375f41 Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sun, 1 Nov 2026 14:11:58 +0100
+Subject: [PATCH 11/11] gts7xlwifi: add the four CS35L41 speaker amps
+
+Boost values come from the stock device tree and amp registers.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 82 +++++++++++++++++++
+ 1 file changed, 82 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 0a2598b09..620adaa62 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -340,6 +340,73 @@ pen@56 {
+ 	};
+ };
+ 
++&i2c11 {
++	clock-frequency = <400000>;
++	pinctrl-names = "default";
++	pinctrl-0 = <&qup_i2c11_default>, <&amp_default>;
++	status = "okay";
++
++	cs35l41_fr: speaker-amp@40 {
++		compatible = "cirrus,cs35l41";
++		reg = <0x40>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <84 IRQ_TYPE_LEVEL_LOW>;
++		cirrus,boost-peak-milliamp = <4100>;
++		cirrus,boost-ind-nanohenry = <1000>;
++		cirrus,boost-cap-microfarad = <15>;
++		cirrus,asp-sdout-hiz = <3>;
++		cirrus,gpio2-src-select = <2>;
++		cirrus,gpio2-output-enable;
++		sound-name-prefix = "FR";
++		#sound-dai-cells = <1>;
++	};
++
++	cs35l41_fl: speaker-amp@41 {
++		compatible = "cirrus,cs35l41";
++		reg = <0x41>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <84 IRQ_TYPE_LEVEL_LOW>;
++		cirrus,boost-peak-milliamp = <4100>;
++		cirrus,boost-ind-nanohenry = <1000>;
++		cirrus,boost-cap-microfarad = <15>;
++		cirrus,asp-sdout-hiz = <3>;
++		cirrus,gpio2-src-select = <2>;
++		cirrus,gpio2-output-enable;
++		sound-name-prefix = "FL";
++		#sound-dai-cells = <1>;
++	};
++
++	cs35l41_rr: speaker-amp@42 {
++		compatible = "cirrus,cs35l41";
++		reg = <0x42>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <84 IRQ_TYPE_LEVEL_LOW>;
++		cirrus,boost-peak-milliamp = <4100>;
++		cirrus,boost-ind-nanohenry = <1000>;
++		cirrus,boost-cap-microfarad = <15>;
++		cirrus,asp-sdout-hiz = <3>;
++		cirrus,gpio2-src-select = <2>;
++		cirrus,gpio2-output-enable;
++		sound-name-prefix = "RR";
++		#sound-dai-cells = <1>;
++	};
++
++	cs35l41_rl: speaker-amp@43 {
++		compatible = "cirrus,cs35l41";
++		reg = <0x43>;
++		interrupt-parent = <&tlmm>;
++		interrupts = <84 IRQ_TYPE_LEVEL_LOW>;
++		cirrus,boost-peak-milliamp = <4100>;
++		cirrus,boost-ind-nanohenry = <1000>;
++		cirrus,boost-cap-microfarad = <15>;
++		cirrus,asp-sdout-hiz = <3>;
++		cirrus,gpio2-src-select = <2>;
++		cirrus,gpio2-output-enable;
++		sound-name-prefix = "RL";
++		#sound-dai-cells = <1>;
++	};
++};
++
+ &i2c0 {
+ 	status = "okay";
+ 
+@@ -549,6 +616,21 @@ pen_default: pen-default-state {
+ 		bias-disable;
+ 	};
+ 
++	/* Shared amp reset, released before the amps probe */
++	amp-reset-hog {
++		gpio-hog;
++		gpios = <69 GPIO_ACTIVE_HIGH>;
++		output-high;
++		line-name = "amp_reset";
++	};
++
++	amp_default: amp-default-state {
++		pins = "gpio84";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-pull-up;
++	};
++
+ 	pogo_default: pogo-default-state {
+ 		int-pins {
+ 			pins = "gpio31";
+-- 
+2.56.0
+

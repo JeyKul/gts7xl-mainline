@@ -1,7 +1,7 @@
 From a65e2253e9bbae411fd4efb2bad57c74d732a9f3 Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sat, 31 Oct 2026 15:52:07 +0100
-Subject: [PATCH 05/10] gts7xlwifi: enable Adreno 650 with the r8q-arch zap
+Subject: [PATCH 05/11] gts7xlwifi: enable Adreno 650 with the r8q-arch zap
  patches
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
