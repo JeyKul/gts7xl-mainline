@@ -22,9 +22,11 @@ Last updated 2026-11-01.
 - [x] All 4 amps probe (i2c11, 0x40-0x43, 1.0uH, 4100mA, slots FL0 FR1 RL2 RR3), loaded by hand
 - [ ] Amp firmware from vendor: `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning `.bin`
 - [x] Sound card registers: Primary TDM, 4 slots, 48kHz (loaded with `/usr/local/sbin/audio-up`)
-- [ ] First sound, very low volume
-- [ ] Autoload ADSP at boot
-- [ ] Start at low volume; bad amp tuning can harm speakers
+- [x] First sound and music, speed and pitch correct
+- [x] Autoloads at boot, PulseAudio sink `speakers`, amps capped at -30 dB
+- [ ] Crackle (cause unknown; suspects: TDM timing, no tuning)
+- [ ] Stereo and per-speaker check by ear (single-amp test was inaudible)
+- [ ] Load `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning; lift the -30 dB cap only after that
 
 ### Native display (paused)
 

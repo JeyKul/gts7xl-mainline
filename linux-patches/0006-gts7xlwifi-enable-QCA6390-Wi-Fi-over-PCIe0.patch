@@ -1,7 +1,7 @@
 From ea8da4bfc11747ec6151b9c55a4efbb9db94b8a7 Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sun, 1 Nov 2026 12:54:36 +0100
-Subject: [PATCH 06/12] gts7xlwifi: enable QCA6390 Wi-Fi over PCIe0
+Subject: [PATCH 06/13] gts7xlwifi: enable QCA6390 Wi-Fi over PCIe0
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---

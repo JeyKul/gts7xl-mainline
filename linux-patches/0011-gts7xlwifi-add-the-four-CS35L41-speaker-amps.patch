@@ -1,7 +1,7 @@
 From caf0b6f08bc1ffb301e35fd974c55782c2375f41 Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sun, 1 Nov 2026 14:11:58 +0100
-Subject: [PATCH 11/12] gts7xlwifi: add the four CS35L41 speaker amps
+Subject: [PATCH 11/13] gts7xlwifi: add the four CS35L41 speaker amps
 
 Boost values come from the stock device tree and amp registers.
 

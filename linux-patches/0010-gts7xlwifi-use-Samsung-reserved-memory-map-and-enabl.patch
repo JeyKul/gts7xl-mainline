@@ -1,7 +1,7 @@
 From e333263ff1b6f4919d92c8f7c3d2db31555cbc17 Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sun, 1 Nov 2026 13:58:06 +0100
-Subject: [PATCH 10/12] gts7xlwifi: use Samsung reserved memory map and enable
+Subject: [PATCH 10/13] gts7xlwifi: use Samsung reserved memory map and enable
  ADSP
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
