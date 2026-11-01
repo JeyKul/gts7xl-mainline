@@ -29,8 +29,8 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| Display: 2800x1752 AMOLED, S6TUUM3 | 🟡 | Firmware framebuffer, tears; native driver shows no correct picture yet |
-| Backlight, brightness | ✅ | Real panel brightness through `kmod/gts7xl-panel-ctl` on the bootloader's DSI link |
+| Display: 2800x1752 AMOLED, S6TUUM3 | ✅ | Native DSC command mode driver at 60Hz; 120Hz not working yet |
+| Backlight, brightness | ✅ | Panel backlight control |
 | Touchscreen | ✅ | Multitouch |
 | S Pen digitizer | 🟡 | Position and pressure work, range hand-calibrated; side button, hover, tilt unconfirmed |
 | S Pen Bluetooth remote | ⬜ | |

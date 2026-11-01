@@ -1,5 +1,7 @@
 # Native display research
 
+**Status: working at 60Hz.** What it took: stock on sequence with no sleep out or tear on, stock 60Hz mode, one packet per line, non-continuous DSI clock, `HS_REQ_SEL_PHY` cleared, interleave 1, no `TE` or block DMA in `TRIG_CTRL`, no `protected-clocks` on `dispcc`, and the panel module loaded straight after `msm`. Which of these are strictly needed hasn't been tested one by one.
+
 Sources: registers the bootloader left running (read from `/dev/mem`), the stock kernel's
 `techpack/display/msm/samsung/S6TUUM3_AMSA24VU01`, and Linux v7.3 `drivers/gpu/drm/msm`.
 
@@ -63,6 +65,8 @@ Plan: swap plane addresses during the blank period using `INTF_TEAR_INT_COUNT_VA
 | 17 | `CTL_LAYER` set to border only, mixers output solid colours, frames paced: with 0x11 and 0x35 still sent, rolling garbage, no colours. So planes aren't the cause |
 | 18 | `TRIG_CTRL` matched to the bootloader (no TE or block DMA bits): short line at the bottom, then black |
 | 19 | Exactly the stock panel on sequence, no sleep out or tear on: **red and blue seen, the first correct image from the native path** |
+
+| 20 | Colour blocks through the real plane, then GNOME: works, smooth, no tearing reported by the user |
 
 Results vary slightly between identical runs, so small differences on screen aren't reliable.
 
