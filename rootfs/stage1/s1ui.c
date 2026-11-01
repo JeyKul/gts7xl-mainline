@@ -31,6 +31,7 @@
 #define IFACE "wlan0"
 
 static unsigned char *fb;
+static int fb_fd = -1;
 static int fbw, fbh, stride;
 static int touch_fd = -1, ax_min, ax_max, ay_min, ay_max;
 static char status[160];
@@ -39,6 +40,13 @@ struct btn { int x, y, w, h; };
 static int hit(const struct btn *b, int x, int y)
 {
 	return x >= b->x && x < b->x + b->w && y >= b->y && y < b->y + b->h;
+}
+
+/* The panel loses its picture without frames, and a write is what sends one */
+static void flush_frame(void)
+{
+	if (pwrite(fb_fd, fb, stride, 0) < 0)
+		return;
 }
 
 static void rect(int x, int y, int w, int h, unsigned c)
@@ -112,6 +120,7 @@ static void open_fb(void)
 	if (fd < 0 || ioctl(fd, FBIOGET_VSCREENINFO, &v) || ioctl(fd, FBIOGET_FSCREENINFO, &f))
 		exit(10);
 	fbw = v.xres; fbh = v.yres; stride = f.line_length;
+	fb_fd = fd;
 	fb = mmap(NULL, f.smem_len, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (fb == MAP_FAILED)
 		exit(11);
@@ -157,8 +166,9 @@ static int wait_tap(int *sx, int *sy, int timeout_ms)
 				return 1;
 			}
 		}
-		usleep(10000);
-		waited += 10;
+		flush_frame();
+		usleep(16000);
+		waited += 16;
 		if (timeout_ms && waited >= timeout_ms)
 			return 0;
 	}
@@ -287,7 +297,7 @@ static int wifi_connect(const struct net *n, const char *pw)
 
 	run(down);
 	usleep(500000);
-	/* Stored as hex, so no character in a name or password needs escaping */
+	/* The network name is stored as hex, so it needs no escaping */
 	f = fopen("/tmp/wpa.conf", "w");
 	if (!f) return -1;
 	chmod("/tmp/wpa.conf", 0600);
