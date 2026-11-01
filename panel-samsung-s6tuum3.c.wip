@@ -29,6 +29,7 @@ struct s6tuum3 {
 	struct gpio_desc *tcon_ready;
 	struct drm_dsc_config dsc;
 	bool first_on_done;
+	bool enabled;
 };
 
 static const u8 s6tuum3_pps[] = {
@@ -68,8 +69,11 @@ static int s6tuum3_prepare(struct drm_panel *panel)
 	dev_info(&ctx->dsi->dev, "tcon ready after %d ms: %d\n", i * 10,
 		 gpiod_get_value_cansleep(ctx->tcon_ready));
 
-	/* The stock on sequence has no sleep out or tear on: the TCON handles both */
+	/* Not in the stock on sequence, but without them no TE ever arrives */
 	ctx->dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
+	mipi_dsi_dcs_exit_sleep_mode_multi(&dsi_ctx);
+	mipi_dsi_msleep(&dsi_ctx, 20);
+	mipi_dsi_dcs_set_tear_on_multi(&dsi_ctx, MIPI_DSI_DCS_TEAR_MODE_VBLANK);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0xd3, 0x4d);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x98, 0x00);
 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x60, 0x20);
@@ -150,6 +154,8 @@ static int s6tuum3_enable(struct drm_panel *panel)
 		ctx->first_on_done = true;
 	}
 
+	ctx->enabled = !dsi_ctx.accum_err;
+
 	return dsi_ctx.accum_err;
 }
 
@@ -158,6 +164,7 @@ static int s6tuum3_unprepare(struct drm_panel *panel)
 	struct s6tuum3 *ctx = to_s6tuum3(panel);
 	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
 
+	ctx->enabled = false;
 	mipi_dsi_dcs_set_display_off_multi(&dsi_ctx);
 	mipi_dsi_dcs_enter_sleep_mode_multi(&dsi_ctx);
 	mipi_dsi_msleep(&dsi_ctx, 100);
@@ -196,9 +203,13 @@ static const struct drm_panel_funcs s6tuum3_funcs = {
 
 static int s6tuum3_bl_update(struct backlight_device *bl)
 {
-	struct mipi_dsi_device *dsi = bl_get_data(bl);
+	struct s6tuum3 *ctx = mipi_dsi_get_drvdata(bl_get_data(bl));
 
-	return s6tuum3_set_brightness(dsi, backlight_get_brightness(bl));
+	/* The link is down until enable, which sends the level itself */
+	if (!ctx->enabled)
+		return 0;
+
+	return s6tuum3_set_brightness(ctx->dsi, backlight_get_brightness(bl));
 }
 
 static const struct backlight_ops s6tuum3_bl_ops = {
