@@ -1,0 +1,60 @@
+From 3d44da78039364f26d719344a72d45dcc1fe464b Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sun, 1 Nov 2026 13:07:58 +0100
+Subject: [PATCH 7/7] gts7xlwifi: report the panel as a built-in DSI display
+ for GNOME
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts |  7 +++++++
+ drivers/gpu/drm/sysfb/simpledrm.c                      | 10 +++++++++-
+ 2 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index dcbf37665..4820e9eda 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -152,11 +152,18 @@ wifi@0 {
+ };
+ 
+ &framebuffer {
++	panel = <&fb_panel>;
++
+ 	width = <2800>;
+ 	height = <1752>;
+ 	stride = <(2800 * 4)>;
+ 	/* Keep MDSS powered for the firmware-initialised scanout */
+ 	power-domains = <&dispcc MDSS_GDSC>;
++
++	fb_panel: panel-info {
++		width-mm = <273>;
++		height-mm = <167>;
++	};
+ };
+ 
+ &dispcc {
+diff --git a/drivers/gpu/drm/sysfb/simpledrm.c b/drivers/gpu/drm/sysfb/simpledrm.c
+index 21ddf4502..ede987ed9 100644
+--- a/drivers/gpu/drm/sysfb/simpledrm.c
++++ b/drivers/gpu/drm/sysfb/simpledrm.c
+@@ -864,8 +864,16 @@ static struct simpledrm_device *simpledrm_device_create(struct drm_driver *drv,
+ 	/* Connector */
+ 
+ 	connector = &sdev->connector;
++	/*
++	 * r8q: advertise DSI rather than Unknown. On this device simpledrm scans
++	 * out a firmware-lit internal DSI panel; mutter's "is builtin panel"
++	 * test is purely connector-type based (eDP/LVDS/DSI/DPI), and only a
++	 * builtin panel gets an integrated touchscreen mapped to it (and thus
++	 * the output rotation transform applied to touch). Unknown left touch
++	 * un-rotated in landscape.
++	 */
+ 	ret = drm_connector_init(dev, connector, &simpledrm_connector_funcs,
+-				 DRM_MODE_CONNECTOR_Unknown);
++				 DRM_MODE_CONNECTOR_DSI);
+ 	if (ret)
+ 		return ERR_PTR(ret);
+ 	drm_connector_helper_add(connector, &simpledrm_connector_helper_funcs);
+-- 
+2.56.0
+

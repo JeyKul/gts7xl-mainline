@@ -18,9 +18,10 @@ Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition
 | Pogo keyboard | Works until the trackpad is touched |
 | Pogo trackpad | Touch crashes the MCU, under investigation |
 | Touchscreen | Working, multitouch |
-| Sway on Alpine v3.22 (Vulkan renderer) | Working |
+| Sway on Alpine v3.22 (Vulkan renderer) | Installed, replaced by GNOME at boot |
 | Adreno 650 GPU (OpenGL, Vulkan) | Working, `glxgears` about 100 FPS |
-| Wi-Fi (QCA6390, ath11k) | Scans; connection not yet tested |
+| Wi-Fi (QCA6390, ath11k) | Connected, internet works |
+| GNOME 48 (gdm autologin) | Running; GPU use not confirmed |
 | Audio | Not started |
 
 ## Desktop

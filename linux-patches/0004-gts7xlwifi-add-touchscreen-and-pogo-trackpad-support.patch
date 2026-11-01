@@ -1,7 +1,7 @@
 From 8bd11623a5eecf8388b0ab3b275b7146f4facce2 Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sat, 31 Oct 2026 15:34:22 +0100
-Subject: [PATCH 4/6] gts7xlwifi: add touchscreen and pogo trackpad support
+Subject: [PATCH 4/7] gts7xlwifi: add touchscreen and pogo trackpad support
 
 Touch uses the FTS driver from r8q-arch on a per-bus FIFO path. The
 trackpad currently crashes the pogo MCU on first touch; frame logging is
