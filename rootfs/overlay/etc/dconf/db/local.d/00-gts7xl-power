@@ -9,3 +9,5 @@ idle-delay=uint32 0
 scaling-factor=uint32 2
 [org/gnome/desktop/peripherals/touchpad]
 send-events='disabled'
+[org/gnome/shell]
+enabled-extensions=['dim@gts7xl']
