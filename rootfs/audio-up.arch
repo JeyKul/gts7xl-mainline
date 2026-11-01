@@ -8,8 +8,8 @@ for i in 1 2 3 4 5 6 7 8 9 10; do [ -e /proc/asound/card0 ] && break; sleep 1; d
 # Stock firmware cannot wake from hibernate: keep the amps awake
 for d in /sys/bus/i2c/devices/11-004[0-3]; do echo on > $d/power/control; done
 for a in FL FR RL RR; do
-amixer -q -c 0 sset "$a Analog PCM" 0
-amixer -q -c 0 sset "$a Digital PCM" 721
+amixer -q -c 0 sset "$a Analog PCM" 17
+amixer -q -c 0 sset "$a Digital PCM" 817
 amixer -q -c 0 cset name="$a DSP1 Preload Switch" 1
 amixer -q -c 0 cset name="$a DSP RX2 Source" ASPRX1
 amixer -q -c 0 cset name="$a PCM Source" DSP
@@ -21,6 +21,5 @@ for i in $(seq 1 60); do P=$(pgrep -o -u user pulseaudio); [ -n "$P" ] && break;
 [ -n "$P" ] || exit 0
 sleep 3
 R=$(tr "\0" "\n" < /proc/$P/environ | sed -n "s/^XDG_RUNTIME_DIR=//p")
-su user -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl load-module module-alsa-sink device=hw:0,0 sink_name=speakers sink_properties=device.description=Speakers rate=48000 format=s16le channels=4 channel_map=front-left,front-right,rear-left,rear-right tsched=0; XDG_RUNTIME_DIR=$R pactl set-default-sink speakers; XDG_RUNTIME_DIR=$R pactl set-sink-volume speakers 60%"
+su user -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl load-module module-alsa-sink device=hw:0,0 sink_name=speakers sink_properties=device.description=Speakers rate=48000 format=s16le channels=4 channel_map=front-left,front-right,rear-left,rear-right tsched=0; XDG_RUNTIME_DIR=$R pactl set-default-sink speakers; XDG_RUNTIME_DIR=$R pactl set-sink-volume speakers 30%"
 su user -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl load-module module-ladspa-sink sink_name=limited sink_master=speakers plugin=fast_lookahead_limiter_1913 label=fastLookaheadLimiter control=0,-6,0.025 channels=4 channel_map=front-left,front-right,rear-left,rear-right sink_properties=device.description=Limited; XDG_RUNTIME_DIR=$R pactl set-default-sink limited"
-su user -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl load-module module-ladspa-sink sink_name=tuned sink_master=limited plugin=highpass_iir_1890 label=highpass_iir control=150,2 channels=4 channel_map=front-left,front-right,rear-left,rear-right sink_properties=device.description=Tablet; XDG_RUNTIME_DIR=$R pactl set-default-sink tuned"
