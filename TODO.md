@@ -85,12 +85,23 @@ Last updated 2026-11-01.
 - [ ] Cameras
 - [ ] Retest GPU zap without the dynamic buffer hack, now that the memory map is right
 
+## Installer in boot
+
+Decision: Linux or Android, not both. An installer in the boot image starts when no distro is found on `userdata`.
+
+- [ ] Touch interface on the firmware framebuffer, no keyboard needed
+- [ ] Wi-Fi: ath11k modules and firmware in the initramfs
+- [ ] Format `userdata`, download and unpack Arch, create the user, extract firmware
+- [ ] Options, region and device information
+- [ ] Waydroid: enable binder in the kernel
+- [ ] `f2fs` as root filesystem, optional
+
 ## Release
 
 - [ ] Run the full GitHub build
 - [ ] Test the TWRP zip end to end on a wiped tablet
 - [ ] Test the Odin package
-- [ ] Test `f2fs` and a LineageOS `vendor`
+- [ ] Test a LineageOS `vendor`
 
 ## Cleanup
 
