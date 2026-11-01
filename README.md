@@ -19,7 +19,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | RAM | ✅ | Reserved memory follows the stock map |
 | Storage: UFS | ✅ | Booting and running from `userdata` |
 | microSD slot | ⬜ | |
-| Suspend | ⬜ | Disabled |
+| Suspend | ❌ | Resumes, but the screen stays black; disabled |
 | Thermal sensors and throttling | ⬜ | |
 | Real-time clock | 🟡 | No saved time, set over Wi-Fi after boot |
 | Hardware buttons: power, volume | ✅ | Emergency reboot combo works |
@@ -52,7 +52,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| 4 speakers, CS35L41 amps | ✅ | 4.0, protection firmware and factory calibration loaded; gain at -12 dB, software limiter and 150 Hz high-pass in front |
+| 4 speakers, CS35L41 amps | ✅ | 4.0, protection firmware and factory calibration loaded; stock gain, software limiter and 150 Hz high-pass in front |
 | Microphones | ⬜ | |
 | USB-C headphones | ⬜ | |
 
