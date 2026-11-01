@@ -129,7 +129,8 @@ static int setup_card(const char *path)
 {
 	struct drm_mode_card_res res = { 0 };
 	unsigned int conns[8], crtcs[8], encs[8];
-	int fd = open(path, O_RDWR);
+	/* Child processes must not keep the screen, or the next program cannot take it */
+	int fd = open(path, O_RDWR | O_CLOEXEC);
 
 	if (fd < 0 || ioctl(fd, DRM_IOCTL_SET_MASTER, 0) || ioctl(fd, DRM_IOCTL_MODE_GETRESOURCES, &res) ||
 	    !res.count_connectors || res.count_connectors > 8 || res.count_crtcs > 8 || res.count_encoders > 8)
@@ -187,6 +188,22 @@ fail:
 	return 0;
 }
 
+static int has_connector(int card)
+{
+	char want[16];
+	int n = snprintf(want, sizeof(want), "card%d-", card), found = 0;
+	DIR *d = opendir("/sys/class/drm");
+	struct dirent *e;
+
+	if (!d)
+		return 0;
+	while ((e = readdir(d)))
+		if (!strncmp(e->d_name, want, n))
+			found = 1;
+	closedir(d);
+	return found;
+}
+
 static void open_fb(void)
 {
 	/* The driver can arrive a little after this program starts */
@@ -194,7 +211,8 @@ static void open_fb(void)
 		for (int i = 0; i < 4; i++) {
 			char p[32];
 			snprintf(p, sizeof(p), "/dev/dri/card%d", i);
-			if (setup_card(p))
+			/* Opening the GPU-only card would start its firmware load */
+			if (has_connector(i) && setup_card(p))
 				goto found;
 		}
 		sleep(1);
@@ -213,7 +231,7 @@ static void open_touch(void)
 		char p[40], n[80] = "";
 		struct input_absinfo a;
 		snprintf(p, sizeof(p), "/dev/input/event%d", i);
-		int fd = open(p, O_RDONLY | O_NONBLOCK);
+		int fd = open(p, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
 		if (fd < 0)
 			continue;
 		ioctl(fd, EVIOCGNAME(sizeof(n)), n);
@@ -421,6 +439,7 @@ static const char *const REBOOT[] = { "reboot", "-f", NULL };
 
 static void close_screen(void)
 {
+	ioctl(drm_fd, DRM_IOCTL_DROP_MASTER, 0);
 	close(drm_fd);
 	drm_fd = -1;
 	if (touch_fd >= 0)
