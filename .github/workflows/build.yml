@@ -52,7 +52,9 @@ jobs:
           scripts/config --file build/.config --set-str INITRAMFS_SOURCE "$INITRAMFS"
           make O=build olddefconfig
           test "$(make -s O=build kernelrelease)" = 7.3.0-gts7xl
-          make -s O=build -j"$(nproc)" Image modules qcom/sm8250-samsung-gts7xlwifi.dtb
+          make -s O=build -j"$(nproc)" modules qcom/sm8250-samsung-gts7xlwifi.dtb
+          ../rootfs/stage1/assemble.sh build "$INITRAMFS"
+          make -s O=build -j"$(nproc)" Image
           make -s O=build INSTALL_MOD_PATH="$PWD/../modroot" modules_install
 
       - name: Package
