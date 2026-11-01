@@ -17,7 +17,7 @@ set -e
 pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -Rdd --noconfirm linux-aarch64 || true
-pacman -Syu --noconfirm --needed gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome adwaita-fonts networkmanager pulseaudio pulseaudio-alsa alsa-utils vlc krita mesa swh-plugins sudo python-pyqt5 psmisc
+pacman -Syu --noconfirm --needed --overwrite '/etc/dconf/*' gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome adwaita-fonts networkmanager pulseaudio pulseaudio-alsa alsa-utils vlc krita mesa swh-plugins sudo python-pyqt5 psmisc
 userdel -r alarm 2>/dev/null || true
 id user 2>/dev/null || useradd -m -G wheel,video,input,audio,tty,network -s /bin/bash user
 passwd -d user; passwd -d root
