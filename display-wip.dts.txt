@@ -4,6 +4,8 @@
 
 #include <dt-bindings/clock/qcom,dispcc-sm8250.h>
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/sound/qcom,q6afe.h>
+#include <dt-bindings/sound/qcom,q6asm.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/interrupt-controller/irq.h>
 #include "sm8250-samsung-common.dtsi"
@@ -81,6 +83,15 @@
 		};
 	};
 
+	vdd_spen: spen-3v3-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "vdd_spen_3p3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		gpio = <&tlmm 93 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
 	pogo_vdd: pogo-vdd-regulator {
 		compatible = "regulator-fixed";
 		regulator-name = "pogo_vdd_3v3";
@@ -151,6 +162,118 @@
 	};
 };
 
+/* Samsung moves these carveouts; values are from the stock device tree */
+&removed_mem {
+	reg = <0x0 0x80b00000 0x0 0x7900000>;
+};
+
+&slpi_mem {
+	reg = <0x0 0x89200000 0x0 0x1500000>;
+};
+
+&adsp_mem {
+	reg = <0x0 0x8a700000 0x0 0x2c00000>;
+};
+
+&spss_mem {
+	reg = <0x0 0x8d300000 0x0 0x100000>;
+};
+
+&npu_mem {
+	reg = <0x0 0x8d400000 0x0 0x500000>;
+};
+
+&video_mem {
+	reg = <0x0 0x8d900000 0x0 0x500000>;
+};
+
+&cvp_mem {
+	reg = <0x0 0x8de00000 0x0 0x500000>;
+};
+
+&cdsp_mem {
+	reg = <0x0 0x8e300000 0x0 0x1a00000>;
+};
+
+&camera_mem {
+	reg = <0x0 0x8fd00000 0x0 0x500000>;
+};
+
+&wlan_mem {
+	reg = <0x0 0x90200000 0x0 0x100000>;
+};
+
+&ipa_fw_mem {
+	reg = <0x0 0x90300000 0x0 0x10000>;
+};
+
+&ipa_gsi_mem {
+	reg = <0x0 0x90310000 0x0 0xa000>;
+};
+
+&gpu_mem {
+	reg = <0x0 0x9031a000 0x0 0x2000>;
+};
+
+&cdsp_secure_heap {
+	reg = <0x0 0x90400000 0x0 0x600000>;
+};
+
+&adsp {
+	firmware-name = "qcom/sm8250/gts7xl/adsp.mbn";
+	status = "okay";
+};
+
+&sound {
+	compatible = "qcom,sm8250-sndcard";
+	model = "Galaxy Tab S7+";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pri_tdm_default>;
+
+	mm1-dai-link {
+		link-name = "MultiMedia1";
+
+		cpu {
+			sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA1>;
+		};
+	};
+
+	speakers-dai-link {
+		link-name = "Speakers";
+
+		cpu {
+			sound-dai = <&q6afedai PRIMARY_TDM_RX_0>;
+		};
+
+		platform {
+			sound-dai = <&q6routing>;
+		};
+
+		codec {
+			sound-dai = <&cs35l41_fl 0>, <&cs35l41_fr 0>,
+				    <&cs35l41_rl 0>, <&cs35l41_rr 0>;
+		};
+	};
+};
+
+&q6asmdai {
+	dai@0 {
+		reg = <0>;
+	};
+};
+
+&q6afedai {
+	dai@2 {
+		reg = <PRIMARY_TDM_RX_0>;
+		qcom,tdm-sync-mode = <0>;
+		qcom,tdm-sync-src = <1>;
+		qcom,tdm-data-out = <0>;
+		qcom,tdm-invert-sync = <0>;
+		qcom,tdm-data-delay = <1>;
+		qcom,tdm-data-align = <0>;
+	};
+};
+
 &mdss {
 	status = "okay";
 };
@@ -199,6 +322,11 @@
 		width-mm = <273>;
 		height-mm = <167>;
 	};
+};
+
+&dispcc {
+	/* The firmware drives the panel, so Linux must not touch these */
+	protected-clocks = <0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57>;
 };
 
 &qupv3_id_0 {
@@ -276,6 +404,93 @@
 		touchscreen-size-y = <2800>;
 		touchscreen-swapped-x-y;
 		touchscreen-inverted-x;
+	};
+};
+
+&qupv3_id_2 {
+	status = "okay";
+};
+
+&i2c17 {
+	clock-frequency = <400000>;
+	status = "okay";
+
+	pen@56 {
+		compatible = "samsung,wacom-w90xx";
+		reg = <0x56>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <136 IRQ_TYPE_LEVEL_LOW>;
+		vdd-supply = <&vdd_spen>;
+		fwe-gpios = <&tlmm 6 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pen_default>;
+	};
+};
+
+&i2c11 {
+	clock-frequency = <400000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&qup_i2c11_default>, <&amp_default>;
+	status = "okay";
+
+	cs35l41_fl: speaker-amp@40 {
+		compatible = "cirrus,cs35l41";
+		reg = <0x40>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <84 IRQ_TYPE_LEVEL_LOW>;
+		cirrus,boost-peak-milliamp = <4100>;
+		cirrus,boost-ind-nanohenry = <1000>;
+		cirrus,boost-cap-microfarad = <15>;
+		cirrus,asp-sdout-hiz = <3>;
+		cirrus,gpio2-src-select = <2>;
+		cirrus,gpio2-output-enable;
+		sound-name-prefix = "FL";
+		#sound-dai-cells = <1>;
+	};
+
+	cs35l41_rl: speaker-amp@41 {
+		compatible = "cirrus,cs35l41";
+		reg = <0x41>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <84 IRQ_TYPE_LEVEL_LOW>;
+		cirrus,boost-peak-milliamp = <4100>;
+		cirrus,boost-ind-nanohenry = <1000>;
+		cirrus,boost-cap-microfarad = <15>;
+		cirrus,asp-sdout-hiz = <3>;
+		cirrus,gpio2-src-select = <2>;
+		cirrus,gpio2-output-enable;
+		sound-name-prefix = "RL";
+		#sound-dai-cells = <1>;
+	};
+
+	cs35l41_fr: speaker-amp@42 {
+		compatible = "cirrus,cs35l41";
+		reg = <0x42>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <84 IRQ_TYPE_LEVEL_LOW>;
+		cirrus,boost-peak-milliamp = <4100>;
+		cirrus,boost-ind-nanohenry = <1000>;
+		cirrus,boost-cap-microfarad = <15>;
+		cirrus,asp-sdout-hiz = <3>;
+		cirrus,gpio2-src-select = <2>;
+		cirrus,gpio2-output-enable;
+		sound-name-prefix = "FR";
+		#sound-dai-cells = <1>;
+	};
+
+	cs35l41_rr: speaker-amp@43 {
+		compatible = "cirrus,cs35l41";
+		reg = <0x43>;
+		interrupt-parent = <&tlmm>;
+		interrupts = <84 IRQ_TYPE_LEVEL_LOW>;
+		cirrus,boost-peak-milliamp = <4100>;
+		cirrus,boost-ind-nanohenry = <1000>;
+		cirrus,boost-cap-microfarad = <15>;
+		cirrus,asp-sdout-hiz = <3>;
+		cirrus,gpio2-src-select = <2>;
+		cirrus,gpio2-output-enable;
+		sound-name-prefix = "RR";
+		#sound-dai-cells = <1>;
 	};
 };
 
@@ -468,6 +683,29 @@
 	/* gpio43 is the pogo connection detect line on this board */
 	gpio-reserved-ranges = <20 4>, <40 3>;
 
+	panel_default: panel-default-state {
+		te-pins {
+			pins = "gpio66";
+			function = "mdp_vsync";
+			drive-strength = <2>;
+			bias-pull-down;
+		};
+
+		tcon-pins {
+			pins = "gpio26";
+			function = "gpio";
+			drive-strength = <8>;
+			bias-pull-down;
+		};
+
+		reset-pins {
+			pins = "gpio82";
+			function = "gpio";
+			drive-strength = <8>;
+			bias-disable;
+		};
+	};
+
 	wlan_en_state: wlan-en-state {
 		pins = "gpio90";
 		function = "gpio";
@@ -482,25 +720,46 @@
 		bias-disable;
 	};
 
-	panel_default: panel-default-state {
-		te-pins {
-			pins = "gpio66";
-			function = "mdp_vsync";
-			drive-strength = <2>;
-			bias-pull-down;
-		};
+	pen_default: pen-default-state {
+		pins = "gpio136";
+		function = "gpio";
+		bias-disable;
+	};
 
-		tcon-pins {
-			pins = "gpio26";
-			function = "gpio";
+	/* Shared amp reset, released before the amps probe */
+	amp-reset-hog {
+		gpio-hog;
+		gpios = <69 GPIO_ACTIVE_HIGH>;
+		output-high;
+		line-name = "amp_reset";
+	};
+
+	amp_default: amp-default-state {
+		pins = "gpio84";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-pull-up;
+	};
+
+	pri_tdm_default: pri-tdm-default-state {
+		clk-pins {
+			pins = "gpio138";
+			function = "mi2s0_sck";
 			drive-strength = <2>;
 			bias-disable;
 		};
 
-		reset-pins {
-			pins = "gpio82";
-			function = "gpio";
-			drive-strength = <8>;
+		ws-pins {
+			pins = "gpio141";
+			function = "mi2s0_ws";
+			drive-strength = <2>;
+			bias-disable;
+		};
+
+		dout-pins {
+			pins = "gpio140";
+			function = "mi2s0_data1";
+			drive-strength = <2>;
 			bias-disable;
 		};
 	};
