@@ -68,7 +68,9 @@ Last updated 2026-11-01.
 - [x] Bluetooth: pairing and speaker audio work
 - [ ] Bluetooth: build RFCOMM, BNEP, HID modules
 - [x] Fast charging: 9V through the MAX77705 mailbox (`rootfs/gts7xl-charge-control`), stock limits
-- [ ] Fast charging: test replug and other chargers, check `current_now` scale, then higher power
+- [x] Fast charging: service renegotiates 9V after a replug
+- [ ] Fast charging: USB-C controller sometimes reads blank (`fe 00 00`), survived a reboot, cleared by a replug; cause unknown, charges at 5V while blank
+- [ ] Fast charging: other chargers, `current_now` scale, a real USB-C driver to handle its interrupts
 - [ ] Fast charging: at least 25W, user's goal
 - [ ] Battery reads 27.1C from the fuel gauge, which is fake; `batt_thm` is the real value
 - [ ] Sleep: s2idle works; measure drain, confirm power key takes one press
