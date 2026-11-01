@@ -60,6 +60,10 @@ Plan: swap plane addresses during the blank period using `INTF_TEAR_INT_COUNT_VA
 | 15 | `MIPI_DSI_CLOCK_NON_CONTINUOUS`, as the bootloader leaves no force request: black, no glitching, lane status `1f1f` like the bootloader, about 30 frames per second |
 | 16 | `HS_REQ_SEL_PHY` cleared and interleave 1, so `0xac` and `CMD_CFG0` match the bootloader: slightly bigger glitch, then black. Signal mode reads `00` instead of `80` |
 
+| 17 | `CTL_LAYER` set to border only, mixers output solid colours, frames paced: with 0x11 and 0x35 still sent, rolling garbage, no colours. So planes aren't the cause |
+| 18 | `TRIG_CTRL` matched to the bootloader (no TE or block DMA bits): short line at the bottom, then black |
+| 19 | Exactly the stock panel on sequence, no sleep out or tear on: **red and blue seen, the first correct image from the native path** |
+
 Results vary slightly between identical runs, so small differences on screen aren't reliable.
 
 Plane setup still differs: mainline scans one 2800 wide `DMA0` plane split over two mixers; the bootloader uses `VIG0` and `VIG1`, 1400 wide each, from physical memory. Whether the picture reaches the DSC encoder at all is unproven.
