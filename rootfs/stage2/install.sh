@@ -3,6 +3,8 @@
 # Without /dry it formats userdata, which erases everything on it.
 set -eu
 . /tmp/choices
+# Big downloads over Wi-Fi do drop: carry on from where they stopped
+get() { curl -fsSL --retry 30 --retry-delay 3 --retry-all-errors --connect-timeout 20 -C - -o "$1" "$2"; }
 step() { echo "$1" > /tmp/step; echo "installer: $1" > /dev/kmsg; }
 pct() { echo "$1" > /tmp/percent; }
 
@@ -14,7 +16,7 @@ watch_size() { # file expected_bytes from to
 		sleep 1
 	done
 }
-fail() { echo "FAILED: $1" > /tmp/step; echo "installer failed: $1" > /dev/kmsg; exit 1; }
+fail() { trap - EXIT; echo "FAILED: $1" > /tmp/step; echo "installer failed: $1" > /dev/kmsg; kill $(jobs -p) 2>/dev/null; exit 1; }
 trap 'fail "step did not finish, see /tmp/install.log"' EXIT
 
 A=/target
@@ -42,11 +44,12 @@ iw dev wlan0 set power_save off 2>/dev/null || true
 pct 2
 step "Downloading Arch Linux ARM"
 cd /tmp
-curl -fsSL -o arch.tar.gz.md5 $U/ArchLinuxARM-aarch64-latest.tar.gz.md5
+rm -f arch.tar.gz.md5
+get arch.tar.gz.md5 $U/ArchLinuxARM-aarch64-latest.tar.gz.md5
 LEN=$(curl -fsSLI $U/ArchLinuxARM-aarch64-latest.tar.gz | tr -d '\r' | awk 'tolower($1)=="content-length:" {v=$2} END {print v+0}')
 watch_size ArchLinuxARM-aarch64-latest.tar.gz "$LEN" 2 30 &
 W=$!
-curl -fsSL -o ArchLinuxARM-aarch64-latest.tar.gz $U/ArchLinuxARM-aarch64-latest.tar.gz
+get ArchLinuxARM-aarch64-latest.tar.gz $U/ArchLinuxARM-aarch64-latest.tar.gz || { kill $W 2>/dev/null; fail "download failed, check Wi-Fi and reboot to retry"; }
 kill $W 2>/dev/null || true
 pct 30
 step "Checking the download"
@@ -62,7 +65,8 @@ step "Adding tablet support"
 # the tablet's own partitions for anything that isn't here.
 FW=https://github.com/JeyKul/gts7xl-mainline/releases/download/Installer/tabs7p.tar
 FWSUM=a23600ef20e314ecceef0bc605bffedcea07658bb09f6044f0b6a3c8e3047267
-if curl -fsSL -o /tmp/fw.tar "$FW" && [ "$(sha256sum /tmp/fw.tar | cut -d' ' -f1)" = "$FWSUM" ]; then
+rm -f /tmp/fw.tar
+if get /tmp/fw.tar "$FW" && [ "$(sha256sum /tmp/fw.tar | cut -d' ' -f1)" = "$FWSUM" ]; then
 	mkdir -p /tmp/fw $A/usr/lib/firmware/qcom/sm8250/gts7xl $A/usr/lib/firmware/cirrus
 	tar -xf /tmp/fw.tar -C /tmp/fw
 	for f in /tmp/fw/files/image/adsp.*; do
