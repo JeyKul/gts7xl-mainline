@@ -63,11 +63,44 @@ jobs:
             --kernel_offset 0x00008000 --ramdisk_offset 0x01000000 --tags_offset 0x00000100 \
             --kernel kernel-dtb --ramdisk rd -o artifact/boot.img
           tar -C modroot -czf artifact/modules-7.3.0-gts7xl.tar.gz lib
-          cp -r rootfs artifact/rootfs
           (cd artifact && sha256sum boot.img modules-7.3.0-gts7xl.tar.gz > SHA256SUMS)
 
       - uses: actions/upload-artifact@v4
         with:
           name: gts7xlwifi-boot
           path: artifact
+          retention-days: 90
+
+  image:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: gts7xlwifi-boot
+          path: artifact
+
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libarchive-tools lz4 zip
+
+      - name: Build the root filesystem
+        run: |
+          curl -fsSLO http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
+          sudo rootfs/arch-install.sh ArchLinuxARM-aarch64-latest.tar.gz \
+            artifact/modules-7.3.0-gts7xl.tar.gz "$PWD/rootfs.tar.gz"
+          sudo chown "$(id -u):$(id -g)" rootfs.tar.gz
+
+      - name: Package for TWRP and Odin
+        run: rootfs/package.sh artifact/boot.img rootfs.tar.gz out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gts7xlwifi-flash
+          path: out
+          compression-level: 0
           retention-days: 90

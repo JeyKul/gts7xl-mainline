@@ -85,6 +85,13 @@ Last updated 2026-11-01.
 - [ ] Cameras
 - [ ] Retest GPU zap without the dynamic buffer hack, now that the memory map is right
 
+## Release
+
+- [ ] Run the full GitHub build
+- [ ] Test the TWRP zip end to end on a wiped tablet
+- [ ] Test the Odin package
+- [ ] Test `f2fs` and a LineageOS `vendor`
+
 ## Cleanup
 
 - [ ] Remove keyboard frame logging and `.noswitch`

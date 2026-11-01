@@ -1,0 +1,7 @@
+[Unit]
+Description=Charger and battery log
+[Service]
+ExecStart=/usr/local/sbin/gts7xl-charge-log
+Restart=always
+[Install]
+WantedBy=multi-user.target

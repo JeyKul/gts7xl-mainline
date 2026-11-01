@@ -1,0 +1,12 @@
+[Unit]
+Description=Tablet GPU and Wi-Fi modules
+DefaultDependencies=no
+After=systemd-udevd.service
+Before=display-manager.service NetworkManager.service
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/gts7xl-hw
+ExecStartPost=/bin/sh -c '/usr/local/sbin/audio-up >/var/log/audio-up.log 2>&1 &'
+[Install]
+WantedBy=sysinit.target

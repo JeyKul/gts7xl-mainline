@@ -1,0 +1,10 @@
+[Unit]
+Description=Fast charging control
+After=multi-user.target
+[Service]
+ExecStartPre=/bin/sleep 5
+ExecStart=/usr/bin/python3 /usr/local/sbin/gts7xl-charge-control
+Restart=always
+RestartSec=5
+[Install]
+WantedBy=multi-user.target

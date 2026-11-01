@@ -1,0 +1,2 @@
+# The amp DSPs stop for good when the first stream closes, so only audio-up opens this card
+SUBSYSTEM=="sound", KERNEL=="card0", ENV{PULSE_IGNORE}="1"

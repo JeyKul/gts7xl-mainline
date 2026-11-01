@@ -94,9 +94,22 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Front: 8 MP | ⬜ | |
 | Flash LED | ⬜ | |
 
-## Root filesystem
+## Installing
 
-The system lives on `userdata` (formatted ext4, which erases Android data). The base is Arch Linux ARM in `/arch`, and an `/.arch` marker on `userdata` boots it. `rootfs/arch-install.sh` was written to run from the old Alpine install, which has been removed, so it needs porting before it can set up a new device.
+Not tested end to end yet. Requires an unlocked bootloader and TWRP. This erases all data on the tablet.
+
+1. In TWRP: Wipe, Format Data, then reboot to recovery. `ext4` is the tested filesystem; `f2fs` is supported by the kernel but not tested as the root filesystem.
+2. Flash `gts7xlwifi-arch-twrp.zip` and reboot to system.
+3. The first boot copies firmware and calibration from this tablet's own partitions. Log: `/var/log/gts7xl-firstboot.log`.
+4. Log in as `user`, password `user`, and change the password.
+
+`gts7xlwifi-boot-odin.tar.md5` holds only `boot` and a blank `dtbo`, for going back to the kernel from download mode without reinstalling.
+
+Android: restore `boot`, `dtbo` and `cache` from your backup, then format `userdata`.
+
+## Firmware and legal notice
+
+This project ships no Samsung or Qualcomm firmware. GPU, audio DSP and amplifier firmware, plus speaker calibration and the Bluetooth address, are copied at first boot from the tablet's own `apnhlos`, `vendor`, `sec_efs` and `efs` partitions, which are only read. Those files belong to their respective owners, Samsung and Qualcomm among them. Those partitions must still hold a stock or stock-compatible copy.
 
 ## GPU
 

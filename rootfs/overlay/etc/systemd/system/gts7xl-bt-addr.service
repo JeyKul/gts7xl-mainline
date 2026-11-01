@@ -1,0 +1,12 @@
+[Unit]
+Description=Set the tablet's Bluetooth address
+After=bluetooth.service
+Requires=bluetooth.service
+[Service]
+SuccessExitStatus=0 1
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/bin/sleep 3
+ExecStart=/bin/sh -c 'btmgmt --index 0 public-addr "$(cat /etc/gts7xl/bt_addr)"'
+[Install]
+WantedBy=multi-user.target
