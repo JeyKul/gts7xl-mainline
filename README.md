@@ -52,7 +52,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| 4 speakers, CS35L41 amps | ✅ | 4.0, protection firmware and factory calibration loaded, stock gain, software limiter in front |
+| 4 speakers, CS35L41 amps | 🟡 | 4.0, protection firmware and factory calibration loaded; sound quality on Arch being fixed, gain at -15 dB, no limiter |
 | Microphones | ⬜ | |
 | USB-C headphones | ⬜ | |
 
