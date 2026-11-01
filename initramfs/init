@@ -52,6 +52,10 @@ elif [ -x /mnt/r/sbin/init ]; then
 	umount /dev/pts 2>/dev/null
 	mount --move /dev /mnt/r/dev; mount --move /proc /mnt/r/proc; mount --move /sys /mnt/r/sys
 	exec switch_root /mnt/r /sbin/init
+else
+	# Nothing bootable on userdata, or it could not be read
+	umount /mnt/r 2>/dev/null
+	[ -e /mods/load.sh ] && S1=1
 fi
 (while :; do setsid -c sh -c 'stty -F /dev/ttyGS0 sane -echo 2>/dev/null; exec sh </dev/ttyGS0 >/dev/ttyGS0 2>&1'; sleep 1; done) &
 if [ "$S1" = 1 ]; then

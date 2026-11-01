@@ -89,8 +89,10 @@ Last updated 2026-11-01.
 
 Decision: Linux or Android, not both. An installer in the boot image starts when no distro is found on `userdata`.
 
-- [ ] Touch interface on the firmware framebuffer, no keyboard needed
-- [ ] Wi-Fi: ath11k modules and firmware in the initramfs
+- [x] Stage 1 shows a touch interface through the native display, built by `rootfs/stage1/assemble.sh`
+- [ ] Confirm touch, Wi-Fi join and reboot from the installer
+- [ ] Download a signed Alpine installer into RAM and switch to it
+- [x] Wi-Fi: networks are listed from the initramfs
 - [ ] Format `userdata`, download and unpack Arch, create the user, extract firmware
 - [ ] Options, region and device information
 - [ ] Waydroid: enable binder in the kernel
