@@ -1,0 +1,45 @@
+From 93ae3fe2390aca0f4980530a8e7a091314680cb1 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 2 Nov 2026 00:15:46 +0100
+Subject: [PATCH] gts7xlwifi: add the rear flash LED
+
+---
+ .../boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts   | 15 +++++++++++++++
+ 1 file changed, 15 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 0a10a2f6a..90870c77e 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -7,6 +7,7 @@
+ #include <dt-bindings/sound/qcom,q6afe.h>
+ #include <dt-bindings/sound/qcom,q6asm.h>
+ #include <dt-bindings/input/input.h>
++#include <dt-bindings/leds/common.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
+ #include "sm8250-samsung-common.dtsi"
+ #include "pm8150l.dtsi"
+@@ -572,6 +573,20 @@ channel@55 {
+ 	};
+ };
+ 
++/* Rear LED, on both channels like stock. Currents are kept low until tested further */
++&pm8150l_flash {
++	status = "okay";
++
++	led-0 {
++		function = LED_FUNCTION_FLASH;
++		color = <LED_COLOR_ID_WHITE>;
++		led-sources = <1>, <2>;
++		led-max-microamp = <100000>;
++		flash-max-microamp = <500000>;
++		flash-max-timeout-us = <400000>;
++	};
++};
++
+ &pm8150l_gpios {
+ 	vol_up_l: vol-up-l-state {
+ 		pins = "gpio3";
+-- 
+2.56.0
+

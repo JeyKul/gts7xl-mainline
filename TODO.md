@@ -79,7 +79,7 @@ Last updated 2026-11-01.
 
 ## Next hardware
 
-- [ ] Flashlight
+- [ ] Flashlight: driver loads as `white:flash` at up to 100mA, needs a check by eye and a desktop toggle
 - [ ] Microphones
 - [ ] Cameras
 
