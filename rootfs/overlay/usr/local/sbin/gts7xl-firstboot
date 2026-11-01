@@ -4,10 +4,11 @@
 Nothing here is redistributed: every file comes from the device it runs on, and
 the source partitions are only ever mounted read-only.
 """
-import glob,os,shutil,struct,subprocess,sys,tempfile
+import glob,os,re,shutil,struct,subprocess,sys,tempfile
 
 DEST=os.environ.get('GTS7XL_DEST','/usr/lib/firmware')
 ETC=os.environ.get('GTS7XL_ETC','/etc/gts7xl')
+NMCONF=os.environ.get('GTS7XL_NMCONF','/etc/NetworkManager/conf.d')
 PL='/dev/disk/by-partlabel/'
 AMPS={'0040':'_r','0041':'','0042':'_br','0043':'_b'}
 PARTS=[]
@@ -122,10 +123,22 @@ def btaddr():
     p=ETC+'/bt_addr'
     open(p,'w').write(a+'\n'); os.chmod(p,0o600)
 
+def wifimac():
+    """Use the tablet's real Wi-Fi address, so routers keep giving it the same IP."""
+    with Ro(PL+'efs','ext4','ro,noload') as m:
+        a=open(need(m+'/wifi/.mac.info')).read().strip().upper()
+    if not re.fullmatch('([0-9A-F]{2}:){5}[0-9A-F]{2}',a):
+        raise RuntimeError('unexpected Wi-Fi address format')
+    d=NMCONF
+    os.makedirs(d,exist_ok=True)
+    open(d+'/20-gts7xl-mac.conf','w').write(
+        '[device]\nwifi.scan-rand-mac-address=no\n\n[connection]\nwifi.cloned-mac-address=%s\n'%a)
+
 def main():
     failed=[]
     for name,fn,needed in (('audio DSP and GPU, apnhlos',apnhlos,True),('amp firmware, vendor',vendor,True),
-                           ('speaker calibration, sec_efs',calibration,False),('Bluetooth address, efs',btaddr,False)):
+                           ('speaker calibration, sec_efs',calibration,False),('Bluetooth address, efs',btaddr,False),
+                           ('Wi-Fi address, efs',wifimac,False)):
         try:
             fn(); print('ok:',name,flush=True)
         except Exception as e:
