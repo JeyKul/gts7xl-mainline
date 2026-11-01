@@ -21,7 +21,8 @@ Last updated 2026-11-01.
 - [x] ADSP firmware boots (loaded by hand, `qcom_q6v5_pas`)
 - [x] All 4 amps probe (i2c11, 0x40-0x43, 1.0uH, 4100mA, slots FL0 FR1 RL2 RR3), loaded by hand
 - [ ] Amp firmware from vendor: `cs35l40-spk-dsp1-spk-prot.wmfw` and tuning `.bin`
-- [ ] Machine driver: Primary TDM, 4 slots, 48kHz
+- [x] Sound card registers: Primary TDM, 4 slots, 48kHz (loaded with `/usr/local/sbin/audio-up`)
+- [ ] First sound, very low volume
 - [ ] Autoload ADSP at boot
 - [ ] Start at low volume; bad amp tuning can harm speakers
 
