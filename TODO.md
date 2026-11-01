@@ -65,8 +65,11 @@ Last updated 2026-11-01.
 
 ## Next targets
 
-- [ ] Bluetooth: controller works on `uart6`; test pairing and audio
-- [ ] Fast charging
+- [x] Bluetooth: pairing and speaker audio work
+- [ ] Bluetooth: build RFCOMM, BNEP, HID modules
+- [x] Fast charging: 9V through the MAX77705 mailbox (`rootfs/gts7xl-charge-control`), stock limits
+- [ ] Fast charging: test replug and other chargers, check `current_now` scale, then higher power
+- [ ] Battery reads 27.1C from the fuel gauge, which is fake; `batt_thm` is the real value
 - [ ] Sleep
 
 ## Not started

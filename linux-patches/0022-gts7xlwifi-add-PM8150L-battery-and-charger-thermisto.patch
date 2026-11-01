@@ -1,0 +1,49 @@
+From 270406efbc6e2b8275160540506efe6bd16fe284 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 1 Nov 2026 21:05:55 +0100
+Subject: [PATCH] gts7xlwifi: add PM8150L battery and charger thermistors
+
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 26 +++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 591d9fd24..93ebece43 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -545,6 +545,32 @@ key-vol-up {
+ 	};
+ };
+ 
++&pm8150l_adc {
++	channel@4d {
++		reg = <ADC5_AMUX_THM1_100K_PU>;
++		qcom,ratiometric;
++		qcom,hw-settle-time = <200>;
++		qcom,pre-scaling = <1 1>;
++		label = "batt_thm";
++	};
++
++	channel@4f {
++		reg = <ADC5_AMUX_THM3_100K_PU>;
++		qcom,ratiometric;
++		qcom,hw-settle-time = <200>;
++		qcom,pre-scaling = <1 1>;
++		label = "chg_thm";
++	};
++
++	channel@55 {
++		reg = <ADC5_GPIO4_100K_PU>;
++		qcom,ratiometric;
++		qcom,hw-settle-time = <200>;
++		qcom,pre-scaling = <1 1>;
++		label = "blkt_thm";
++	};
++};
++
+ &pm8150l_gpios {
+ 	vol_up_l: vol-up-l-state {
+ 		pins = "gpio3";
+-- 
+2.56.0
+
