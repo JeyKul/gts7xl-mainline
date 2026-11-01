@@ -1,0 +1,172 @@
+From ea8da4bfc11747ec6151b9c55a4efbb9db94b8a7 Mon Sep 17 00:00:00 2001
+From: JeyKul <minkajey@gmail.com>
+Date: Sun, 1 Nov 2026 12:54:36 +0100
+Subject: [PATCH 6/6] gts7xlwifi: enable QCA6390 Wi-Fi over PCIe0
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 126 ++++++++++++++++++
+ 1 file changed, 126 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index e2fc2230f..dcbf37665 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -29,6 +29,58 @@ battery: battery {
+ 		constant-charge-current-max-microamp = <500000>;
+ 	};
+ 
++	qca6390_pmu: qca6390-pmu {
++		compatible = "qcom,qca6390-pmu";
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&wlan_en_state>, <&bt_en_state>;
++
++		vddaon-supply = <&vreg_s6a_0p95>;
++		vddpmu-supply = <&vreg_s6a_0p95>;
++		vddrfa0p95-supply = <&vreg_s6a_0p95>;
++		vddrfa1p3-supply = <&vreg_s8c_1p35>;
++		vddrfa1p9-supply = <&vreg_s5a_1p9>;
++		vddpcie1p3-supply = <&vreg_s8c_1p35>;
++		vddpcie1p9-supply = <&vreg_s5a_1p9>;
++		vddio-supply = <&vreg_s4a_1p8>;
++
++		wlan-enable-gpios = <&tlmm 90 GPIO_ACTIVE_HIGH>;
++		bt-enable-gpios = <&tlmm 76 GPIO_ACTIVE_HIGH>;
++
++		regulators {
++			vreg_pmu_rfa_cmn: ldo0 {
++				regulator-name = "vreg_pmu_rfa_cmn";
++			};
++			vreg_pmu_aon_0p59: ldo1 {
++				regulator-name = "vreg_pmu_aon_0p59";
++			};
++			vreg_pmu_wlcx_0p8: ldo2 {
++				regulator-name = "vreg_pmu_wlcx_0p8";
++			};
++			vreg_pmu_wlmx_0p85: ldo3 {
++				regulator-name = "vreg_pmu_wlmx_0p85";
++			};
++			vreg_pmu_btcmx_0p85: ldo4 {
++				regulator-name = "vreg_pmu_btcmx_0p85";
++			};
++			vreg_pmu_rfa_0p8: ldo5 {
++				regulator-name = "vreg_pmu_rfa_0p8";
++			};
++			vreg_pmu_rfa_1p2: ldo6 {
++				regulator-name = "vreg_pmu_rfa_1p2";
++			};
++			vreg_pmu_rfa_1p7: ldo7 {
++				regulator-name = "vreg_pmu_rfa_1p7";
++			};
++			vreg_pmu_pcie_0p9: ldo8 {
++				regulator-name = "vreg_pmu_pcie_0p9";
++			};
++			vreg_pmu_pcie_1p8: ldo9 {
++				regulator-name = "vreg_pmu_pcie_1p8";
++			};
++		};
++	};
++
+ 	pogo_vdd: pogo-vdd-regulator {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "pogo_vdd_3v3";
+@@ -72,6 +124,33 @@ &gpu_zap_shader {
+ 	firmware-name = "qcom/sm8250/a650_zap.mbn";
+ };
+ 
++&pcie0 {
++	status = "okay";
++};
++
++&pcie0_phy {
++	vdda-phy-supply = <&vreg_l5a_0p88>;
++	vdda-pll-supply = <&vreg_l9a_1p2>;
++	status = "okay";
++};
++
++&pcieport0 {
++	wifi@0 {
++		compatible = "pci17cb,1101";
++		reg = <0x10000 0x0 0x0 0x0 0x0>;
++
++		vddrfacmn-supply = <&vreg_pmu_rfa_cmn>;
++		vddaon-supply = <&vreg_pmu_aon_0p59>;
++		vddwlcx-supply = <&vreg_pmu_wlcx_0p8>;
++		vddwlmx-supply = <&vreg_pmu_wlmx_0p85>;
++		vddrfa0p8-supply = <&vreg_pmu_rfa_0p8>;
++		vddrfa1p2-supply = <&vreg_pmu_rfa_1p2>;
++		vddrfa1p7-supply = <&vreg_pmu_rfa_1p7>;
++		vddpcie0p9-supply = <&vreg_pmu_pcie_0p9>;
++		vddpcie1p8-supply = <&vreg_pmu_pcie_1p8>;
++	};
++};
++
+ &framebuffer {
+ 	width = <2800>;
+ 	height = <1752>;
+@@ -90,7 +169,40 @@ &qupv3_id_0 {
+ };
+ 
+ &apps_rsc {
++	regulators-1 {
++		compatible = "qcom,pm8150l-rpmh-regulators";
++		qcom,pmic-id = "c";
++
++		vreg_s8c_1p35: smps8 {
++				regulator-name = "vreg_s8c_1p35";
++				regulator-min-microvolt = <1350000>;
++				regulator-max-microvolt = <1400000>;
++				regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			};
++	};
+ 	regulators-0 {
++		vreg_s4a_1p8: smps4 {
++				regulator-name = "vreg_s4a_1p8";
++				regulator-min-microvolt = <1800000>;
++				regulator-max-microvolt = <1920000>;
++				regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++				regulator-allow-set-load;
++				regulator-allowed-modes = <RPMH_REGULATOR_MODE_LPM
++						   RPMH_REGULATOR_MODE_HPM>;
++			};
++		vreg_s5a_1p9: smps5 {
++				regulator-name = "vreg_s5a_1p9";
++				regulator-min-microvolt = <1900000>;
++				regulator-max-microvolt = <2040000>;
++				regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			};
++		vreg_s6a_0p95: smps6 {
++				regulator-name = "vreg_s6a_0p95";
++				regulator-min-microvolt = <950000>;
++				regulator-max-microvolt = <1128000>;
++				regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			};
++
+ 		vreg_l13a_3p3: ldo13 {
+ 			regulator-name = "vreg_l13a_3p3";
+ 			regulator-min-microvolt = <3304000>;
+@@ -303,6 +415,20 @@ &tlmm {
+ 	/* gpio43 is the pogo connection detect line on this board */
+ 	gpio-reserved-ranges = <20 4>, <40 3>;
+ 
++	wlan_en_state: wlan-en-state {
++		pins = "gpio90";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	bt_en_state: bt-en-state {
++		pins = "gpio76";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	pogo_default: pogo-default-state {
+ 		int-pins {
+ 			pins = "gpio31";
+-- 
+2.56.0
+

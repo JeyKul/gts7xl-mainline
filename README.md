@@ -20,7 +20,8 @@ Experimental. It replaces `boot`, `dtbo` and `cache`, so back up every partition
 | Touchscreen | Working, multitouch |
 | Sway on Alpine v3.22 (Vulkan renderer) | Working |
 | Adreno 650 GPU (OpenGL, Vulkan) | Working, `glxgears` about 100 FPS |
-| Wi-Fi, audio | Not started |
+| Wi-Fi (QCA6390, ath11k) | Scans; connection not yet tested |
+| Audio | Not started |
 
 ## Desktop
 

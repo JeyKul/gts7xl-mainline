@@ -1,7 +1,7 @@
 From a01994fc346ccbe6c8a08282c1b5f7598375b728 Mon Sep 17 00:00:00 2001
 From: JeyKul <minkajey@gmail.com>
 Date: Sat, 31 Oct 2026 14:14:31 +0100
-Subject: [PATCH 2/5] arm64: dts: qcom: gts7xlwifi: add reboot modes and
+Subject: [PATCH 2/6] arm64: dts: qcom: gts7xlwifi: add reboot modes and
  bring-up pin tests
 
 Add recovery and bootloader reboot modes. The pin hogs and stock input
