@@ -71,7 +71,9 @@ Last updated 2026-11-01.
 - [ ] Fast charging: test replug and other chargers, check `current_now` scale, then higher power
 - [ ] Fast charging: at least 25W, user's goal
 - [ ] Battery reads 27.1C from the fuel gauge, which is fake; `batt_thm` is the real value
-- [ ] Sleep
+- [ ] Sleep: s2idle works; measure drain, confirm power key takes one press
+- [ ] IRQ 156 (MAX77705, spmi-gpio 10) fires nonstop and gets disabled about a minute after boot: `nobody cared`
+- [ ] Use the RTC offset to keep time across reboots
 
 ## Not started
 

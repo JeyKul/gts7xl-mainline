@@ -1,0 +1,6 @@
+#!/bin/sh
+# The Bluetooth UART storms after resume unless the chip is powered down first
+case "$1" in
+pre) /usr/bin/rfkill block bluetooth; sleep 1 ;;
+post) /usr/bin/rfkill unblock bluetooth ;;
+esac
