@@ -32,7 +32,7 @@ Last updated 2026-11-01.
 - [x] First sound and music, speed and pitch correct
 - [x] Autoloads at boot, PulseAudio sink `speakers`, amps at stock gain
 - [ ] Root cause of distortion unknown; limiter reduces it, amp gain now stock, retest
-- [ ] Amp mailbox pause/resume fails (`-ENOMSG`) when the stream restarts; DSP state still reads running
+- [x] Amps fail to wake from hibernate with this firmware (`-ENOMSG`, then `-110`): runtime PM off, PulseAudio idle suspend off
 - [x] Limiter sink `limited` (ZaMaximX2, -6 dB) in front of the speakers: distortion a lot better by ear, autoloads
 - [ ] S24 sink and the equalizer sink together made audio barely audible; S16 kept, equalizer sink removed
 - [ ] `CAL_AMBIENT` reads back 0, stored value 29; unexplained
