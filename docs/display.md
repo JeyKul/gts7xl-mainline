@@ -27,6 +27,10 @@ Sources: registers the bootloader left running (read from `/dev/mem`), the stock
 | Brightness | `51` high byte first | Stock: `68 19 20 00 14`, `51` low byte first, `53 20`, range to 0xDD8 |
 | Width | 273mm | Stock 267mm |
 
+## MDSS probe stops the firmware framebuffer
+
+With `mdss` enabled in the device tree, loading `msm` wipes the bootloader's display setup: DSC registers read 0 and `CTL_TOP` changes from `0x20000` to `0x1f00`. The panel then keeps showing its last frame while GNOME runs unseen. So the firmware framebuffer and an enabled `mdss` can't be used together: the native driver must take over in the same boot, or the image must go back to `out/direct-simplefb-arch.img`.
+
 ## Still unexplained
 
 - `INTF_CONFIG` bit 23 and `INTF_CONFIG2` bit 8 are set by the bootloader. Neither mainline nor the stock driver code read so far names them.
