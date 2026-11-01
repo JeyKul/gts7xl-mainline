@@ -18,7 +18,7 @@ Last updated 2026-11-01.
 ### Arch Linux base
 
 - [x] Installed in `/arch` on userdata with `rootfs/arch-install.sh`, boots with `/.arch`; remove `/.arch` from TWRP to return to Alpine
-- [ ] Limiter back on Arch with `swh-plugins` (ZaMaximX2 is not packaged for Arch ARM); earlier bad sound was `alsa-restore`, not the limiter; minimal distortion at full volume at -15 dB by ear. Amps -12 dB. 150 Hz high-pass in front of the limiter for bass (`highpass_iir`; `butthigh_iir` crashes PulseAudio); confirm by ear
+- [ ] Limiter back on Arch with `swh-plugins` (ZaMaximX2 is not packaged for Arch ARM); earlier bad sound was `alsa-restore`, not the limiter; minimal distortion at full volume at -15 dB by ear. Amps at stock gain, testing. 150 Hz high-pass in front of the limiter for bass (`highpass_iir`; `butthigh_iir` crashes PulseAudio); confirm by ear
 - [x] `alsa-restore` wrote saved values over the amp DSP controls at boot, which sounded bitcrushed: masked, audio confirmed by ear
 - [x] `linux-firmware-cirrus` overwrote the Samsung amp firmware; restored and excluded with `NoExtract`
 - [ ] Run `depmod` after copying modules: kmod ignores a hand-made `modules.dep`
@@ -67,7 +67,7 @@ Last updated 2026-11-01.
 - [ ] Sensors (SLPI DSP, rotation)
 - [ ] Bluetooth
 - [ ] USB host mode
-- [ ] Suspend (disabled; reset risk reported on S20 FE, untested here)
+- [ ] Suspend: wakes, but the screen stays black until reboot on the firmware framebuffer; targets masked on Arch
 - [ ] Cameras
 - [ ] Retest GPU zap without the dynamic buffer hack, now that the memory map is right
 
