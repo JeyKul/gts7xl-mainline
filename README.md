@@ -109,7 +109,8 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 ## Layout
 
 - `linux-patches/`: apply to Linux v7.3
-- `config/gts7xl.config`: merge on top of arm64 defconfig
+- `config/gts7xl_defconfig`: full kernel configuration
+- `.github/workflows/build.yml`: manual build of the boot image and modules
 - `uefi/`: copy over a Mu-Silicium checkout
 - `initramfs/init`: bring-up init, add a static aarch64 busybox as `bin/busybox`
 - `tools/`: serial shell helper, USB deploy, test programs
