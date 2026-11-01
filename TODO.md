@@ -74,6 +74,7 @@ Last updated 2026-11-01.
 ## Cleanup
 
 - [ ] Remove keyboard frame logging and `.noswitch`
+- [ ] Remove or keep `gts7xl-early-log`, which writes the kernel log to `/var/log/early`
 - [ ] Decide `i2c9` speed (100kHz test value still set)
 - [ ] Package the Krita `lcms2` link properly
 - [ ] Update README for direct boot as the main path
