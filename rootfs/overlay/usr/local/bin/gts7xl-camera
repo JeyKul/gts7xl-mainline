@@ -9,12 +9,11 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gst", "1.0")
 from gi.repository import GLib, Gst, Gtk
 
-PREVIEW = (1024, 768)
-# Name, libcamera id, photo size, has a focus motor
+# Name, libcamera id, photo size, preview size, has a focus motor
 CAMERAS = [
-    ("Rear", "/base/soc@0/cci@ac4f000/i2c-bus@0/camera@2d", (4120, 3096), True),
-    ("Ultrawide", "/base/soc@0/cci@ac50000/i2c-bus@0/camera@10", (2568, 1932), False),
-    ("Front", "/base/soc@0/cci@ac4f000/i2c-bus@1/camera@2d", (3256, 2448), False),
+    ("Rear", "/base/soc@0/cci@ac4f000/i2c-bus@0/camera@2d", (4120, 3096), (1000, 756), True),
+    ("Ultrawide", "/base/soc@0/cci@ac50000/i2c-bus@0/camera@10", (2568, 1932), (1288, 972), False),
+    ("Front", "/base/soc@0/cci@ac4f000/i2c-bus@1/camera@2d", (3256, 2448), (792, 600), False),
 ]
 FOCUS_MAX = 1023
 VIDIOC_S_CTRL = 0xc008561c
@@ -84,7 +83,7 @@ class Camera(Gtk.Application):
         return False
 
     def start_preview(self):
-        w, h = PREVIEW
+        w, h = CAMERAS[self.camera][3]
         self.pipeline = Gst.parse_launch(
             f"libcamerasrc name=src camera-name={CAMERAS[self.camera][1]} ! "
             f"video/x-raw,width={w},height={h} ! videoconvert ! "
@@ -139,16 +138,17 @@ class Camera(Gtk.Application):
 
     def tapped(self, gesture, _n, x, y):
         width, height = self.picture.get_width(), self.picture.get_height()
-        scale = min(width / PREVIEW[0], height / PREVIEW[1])
-        fx = (x - (width - PREVIEW[0] * scale) / 2) / (PREVIEW[0] * scale)
-        fy = (y - (height - PREVIEW[1] * scale) / 2) / (PREVIEW[1] * scale)
+        pw, ph = CAMERAS[self.camera][3]
+        scale = min(width / pw, height / ph)
+        fx = (x - (width - pw * scale) / 2) / (pw * scale)
+        fy = (y - (height - ph * scale) / 2) / (ph * scale)
         self.spot = (min(0.95, max(0.05, fx)), min(0.95, max(0.05, fy)))
         self.autofocus()
 
     def autofocus(self):
         if self.busy or self.sweep is not None or not self.pipeline or self.focus.fd is None:
             return
-        if not CAMERAS[self.camera][3]:
+        if not CAMERAS[self.camera][4]:
             return
         self.status.set_text("Focusing")
         self.best = (0, self.position)
