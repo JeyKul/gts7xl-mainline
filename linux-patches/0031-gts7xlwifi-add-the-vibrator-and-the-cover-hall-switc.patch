@@ -1,0 +1,81 @@
+From 60625f3bda34028fd6588743e54915a5a67db977 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 2 Nov 2026 19:11:45 +0100
+Subject: [PATCH] gts7xlwifi: add the vibrator and the cover hall switch
+
+Vibrator on L7C at the stock 2.856V through regulator-haptic. gpio157 as SW_LID;
+it does not react to the keyboard cover, so its polarity is from the stock tree only.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 33 ++++++++++++++++++-
+ 1 file changed, 32 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index e0507a2fb..b1b43c0fe 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -97,6 +97,13 @@ vdd_spen: spen-3v3-regulator {
+ 		enable-active-high;
+ 	};
+ 
++	vibrator {
++		compatible = "regulator-haptic";
++		haptic-supply = <&vreg_l7c_2p856>;
++		min-microvolt = <2856000>;
++		max-microvolt = <2856000>;
++	};
++
+ 	pogo_vdd: pogo-vdd-regulator {
+ 		compatible = "regulator-fixed";
+ 		regulator-name = "pogo_vdd_3v3";
+@@ -421,6 +428,14 @@ regulators-1 {
+ 		compatible = "qcom,pm8150l-rpmh-regulators";
+ 		qcom,pmic-id = "c";
+ 
++		/* Stock pm8150a_l7, the vibrator motor */
++		vreg_l7c_2p856: ldo7 {
++			regulator-name = "vreg_l7c_2p856";
++			regulator-min-microvolt = <2856000>;
++			regulator-max-microvolt = <2856000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++		};
++
+ 		/* Stock pm8150a_l5: rail of the digital mics, 1.8V to 2.8V */
+ 		vreg_l5c_1p8: ldo5 {
+ 			regulator-name = "vreg_l5c_1p8";
+@@ -617,7 +632,16 @@ fuel-gauge@36 {
+ };
+ 
+ &gpio_keys {
+-	pinctrl-0 = <&vol_up_l>;
++	pinctrl-0 = <&vol_up_l>, <&hall_default>;
++
++	switch-lid {
++		label = "Cover";
++		gpios = <&tlmm 157 GPIO_ACTIVE_LOW>;
++		linux,input-type = <EV_SW>;
++		linux,code = <SW_LID>;
++		debounce-interval = <15>;
++		wakeup-source;
++	};
+ 
+ 	key-vol-up {
+ 		gpios = <&pm8150l_gpios 3 GPIO_ACTIVE_LOW>;
+@@ -897,6 +921,13 @@ dout-pins {
+ 		};
+ 	};
+ 
++	hall_default: hall-default-state {
++		pins = "gpio157";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	pogo_default: pogo-default-state {
+ 		int-pins {
+ 			pins = "gpio31";
+-- 
+2.56.0
+
