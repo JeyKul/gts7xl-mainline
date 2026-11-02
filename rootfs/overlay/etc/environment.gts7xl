@@ -1,1 +1,2 @@
 KWIN_DRM_DEVICES=/dev/dri/panel
+LIBCAMERA_SOFTISP_MODE=cpu
