@@ -1,0 +1,258 @@
+#!/usr/bin/python3
+# S Pen button and air gestures over Bluetooth LE, through BlueZ and uinput.
+# Protocol from LineageOS SPenActions. The pen only advertises for a few
+# seconds after its charging is toggled through the digitizer.
+import fcntl, glob, grp, os, struct, time
+
+import dbus
+import dbus.mainloop.glib
+import dbus.service
+from gi.repository import GLib
+
+SERVICES = {
+    "0000fd6c-0000-1000-8000-00805f9b34fb",  # EXT1, CANVAS, STICKY
+    "dc6bb0a8-202e-487c-8f1b-53b37cc837c6",  # DAVINCI
+    "edfec62e-9910-0bac-5241-d8bda6932a2f",  # GENERIC_BUNDLED, CROW
+    "edfec62e-9910-0bac-5241-d8bda6932a30",  # GENERIC_UNBUNDLED, such as a pen sold apart
+}
+BUTTON_EVENT = "6c290d2e-1c03-aca1-ab48-a9b908bae79e"
+BATTERY_LEVEL = "5a87b4ef-3bfa-76a8-e642-92933c31434f"
+MOTION_THRESHOLD = 100
+STATE = "/var/lib/gts7xl-spen/address"
+
+ACTIONS_FILE = "/var/lib/gts7xl-spen/actions"
+# Names the Pen Actions app offers, with their kernel key codes
+KEYS = {
+    "playpause": 164, "next": 163, "previous": 165,
+    "volumeup": 115, "volumedown": 114, "mute": 113,
+    "pageup": 104, "pagedown": 109,
+    "up": 103, "down": 108, "left": 105, "right": 106,
+    "enter": 28, "escape": 1, "space": 57, "screenshot": 99,
+}
+DEFAULT_ACTIONS = {
+    "click": "playpause", "swipe_right": "next", "swipe_left": "previous",
+    "swipe_up": "volumeup", "swipe_down": "volumedown",
+}
+EV_SYN, EV_KEY = 0, 1
+
+BLUEZ = "org.bluez"
+ADAPTER = BLUEZ + ".Adapter1"
+DEVICE = BLUEZ + ".Device1"
+CHAR = BLUEZ + ".GattCharacteristic1"
+AGENT = BLUEZ + ".Agent1"
+PROPS = "org.freedesktop.DBus.Properties"
+AGENT_PATH = "/gts7xl/spen"
+
+
+class Keys:
+    def __init__(self):
+        self.fd = os.open("/dev/uinput", os.O_WRONLY)
+        fcntl.ioctl(self.fd, 0x40045564, EV_KEY)
+        for key in KEYS.values():
+            fcntl.ioctl(self.fd, 0x40045565, key)
+        setup = struct.pack("<4H80sI", 3, 0x04e8, 0x5350, 1, b"S Pen", 0)
+        fcntl.ioctl(self.fd, 0x405c5503, setup)
+        fcntl.ioctl(self.fd, 0x5501)
+
+    def tap(self, key):
+        for value in (1, 0):
+            os.write(self.fd, struct.pack("<qqHHi", 0, 0, EV_KEY, key, value))
+            os.write(self.fd, struct.pack("<qqHHi", 0, 0, EV_SYN, 0, 0))
+
+
+def do_action(keys, action):
+    actions = dict(DEFAULT_ACTIONS)
+    try:
+        with open(ACTIONS_FILE) as f:
+            for line in f:
+                name, _, value = line.strip().partition("=")
+                actions[name] = value
+    except OSError:
+        pass
+    key = KEYS.get(actions.get(action))
+    if key:
+        keys.tap(key)
+
+
+def toggle_charging():
+    for node in glob.glob("/sys/bus/i2c/drivers/samsung-w90xx/*/ble_charge"):
+        for mode in ("0", "1"):
+            with open(node, "w") as f:
+                f.write(mode)
+            time.sleep(0.2)
+
+
+class Agent(dbus.service.Object):
+    @dbus.service.method(AGENT, in_signature="ou")
+    def RequestConfirmation(self, device, passkey):
+        pass
+
+    @dbus.service.method(AGENT, in_signature="o")
+    def RequestAuthorization(self, device):
+        pass
+
+    @dbus.service.method(AGENT, in_signature="os")
+    def AuthorizeService(self, device, uuid):
+        pass
+
+    @dbus.service.method(AGENT)
+    def Release(self):
+        pass
+
+    @dbus.service.method(AGENT)
+    def Cancel(self):
+        pass
+
+
+class Pen:
+    def __init__(self):
+        self.bus = dbus.SystemBus()
+        self.keys = Keys()
+        self.path = None
+        self.char = None
+        self.down = False
+        self.gesture = False
+        self.agent = Agent(self.bus, AGENT_PATH)
+        manager = dbus.Interface(self.bus.get_object(BLUEZ, "/org/bluez"), BLUEZ + ".AgentManager1")
+        manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
+        manager.RequestDefaultAgent(AGENT_PATH)
+        self.bus.add_signal_receiver(self.interfaces_added, "InterfacesAdded",
+                                     "org.freedesktop.DBus.ObjectManager")
+        self.bus.add_signal_receiver(self.props_changed, "PropertiesChanged", PROPS,
+                                     path_keyword="path")
+        GLib.timeout_add_seconds(5, self.tick)
+        GLib.idle_add(self.tick)
+
+    def objects(self):
+        manager = dbus.Interface(self.bus.get_object(BLUEZ, "/"), "org.freedesktop.DBus.ObjectManager")
+        return manager.GetManagedObjects()
+
+    def adapter(self):
+        for path, ifaces in self.objects().items():
+            if ADAPTER in ifaces:
+                return path, ifaces[ADAPTER]
+        return None, None
+
+    def is_pen(self, props):
+        uuids = {str(u).lower() for u in props.get("UUIDs", [])}
+        name = str(props.get("Name", "")).lower().replace(" ", "")
+        return bool(uuids & SERVICES) or "spen" in name
+
+    def known(self):
+        try:
+            with open(STATE) as f:
+                return f.read().strip()
+        except OSError:
+            return None
+
+    def tick(self):
+        try:
+            self.step()
+        except dbus.DBusException as e:
+            print("bluez:", e.get_dbus_message(), flush=True)
+        return True
+
+    def step(self):
+        path, adapter = self.adapter()
+        if not path or not adapter["Powered"]:
+            return
+        objects = self.objects()
+        for dev, ifaces in objects.items():
+            props = ifaces.get(DEVICE)
+            if not props:
+                continue
+            address = str(props["Address"])
+            if address == self.known() or self.is_pen(props):
+                self.use(dev, props, objects)
+                return
+        if not adapter["Discovering"]:
+            obj = dbus.Interface(self.bus.get_object(BLUEZ, path), ADAPTER)
+            obj.SetDiscoveryFilter({"Transport": "le"})
+            toggle_charging()
+            obj.StartDiscovery()
+            print("looking for the pen", flush=True)
+
+    def use(self, dev, props, objects):
+        device = dbus.Interface(self.bus.get_object(BLUEZ, dev), DEVICE)
+        if not props["Connected"]:
+            self.char = None
+            print("connecting", props["Address"], props.get("Name", ""), flush=True)
+            if not props["Paired"]:
+                device.Pair(timeout=30)
+            device.Connect(timeout=30)
+            return
+        if not props["ServicesResolved"] or self.char:
+            return
+        for path, ifaces in objects.items():
+            char = ifaces.get(CHAR)
+            if not char or not path.startswith(str(dev) + "/"):
+                continue
+            uuid = str(char["UUID"]).lower()
+            obj = dbus.Interface(self.bus.get_object(BLUEZ, path), CHAR)
+            if uuid == BUTTON_EVENT:
+                obj.StartNotify()
+                self.char = path
+                print("connected", props["Address"], flush=True)
+            elif uuid == BATTERY_LEVEL:
+                try:
+                    print("battery", int(obj.ReadValue({})[0]), flush=True)
+                except dbus.DBusException:
+                    pass
+        if self.char:
+            device_props = dbus.Interface(self.bus.get_object(BLUEZ, dev), PROPS)
+            device_props.Set(DEVICE, "Trusted", True)
+            os.makedirs(os.path.dirname(STATE), exist_ok=True)
+            with open(STATE, "w") as f:
+                f.write(str(props["Address"]))
+            adapter = dbus.Interface(self.bus.get_object(BLUEZ, self.adapter()[0]), ADAPTER)
+            if self.adapter()[1]["Discovering"]:
+                adapter.StopDiscovery()
+
+    def interfaces_added(self, path, ifaces):
+        if DEVICE in ifaces and self.is_pen(ifaces[DEVICE]):
+            GLib.idle_add(lambda: self.tick() and False)
+
+    def props_changed(self, iface, changed, invalidated, path=None):
+        if iface == CHAR and path == self.char and "Value" in changed:
+            self.event(bytes(changed["Value"]))
+        elif iface == DEVICE and changed.get("Connected") == False:
+            self.char = None
+
+    def gesture_sample(self, data, i):
+        dx, dy = struct.unpack_from("<hh", data, i + 1)
+        if abs(dx) <= MOTION_THRESHOLD and abs(dy) <= MOTION_THRESHOLD:
+            return
+        if abs(dx) > abs(dy):
+            do_action(self.keys, "swipe_right" if dx > 0 else "swipe_left")
+        else:
+            do_action(self.keys, "swipe_down" if dy > 0 else "swipe_up")
+        self.gesture = True
+
+    def event(self, data):
+        if not data:
+            return
+        kind = data[0]
+        if kind == 0xf0 and len(data) >= 8:
+            for i in range(2, len(data) - 5, 6):
+                self.gesture_sample(data, i)
+        elif kind == 0x0f and len(data) >= 5:
+            self.gesture_sample(data, 0)
+        elif kind == 3:
+            self.down = True
+        elif kind == 0:
+            if self.down and not self.gesture:
+                do_action(self.keys, "click")
+            self.down = False
+            self.gesture = False
+        else:
+            print("unknown event", data.hex(), flush=True)
+
+
+# The desktop user changes the actions through the Pen Actions app
+os.makedirs(os.path.dirname(ACTIONS_FILE), exist_ok=True)
+os.chown(os.path.dirname(ACTIONS_FILE), 0, grp.getgrnam("wheel").gr_gid)
+os.chmod(os.path.dirname(ACTIONS_FILE), 0o775)
+
+dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+Pen()
+GLib.MainLoop().run()

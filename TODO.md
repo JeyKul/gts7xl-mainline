@@ -70,6 +70,11 @@ See the status tables in `README.md`.
 - [ ] IRQ 156 (MAX77705, spmi-gpio 10) fires nonstop and gets disabled about a minute after boot: `nobody cared`
 - [ ] Use the RTC offset to keep time across reboots
 
+## Later
+
+- [ ] Minimal repo: strip what is no longer used, when the user decides it is time
+- [ ] S Pen: test the built-in pen, reporting its charge toggle discovery; handle the Pro's `13` and `ff....` events
+
 ## Next hardware
 
 - [x] Flashlight, with a `Flashlight` app
@@ -77,11 +82,11 @@ See the status tables in `README.md`.
 - [ ] Main mic (DMIC1) reads zero: pins, clock and L5C on, cause unknown
 - [ ] L5C mic rail is always on; tie it to capture
 - [ ] Check UFS `ufshcd_query_attr` errors and `DSI PLL lock failed` warning seen at boot during mic work
-- [ ] Cameras
+- [ ] Cameras: rear `s5k3m5` streams at about 30 fps and the driver binds, no frames reach memory yet; `csid0` sees no data, test pattern gave nothing either. Work in progress, not committed
 
 ## Not started
 
-- [ ] Sensors: motion, compass and light chips sit on the SLPI bus (`qcom-ssc-block-bus` only covers SDM630 here). Goal is native, minimal Android parts; no direct route known
+- [ ] Sensors: motion, compass and light chips sit on the SLPI bus (`sm8250.dtsi` has no `qcom-ssc-block-bus` node; no route proven or ruled out). Goal is native, minimal Android parts; no direct route known
 - [ ] Detect the keyboard cover closing: `gpio157`, `gpio110` and the MCU hall message do not change
 - [ ] USB host mode
 - [ ] Suspend: wakes, but the screen stays black until reboot on the firmware framebuffer; targets masked on Arch
