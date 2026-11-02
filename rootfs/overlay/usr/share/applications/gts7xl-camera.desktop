@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Camera
+Comment=Take photos with the rear camera
+Exec=/usr/local/bin/gts7xl-camera
+Icon=camera-photo
+Categories=Graphics;Photography;
