@@ -88,7 +88,8 @@ See the status tables in `README.md`.
 - [x] Camera app with preview, tap to focus and full size photos
 - [ ] Rear camera: colour tuning, GPU debayer fails
 - [ ] Focus motor powers down when its device closes, so a manual position only holds while something keeps it open
-- [ ] Front and ultrawide cameras: no mainline sensor driver
+- [x] Front (`s5k4ha`) and ultrawide (`s5k5e9`) cameras through `s5k-tab`, raw frames and chip IDs confirmed
+- [ ] Front and ultrawide: check colour order and gain scale, tuning, more modes
 
 ## Not started
 
