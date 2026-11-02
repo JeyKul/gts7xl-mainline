@@ -32,8 +32,8 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | S Pen digitizer | 🟡 | Position and pressure work, range hand-calibrated; side button, hover, tilt unconfirmed |
 | S Pen Bluetooth remote | ⬜ | |
 | Fingerprint reader (under display) | ⬜ | |
-| Pogo keyboard | 🟡 | Works until the trackpad is touched |
-| Pogo trackpad | ❌ | Touch crashes the keyboard MCU |
+| Pogo keyboard | ✅ | Recovers by itself after trackpad use |
+| Pogo trackpad | 🟡 | Moves for under a second, then drops and recovers; also on the stock kernel in TWRP, fine on One UI |
 
 ### Graphics and DSPs
 
@@ -137,7 +137,7 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 
 ## Keyboard notes
 
-Touching the trackpad makes the MCU send a few valid frames, then stop, with gpio43 bouncing about 10 times a second. Typing alone is fine. Unsolicited I2C polling also upsets the MCU, so don't poll it. The pin overrides tried earlier made no difference.
+Trackpad use makes the connection line (gpio43) drop about once a second, after about 30 reports at most. The stock kernel in TWRP does the same, One UI does not, and the cause is unknown. Starting the sensor DSP and `hexagonrpcd` did not fix it, though `hexagonrpcd` stops at the missing `sns_registry` interface, so the sensor stack may not be fully up. The MCU firmware reads its own detect pin and watches a second I2C bus towards the sensor DSP. This project never writes firmware to the keyboard.
 
 ## License and credit
 

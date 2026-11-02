@@ -47,7 +47,7 @@ See the status tables in `README.md`.
 
 - [ ] Tablet powered off at 2% battery (UPower action); Arch keeps the default, Alpine has it disabled
 
-- [ ] Trackpad touch crashes the keyboard MCU (stock survives it; not fixed by the memory map change)
+- [ ] Trackpad drops after under a second, keyboard recovers. Same on the stock kernel in TWRP, fine on One UI. Not caused by BOB, bus speed or MCU pins. Open lead: sensor DSP stack needs `sns_registry` in `hexagonrpcd`; the MCU watches a second I2C bus towards it
 - [ ] Pen: side button and hover unconfirmed; range is hand-calibrated
 - [ ] `su -c` fails on the tablet
 - [ ] Charging: 500mA limit, barely gains on PC USB
@@ -66,7 +66,7 @@ See the status tables in `README.md`.
 - [ ] Fast charging: other chargers, `current_now` scale, a real USB-C driver to handle its interrupts
 - [ ] Fast charging: at least 25W, user's goal
 - [ ] Battery reads 27.1C from the fuel gauge, which is fake; `batt_thm` is the real value
-- [ ] Sleep: s2idle works; measure drain, confirm power key takes one press
+- [ ] Sleep: s2idle works, about 2%/h measured by the user over 15h46 (79% to 48%), roughly 0.8W; find what keeps it above stock levels
 - [ ] IRQ 156 (MAX77705, spmi-gpio 10) fires nonstop and gets disabled about a minute after boot: `nobody cared`
 - [ ] Use the RTC offset to keep time across reboots
 
@@ -117,7 +117,7 @@ Decision: Linux or Android, not both. An installer in the boot image starts when
 
 ## Cleanup
 
-- [ ] Remove keyboard frame logging and `.noswitch`
+- [ ] Remove `.noswitch`
 - [ ] Remove or keep `gts7xl-early-log`, which writes the kernel log to `/var/log/early`
 - [ ] Decide `i2c9` speed (100kHz test value still set)
 - [ ] Package the Krita `lcms2` link properly
