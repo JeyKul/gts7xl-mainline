@@ -1,0 +1,428 @@
+From 7be7e05266ea07f52b54f7c445b771cffa436f79 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 2 Nov 2026 21:38:36 +0100
+Subject: [PATCH] media: cameras: add the stock low resolution modes
+
+libcamera's software ISP crops instead of scaling, so small streams from a full
+size mode looked zoomed in. Keep the new modes at 30 fps for full exposure.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/media/i2c/s5k-tab.c | 213 +++++++++++++++++++++++++++++++-----
+ drivers/media/i2c/s5k3m5.c  |  55 ++++++++++
+ 2 files changed, 240 insertions(+), 28 deletions(-)
+
+diff --git a/drivers/media/i2c/s5k-tab.c b/drivers/media/i2c/s5k-tab.c
+index 4957527ff..0014b7d42 100644
+--- a/drivers/media/i2c/s5k-tab.c
++++ b/drivers/media/i2c/s5k-tab.c
+@@ -219,36 +219,162 @@ static const struct cci_reg_sequence s5k5e9_mode[] = {
+ 	{ CCI_REG8(0x3c0f), 0x01 },
+ };
+ 
++static const struct cci_reg_sequence s5k4ha_mode_small[] = {
++	{ CCI_REG8(0x0137), 0x34 },
++	{ CCI_REG8(0x0301), 0x04 },
++	{ CCI_REG8(0x0305), 0x04 },
++	{ CCI_REG8(0x0306), 0x00 },
++	{ CCI_REG8(0x0307), 0x74 },
++	{ CCI_REG8(0x3c1f), 0x00 },
++	{ CCI_REG8(0x030d), 0x04 },
++	{ CCI_REG8(0x030e), 0x00 },
++	{ CCI_REG8(0x030f), 0xa5 },
++	{ CCI_REG8(0x3c17), 0x00 },
++	{ CCI_REG8(0x0340), 0x02 },
++	{ CCI_REG8(0x0341), 0x78 },
++	{ CCI_REG8(0x0342), 0x0e },
++	{ CCI_REG8(0x0343), 0x68 },
++	{ CCI_REG8(0x0344), 0x00 },
++	{ CCI_REG8(0x0345), 0x28 },
++	{ CCI_REG8(0x0346), 0x00 },
++	{ CCI_REG8(0x0347), 0x20 },
++	{ CCI_REG8(0x0348), 0x0c },
++	{ CCI_REG8(0x0349), 0xa7 },
++	{ CCI_REG8(0x034a), 0x09 },
++	{ CCI_REG8(0x034b), 0x7f },
++	{ CCI_REG8(0x034c), 0x03 },
++	{ CCI_REG8(0x034d), 0x20 },
++	{ CCI_REG8(0x034e), 0x02 },
++	{ CCI_REG8(0x034f), 0x58 },
++	{ CCI_REG8(0x0381), 0x01 },
++	{ CCI_REG8(0x0383), 0x01 },
++	{ CCI_REG8(0x0385), 0x01 },
++	{ CCI_REG8(0x0387), 0x07 },
++	{ CCI_REG8(0x0900), 0x01 },
++	{ CCI_REG8(0x0901), 0x44 },
++	{ CCI_REG8(0x0204), 0x00 },
++	{ CCI_REG8(0x0205), 0x20 },
++	{ CCI_REG8(0x0200), 0x0d },
++	{ CCI_REG8(0x0201), 0xd8 },
++	{ CCI_REG8(0x0202), 0x00 },
++	{ CCI_REG8(0x0203), 0x02 },
++	{ CCI_REG8(0x0820), 0x03 },
++	{ CCI_REG8(0x0821), 0x18 },
++	{ CCI_REG8(0x0822), 0x00 },
++	{ CCI_REG8(0x0823), 0x00 },
++	{ CCI_REG8(0x0112), 0x0a },
++	{ CCI_REG8(0x0113), 0x0a },
++	{ CCI_REG8(0x0114), 0x03 },
++	{ CCI_REG8(0x3929), 0x3f },
++	{ CCI_REG8(0x0101), 0x03 },
++	{ CCI_REG8(0x3941), 0x0b },
++	{ CCI_REG8(0x3942), 0x41 },
++};
++
++static const struct cci_reg_sequence s5k5e9_mode_small[] = {
++	{ CCI_REG8(0x0137), 0x33 },
++	{ CCI_REG8(0x0301), 0x06 },
++	{ CCI_REG8(0x0305), 0x03 },
++	{ CCI_REG8(0x0306), 0x00 },
++	{ CCI_REG8(0x0307), 0x59 },
++	{ CCI_REG8(0x3c1f), 0x00 },
++	{ CCI_REG8(0x030d), 0x04 },
++	{ CCI_REG8(0x030e), 0x00 },
++	{ CCI_REG8(0x030f), 0xbb },
++	{ CCI_REG8(0x3c17), 0x00 },
++	{ CCI_REG8(0x0340), 0x03 },
++	{ CCI_REG8(0x0341), 0xf8 },
++	{ CCI_REG8(0x0342), 0x0c },
++	{ CCI_REG8(0x0343), 0x28 },
++	{ CCI_REG8(0x0344), 0x00 },
++	{ CCI_REG8(0x0345), 0x08 },
++	{ CCI_REG8(0x0346), 0x00 },
++	{ CCI_REG8(0x0347), 0x08 },
++	{ CCI_REG8(0x0348), 0x0a },
++	{ CCI_REG8(0x0349), 0x27 },
++	{ CCI_REG8(0x034a), 0x07 },
++	{ CCI_REG8(0x034b), 0x9f },
++	{ CCI_REG8(0x034c), 0x05 },
++	{ CCI_REG8(0x034d), 0x10 },
++	{ CCI_REG8(0x034e), 0x03 },
++	{ CCI_REG8(0x034f), 0xcc },
++	{ CCI_REG8(0x0381), 0x01 },
++	{ CCI_REG8(0x0383), 0x01 },
++	{ CCI_REG8(0x0385), 0x01 },
++	{ CCI_REG8(0x0387), 0x03 },
++	{ CCI_REG8(0x0900), 0x01 },
++	{ CCI_REG8(0x0901), 0x22 },
++	{ CCI_REG8(0x0204), 0x00 },
++	{ CCI_REG8(0x0205), 0x20 },
++	{ CCI_REG8(0x0200), 0x0b },
++	{ CCI_REG8(0x0201), 0x9c },
++	{ CCI_REG8(0x0202), 0x00 },
++	{ CCI_REG8(0x0203), 0x02 },
++	{ CCI_REG8(0x0820), 0x03 },
++	{ CCI_REG8(0x0821), 0x81 },
++	{ CCI_REG8(0x0822), 0x00 },
++	{ CCI_REG8(0x0823), 0x00 },
++	{ CCI_REG8(0x0112), 0x0a },
++	{ CCI_REG8(0x0113), 0x0a },
++	{ CCI_REG8(0x0114), 0x01 },
++	{ CCI_REG8(0x3929), 0x0f },
++	{ CCI_REG8(0x0101), 0x00 },
++	{ CCI_REG8(0x30b8), 0x2a },
++	{ CCI_REG8(0x30ba), 0x2e },
++	{ CCI_REG8(0x3941), 0x0b },
++	{ CCI_REG8(0x3942), 0x41 },
++	{ CCI_REG8(0x3400), 0x01 },
++	{ CCI_REG8(0x3c0f), 0x01 },
++};
++
++struct s5ktab_mode {
++	u32 width, height, hts, vts;
++	const struct cci_reg_sequence *regs;
++	unsigned int num_regs;
++};
++
++#define S5KTAB_MODE(w, h, ht, vt, r) { w, h, ht, vt, r, ARRAY_SIZE(r) }
++
++static const struct s5ktab_mode s5k4ha_modes[] = {
++	S5KTAB_MODE(3264, 2448, 3688, 2516, s5k4ha_mode),
++	S5KTAB_MODE(800, 600, 3688, 2516, s5k4ha_mode_small),
++};
++
++static const struct s5ktab_mode s5k5e9_modes[] = {
++	S5KTAB_MODE(2576, 1932, 3112, 2030, s5k5e9_mode),
++	S5KTAB_MODE(1296, 972, 3112, 2030, s5k5e9_mode_small),
++};
++
+ struct s5ktab_data {
+ 	const char *name;
+ 	u16 chip_id;
+-	u32 width, height, hts, vts;
+ 	u32 lanes;
+ 	s64 link_freq;
+ 	u32 code;
+-	const struct cci_reg_sequence *init, *mode;
+-	unsigned int num_init, num_mode;
++	const struct cci_reg_sequence *init;
++	unsigned int num_init;
++	const struct s5ktab_mode *modes;
++	unsigned int num_modes;
+ };
+ 
+ static const struct s5ktab_data s5k4ha_data = {
+ 	.name = "s5k4ha", .chip_id = 0x48ab,
+-	.width = 3264, .height = 2448, .hts = 3688, .vts = 2516,
+ 	.lanes = 4, .link_freq = 792000000, .code = MEDIA_BUS_FMT_SGBRG10_1X10,
+ 	.init = s5k4ha_init, .num_init = ARRAY_SIZE(s5k4ha_init),
+-	.mode = s5k4ha_mode, .num_mode = ARRAY_SIZE(s5k4ha_mode),
++	.modes = s5k4ha_modes, .num_modes = ARRAY_SIZE(s5k4ha_modes),
+ };
+ 
+ static const struct s5ktab_data s5k5e9_data = {
+ 	.name = "s5k5e9", .chip_id = 0x559b,
+-	.width = 2576, .height = 1932, .hts = 3112, .vts = 2030,
+ 	.lanes = 2, .link_freq = 897600000, .code = MEDIA_BUS_FMT_SGBRG10_1X10,
+ 	.init = s5k5e9_init, .num_init = ARRAY_SIZE(s5k5e9_init),
+-	.mode = s5k5e9_mode, .num_mode = ARRAY_SIZE(s5k5e9_mode),
++	.modes = s5k5e9_modes, .num_modes = ARRAY_SIZE(s5k5e9_modes),
+ };
+ 
+ struct s5ktab {
+ 	struct device *dev;
+ 	const struct s5ktab_data *data;
++	const struct s5ktab_mode *mode;
+ 	struct regmap *regmap;
+ 	struct clk *mclk;
+ 	struct gpio_desc *reset;
+@@ -256,7 +382,7 @@ struct s5ktab {
+ 	struct v4l2_subdev sd;
+ 	struct media_pad pad;
+ 	struct v4l2_ctrl_handler ctrls;
+-	struct v4l2_ctrl *exposure;
++	struct v4l2_ctrl *exposure, *hblank, *vblank;
+ 	s64 link_freq[1];
+ };
+ 
+@@ -272,7 +398,7 @@ static int s5ktab_set_ctrl(struct v4l2_ctrl *ctrl)
+ 
+ 	if (ctrl->id == V4L2_CID_VBLANK)
+ 		__v4l2_ctrl_modify_range(s->exposure, s->exposure->minimum,
+-					 s->data->height + ctrl->val - S5KTAB_EXPOSURE_MARGIN,
++					 s->mode->height + ctrl->val - S5KTAB_EXPOSURE_MARGIN,
+ 					 1, s->exposure->default_value);
+ 
+ 	if (!pm_runtime_get_if_in_use(s->dev))
+@@ -286,7 +412,7 @@ static int s5ktab_set_ctrl(struct v4l2_ctrl *ctrl)
+ 		cci_write(s->regmap, S5KTAB_REG_AGAIN, ctrl->val, &ret);
+ 		break;
+ 	case V4L2_CID_VBLANK:
+-		cci_write(s->regmap, S5KTAB_REG_VTS, s->data->height + ctrl->val, &ret);
++		cci_write(s->regmap, S5KTAB_REG_VTS, s->mode->height + ctrl->val, &ret);
+ 		break;
+ 	default:
+ 		ret = -EINVAL;
+@@ -303,6 +429,7 @@ static const struct v4l2_ctrl_ops s5ktab_ctrl_ops = {
+ static int s5ktab_init_controls(struct s5ktab *s)
+ {
+ 	const struct s5ktab_data *d = s->data;
++	const struct s5ktab_mode *m = s->mode;
+ 	struct v4l2_ctrl_handler *h = &s->ctrls;
+ 	struct v4l2_fwnode_device_properties props;
+ 	struct v4l2_ctrl *c;
+@@ -315,16 +442,16 @@ static int s5ktab_init_controls(struct s5ktab *s)
+ 	if (c)
+ 		c->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+ 	v4l2_ctrl_new_std(h, &s5ktab_ctrl_ops, V4L2_CID_PIXEL_RATE, rate, rate, 1, rate);
+-	c = v4l2_ctrl_new_std(h, &s5ktab_ctrl_ops, V4L2_CID_HBLANK, d->hts - d->width,
+-			      d->hts - d->width, 1, d->hts - d->width);
+-	if (c)
+-		c->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+-	v4l2_ctrl_new_std(h, &s5ktab_ctrl_ops, V4L2_CID_VBLANK, d->vts - d->height,
+-			  S5KTAB_VTS_MAX - d->height, 1, d->vts - d->height);
++	s->hblank = v4l2_ctrl_new_std(h, &s5ktab_ctrl_ops, V4L2_CID_HBLANK, m->hts - m->width,
++				      m->hts - m->width, 1, m->hts - m->width);
++	if (s->hblank)
++		s->hblank->flags |= V4L2_CTRL_FLAG_READ_ONLY;
++	s->vblank = v4l2_ctrl_new_std(h, &s5ktab_ctrl_ops, V4L2_CID_VBLANK, m->vts - m->height,
++				      S5KTAB_VTS_MAX - m->height, 1, m->vts - m->height);
+ 	v4l2_ctrl_new_std(h, &s5ktab_ctrl_ops, V4L2_CID_ANALOGUE_GAIN, S5KTAB_AGAIN_MIN,
+ 			  S5KTAB_AGAIN_MAX, 1, S5KTAB_AGAIN_MIN);
+ 	s->exposure = v4l2_ctrl_new_std(h, &s5ktab_ctrl_ops, V4L2_CID_EXPOSURE, 2,
+-					d->vts - S5KTAB_EXPOSURE_MARGIN, 1, d->vts / 4);
++					m->vts - S5KTAB_EXPOSURE_MARGIN, 1, m->vts / 4);
+ 
+ 	ret = v4l2_fwnode_device_parse(s->dev, &props);
+ 	if (!ret)
+@@ -352,7 +479,7 @@ static int s5ktab_enable_streams(struct v4l2_subdev *sd, struct v4l2_subdev_stat
+ 
+ 	ret = 0;
+ 	cci_multi_reg_write(s->regmap, s->data->init, s->data->num_init, &ret);
+-	cci_multi_reg_write(s->regmap, s->data->mode, s->data->num_mode, &ret);
++	cci_multi_reg_write(s->regmap, s->mode->regs, s->mode->num_regs, &ret);
+ 	if (!ret)
+ 		ret = __v4l2_ctrl_handler_setup(&s->ctrls);
+ 	cci_write(s->regmap, S5KTAB_REG_MODE, 1, &ret);
+@@ -373,11 +500,12 @@ static int s5ktab_disable_streams(struct v4l2_subdev *sd, struct v4l2_subdev_sta
+ 	return ret;
+ }
+ 
+-static void s5ktab_fill_format(struct s5ktab *s, struct v4l2_mbus_framefmt *fmt)
++static void s5ktab_fill_format(struct s5ktab *s, const struct s5ktab_mode *m,
++			       struct v4l2_mbus_framefmt *fmt)
+ {
+ 	fmt->code = s->data->code;
+-	fmt->width = s->data->width;
+-	fmt->height = s->data->height;
++	fmt->width = m->width;
++	fmt->height = m->height;
+ 	fmt->field = V4L2_FIELD_NONE;
+ 	fmt->colorspace = V4L2_COLORSPACE_RAW;
+ 	fmt->ycbcr_enc = V4L2_YCBCR_ENC_DEFAULT;
+@@ -388,8 +516,34 @@ static void s5ktab_fill_format(struct s5ktab *s, struct v4l2_mbus_framefmt *fmt)
+ static int s5ktab_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *state,
+ 			  struct v4l2_subdev_format *fmt)
+ {
+-	s5ktab_fill_format(to_s5ktab(sd), &fmt->format);
++	struct s5ktab *s = to_s5ktab(sd);
++	const struct s5ktab_mode *m;
++	unsigned int i;
++
++	m = &s->data->modes[0];
++	for (i = 1; i < s->data->num_modes; i++) {
++		const struct s5ktab_mode *c = &s->data->modes[i];
++
++		if (abs((int)c->width - (int)fmt->format.width) +
++		    abs((int)c->height - (int)fmt->format.height) <
++		    abs((int)m->width - (int)fmt->format.width) +
++		    abs((int)m->height - (int)fmt->format.height))
++			m = c;
++	}
++	s5ktab_fill_format(s, m, &fmt->format);
+ 	*v4l2_subdev_state_get_format(state, 0) = fmt->format;
++
++	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY || m == s->mode)
++		return 0;
++
++	s->mode = m;
++	__v4l2_ctrl_modify_range(s->hblank, m->hts - m->width, m->hts - m->width, 1,
++				 m->hts - m->width);
++	__v4l2_ctrl_modify_range(s->vblank, m->vts - m->height, S5KTAB_VTS_MAX - m->height, 1,
++				 m->vts - m->height);
++	__v4l2_ctrl_s_ctrl(s->vblank, m->vts - m->height);
++	__v4l2_ctrl_modify_range(s->exposure, 2, m->vts - S5KTAB_EXPOSURE_MARGIN, 1, m->vts / 4);
++	__v4l2_ctrl_s_ctrl(s->exposure, m->vts / 4);
+ 	return 0;
+ }
+ 
+@@ -407,10 +561,10 @@ static int s5ktab_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_sta
+ {
+ 	struct s5ktab *s = to_s5ktab(sd);
+ 
+-	if (fse->index || fse->code != s->data->code)
++	if (fse->index >= s->data->num_modes || fse->code != s->data->code)
+ 		return -EINVAL;
+-	fse->min_width = fse->max_width = s->data->width;
+-	fse->min_height = fse->max_height = s->data->height;
++	fse->min_width = fse->max_width = s->data->modes[fse->index].width;
++	fse->min_height = fse->max_height = s->data->modes[fse->index].height;
+ 	return 0;
+ }
+ 
+@@ -426,8 +580,8 @@ static int s5ktab_get_selection(struct v4l2_subdev *sd, struct v4l2_subdev_state
+ 	case V4L2_SEL_TGT_NATIVE_SIZE:
+ 		sel->r.left = 0;
+ 		sel->r.top = 0;
+-		sel->r.width = s->data->width;
+-		sel->r.height = s->data->height;
++		sel->r.width = s->data->modes[0].width;
++		sel->r.height = s->data->modes[0].height;
+ 		return 0;
+ 	}
+ 	return -EINVAL;
+@@ -435,7 +589,9 @@ static int s5ktab_get_selection(struct v4l2_subdev *sd, struct v4l2_subdev_state
+ 
+ static int s5ktab_init_state(struct v4l2_subdev *sd, struct v4l2_subdev_state *state)
+ {
+-	s5ktab_fill_format(to_s5ktab(sd), v4l2_subdev_state_get_format(state, 0));
++	struct s5ktab *s = to_s5ktab(sd);
++
++	s5ktab_fill_format(s, s->mode, v4l2_subdev_state_get_format(state, 0));
+ 	return 0;
+ }
+ 
+@@ -508,6 +664,7 @@ static int s5ktab_probe(struct i2c_client *client)
+ 		return -ENOMEM;
+ 	s->dev = dev;
+ 	s->data = of_device_get_match_data(dev);
++	s->mode = &s->data->modes[0];
+ 	v4l2_i2c_subdev_init(&s->sd, client, &s5ktab_subdev_ops);
+ 
+ 	s->regmap = devm_cci_regmap_init_i2c(client, 16);
+diff --git a/drivers/media/i2c/s5k3m5.c b/drivers/media/i2c/s5k3m5.c
+index 203d7a3c5..b1a733c39 100644
+--- a/drivers/media/i2c/s5k3m5.c
++++ b/drivers/media/i2c/s5k3m5.c
+@@ -610,6 +610,50 @@ static const struct cci_reg_sequence s5k3m5_4128x3096_30fps_mode[] = {
+ 	{ CCI_REG16(0x0d08), 0x0000 },
+ };
+ 
++static const struct cci_reg_sequence s5k3m5_1008x756_mode[] = {
++	{ CCI_REG16(0x6000), 0x0005 },
++	{ CCI_REG16(0xfcfc), 0x2000 },
++	{ CCI_REG16(0x0e4c), 0x0101 },
++	{ CCI_REG16(0x0e4a), 0x0041 },
++	{ CCI_REG16(0xfcfc), 0x4000 },
++	{ CCI_REG16(0x6000), 0x0085 },
++	{ CCI_REG16(0x0114), 0x0300 },
++	{ CCI_REG16(0x0136), 0x1333 },
++	{ CCI_REG16(0x0202), 0x0100 },
++	{ CCI_REG16(0x0204), 0x0020 },
++	{ CCI_REG16(0x020e), 0x0100 },
++	{ CCI_REG16(0x021e), 0x0000 },
++	{ CCI_REG16(0x0226), 0x0100 },
++	{ CCI_REG16(0x0230), 0x0100 },
++	{ CCI_REG16(0x0304), 0x0006 },
++	{ CCI_REG16(0x0306), 0x012e },
++	{ CCI_REG16(0x030c), 0x0000 },
++	{ CCI_REG16(0x030e), 0x0002 },
++	{ CCI_REG16(0x0310), 0x0048 },
++	{ CCI_REG16(0x0312), 0x0000 },
++	{ CCI_REG16(0x0340), 0x033e },
++	{ CCI_REG16(0x0342), 0x12f0 },
++	{ CCI_REG16(0x0344), 0x0060 },
++	{ CCI_REG16(0x0346), 0x0038 },
++	{ CCI_REG16(0x0348), 0x101f },
++	{ CCI_REG16(0x034a), 0x0c07 },
++	{ CCI_REG16(0x034c), 0x03f0 },
++	{ CCI_REG16(0x034e), 0x02f4 },
++	{ CCI_REG16(0x0350), 0x0000 },
++	{ CCI_REG16(0x0352), 0x0000 },
++	{ CCI_REG16(0x0380), 0x0001 },
++	{ CCI_REG16(0x0382), 0x0001 },
++	{ CCI_REG16(0x0384), 0x0001 },
++	{ CCI_REG16(0x0386), 0x0007 },
++	{ CCI_REG16(0x0402), 0x1010 },
++	{ CCI_REG16(0x0404), 0x4000 },
++	{ CCI_REG16(0x0900), 0x0114 },
++	{ CCI_REG16(0x0d00), 0x0000 },
++	{ CCI_REG16(0x0d02), 0x0000 },
++	{ CCI_REG16(0x0d06), 0x0000 },
++	{ CCI_REG16(0x0d08), 0x0000 },
++};
++
+ static const struct s5k3m5_mode s5k3m5_supported_modes[] = {
+ 	{
+ 		.width = 4128,
+@@ -622,6 +666,17 @@ static const struct s5k3m5_mode s5k3m5_supported_modes[] = {
+ 			.num_regs = ARRAY_SIZE(s5k3m5_4128x3096_30fps_mode),
+ 		},
+ 	},
++	{
++		.width = 1008,
++		.height = 756,
++		.hts = 4848,
++		.vts = 3322,
++		.exposure = 256,
++		.reg_list = {
++			.regs = s5k3m5_1008x756_mode,
++			.num_regs = ARRAY_SIZE(s5k3m5_1008x756_mode),
++		},
++	},
+ };
+ 
+ static int s5k3m5_set_ctrl(struct v4l2_ctrl *ctrl)
+-- 
+2.56.0
+
