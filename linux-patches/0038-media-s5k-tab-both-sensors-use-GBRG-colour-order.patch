@@ -1,0 +1,73 @@
+From eddd4630d02dab33d102bf26df25d9644b397cb7 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 2 Nov 2026 21:30:29 +0100
+Subject: [PATCH] media: s5k-tab: both sensors use GBRG colour order
+
+Checked against a reference photo on the front camera and a colour wheel on
+the ultrawide.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/media/i2c/s5k-tab.c | 11 ++++++-----
+ 1 file changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/media/i2c/s5k-tab.c b/drivers/media/i2c/s5k-tab.c
+index 67d8d1895..4957527ff 100644
+--- a/drivers/media/i2c/s5k-tab.c
++++ b/drivers/media/i2c/s5k-tab.c
+@@ -225,6 +225,7 @@ struct s5ktab_data {
+ 	u32 width, height, hts, vts;
+ 	u32 lanes;
+ 	s64 link_freq;
++	u32 code;
+ 	const struct cci_reg_sequence *init, *mode;
+ 	unsigned int num_init, num_mode;
+ };
+@@ -232,7 +233,7 @@ struct s5ktab_data {
+ static const struct s5ktab_data s5k4ha_data = {
+ 	.name = "s5k4ha", .chip_id = 0x48ab,
+ 	.width = 3264, .height = 2448, .hts = 3688, .vts = 2516,
+-	.lanes = 4, .link_freq = 792000000,
++	.lanes = 4, .link_freq = 792000000, .code = MEDIA_BUS_FMT_SGBRG10_1X10,
+ 	.init = s5k4ha_init, .num_init = ARRAY_SIZE(s5k4ha_init),
+ 	.mode = s5k4ha_mode, .num_mode = ARRAY_SIZE(s5k4ha_mode),
+ };
+@@ -240,7 +241,7 @@ static const struct s5ktab_data s5k4ha_data = {
+ static const struct s5ktab_data s5k5e9_data = {
+ 	.name = "s5k5e9", .chip_id = 0x559b,
+ 	.width = 2576, .height = 1932, .hts = 3112, .vts = 2030,
+-	.lanes = 2, .link_freq = 897600000,
++	.lanes = 2, .link_freq = 897600000, .code = MEDIA_BUS_FMT_SGBRG10_1X10,
+ 	.init = s5k5e9_init, .num_init = ARRAY_SIZE(s5k5e9_init),
+ 	.mode = s5k5e9_mode, .num_mode = ARRAY_SIZE(s5k5e9_mode),
+ };
+@@ -374,7 +375,7 @@ static int s5ktab_disable_streams(struct v4l2_subdev *sd, struct v4l2_subdev_sta
+ 
+ static void s5ktab_fill_format(struct s5ktab *s, struct v4l2_mbus_framefmt *fmt)
+ {
+-	fmt->code = MEDIA_BUS_FMT_SGRBG10_1X10;
++	fmt->code = s->data->code;
+ 	fmt->width = s->data->width;
+ 	fmt->height = s->data->height;
+ 	fmt->field = V4L2_FIELD_NONE;
+@@ -397,7 +398,7 @@ static int s5ktab_enum_mbus_code(struct v4l2_subdev *sd, struct v4l2_subdev_stat
+ {
+ 	if (code->index)
+ 		return -EINVAL;
+-	code->code = MEDIA_BUS_FMT_SGRBG10_1X10;
++	code->code = to_s5ktab(sd)->data->code;
+ 	return 0;
+ }
+ 
+@@ -406,7 +407,7 @@ static int s5ktab_enum_frame_size(struct v4l2_subdev *sd, struct v4l2_subdev_sta
+ {
+ 	struct s5ktab *s = to_s5ktab(sd);
+ 
+-	if (fse->index || fse->code != MEDIA_BUS_FMT_SGRBG10_1X10)
++	if (fse->index || fse->code != s->data->code)
+ 		return -EINVAL;
+ 	fse->min_width = fse->max_width = s->data->width;
+ 	fse->min_height = fse->max_height = s->data->height;
+-- 
+2.56.0
+
