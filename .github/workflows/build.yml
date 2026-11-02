@@ -55,6 +55,8 @@ jobs:
           # modules_install needs the full kernel; the second Image step only adds the installer
           make -s O=build -j"$(nproc)" Image modules qcom/sm8250-samsung-gts7xlwifi.dtb
           make -s O=build INSTALL_MOD_PATH="$PWD/../modroot" INSTALL_MOD_STRIP=1 modules_install
+          # Optional modules become pacman packages instead of part of the system
+          python3 ../tools/module-repo.py ../modroot ../module-repo "$GITHUB_RUN_ID"
           tar -C ../modroot -czf ../modules.tar.gz lib
           ../rootfs/stage1/assemble.sh build "$INITRAMFS"
           # The boot image only accepts the installer built with it
@@ -85,6 +87,15 @@ jobs:
           gh release create "$TAG" stage2.tar.gz --prerelease \
             --title "Installer $TAG" \
             --notes "Downloaded by the boot image built in this run. Contains no Samsung or Qualcomm device firmware beyond the open linux-firmware files."
+
+      - name: Publish the module repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view modules >/dev/null 2>&1 || \
+            gh release create modules --prerelease --title "Kernel module packages" \
+              --notes "pacman repo for optional kernel modules. See README."
+          gh release upload modules module-repo/* --clobber
 
       - uses: actions/upload-artifact@v4
         with:

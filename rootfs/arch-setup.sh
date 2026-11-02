@@ -22,6 +22,14 @@ phosh) PKGS="phosh phoc squeekboard gdm gnome-control-center gnome-console nauti
 *) echo "unknown desktop $DESKTOP"; exit 1 ;;
 esac
 pacman -Syu --noconfirm --needed --overwrite '/etc/dconf/*' $BASE $PKGS
+
+# Optional kernel modules, see modules-repo/ in the project
+grep -q '^\[gts7xl\]' /etc/pacman.conf || cat >> /etc/pacman.conf <<'CONF'
+
+[gts7xl]
+SigLevel = Optional TrustAll
+Server = https://github.com/JeyKul/gts7xl-mainline/releases/download/modules
+CONF
 userdel -r alarm 2>/dev/null || true
 useradd -m -G wheel,video,input,audio,tty,network -s /bin/bash "$NEW_USER"
 printf '%s:%s\n' "$NEW_USER" "$NEW_PASS" | chpasswd
