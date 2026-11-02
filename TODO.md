@@ -83,7 +83,9 @@ See the status tables in `README.md`.
 - [ ] Main mic (DMIC1) reads zero: pins, clock and L5C on, cause unknown
 - [ ] L5C mic rail is always on; tie it to capture
 - [ ] Check UFS `ufshcd_query_attr` errors and `DSI PLL lock failed` warning seen at boot during mic work
-- [ ] Cameras: rear `s5k3m5` streams at about 30 fps and the driver binds, no frames reach memory yet; `csid0` sees start and end of transmission on all 4 lanes but decodes no packets and reports no packet errors (`CSI2_RX_IRQ_STATUS` 0x1000ff). Settle sweep 6 to 90 did not help; 10 gives lane FIFO overflows. RDI output config is right. Test pattern gave nothing, setup unverified. Stock mode decoded from `com.samsung.sensormodule.0_lsi_s5k3m5.bin` (offset table, data base 0x143d8): 19.2 MHz in, 0x0306=0x12e, 0x030e=2, 0x0310=0x48, 691.2 MHz link, lanes 0x3210, 4128x3096. With those, only settle 13 gets packets to RDI (`rx` 0x117c0ff, `rdi` 0x149110) with FIFO overflow flags on lanes; still no frames, VFE sees no per-frame interrupts. Settle formula gives about 20. Driver and device tree changes not committed
+- [x] Rear camera: raw frames through CAMSS, 4128x3096; `libcamera` lists it
+- [ ] Rear camera: colour and exposure through libcamera, autofocus actuator, flash in apps
+- [ ] Front and ultrawide cameras: no mainline sensor driver
 
 ## Not started
 

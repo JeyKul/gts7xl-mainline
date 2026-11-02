@@ -1,0 +1,378 @@
+From 2bef8bd63a5c6b8a10df260b64f7f7dd07135967 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 2 Nov 2026 20:24:11 +0100
+Subject: [PATCH] gts7xlwifi: add the rear camera
+
+s5k3m5 on CCI0 with its data lanes wired in reverse. Use the stock sensor mode:
+19.2MHz in, 691.2MHz link, 4128x3096, no phase detect output. Raise the camera
+NoC clock from the 19.2MHz the bootloader leaves, or the VFE reports CCIF
+violations and writes nothing.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 102 ++++++++++
+ drivers/media/i2c/s5k3m5.c                    | 179 +++++-------------
+ 2 files changed, 146 insertions(+), 135 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index b1b43c0fe..eeb94a28a 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -2,6 +2,7 @@
+ 
+ /dts-v1/;
+ 
++#include <dt-bindings/media/video-interfaces.h>
+ #include <dt-bindings/clock/qcom,dispcc-sm8250.h>
+ #include <dt-bindings/gpio/gpio.h>
+ #include <dt-bindings/sound/qcom,q6afe.h>
+@@ -97,6 +98,24 @@ vdd_spen: spen-3v3-regulator {
+ 		enable-active-high;
+ 	};
+ 
++	cam_rear_vana: cam-rear-vana-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "cam_rear_vana";
++		regulator-min-microvolt = <2800000>;
++		regulator-max-microvolt = <2800000>;
++		gpio = <&tlmm 39 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++	};
++
++	cam_vio: cam-vio-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "cam_vio";
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++		gpio = <&tlmm 37 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++	};
++
+ 	vibrator {
+ 		compatible = "regulator-haptic";
+ 		haptic-supply = <&vreg_l7c_2p856>;
+@@ -331,6 +350,66 @@ data-pins {
+ 	};
+ };
+ 
++&camss {
++	/* The driver leaves these at the 19.2MHz the bootloader sets here */
++	assigned-clocks = <&camcc CAM_CC_CAMNOC_AXI_CLK_SRC>,
++			  <&camcc CAM_CC_SLOW_AHB_CLK_SRC>;
++	assigned-clock-rates = <400000000>, <80000000>;
++
++	vdda-phy-supply = <&vreg_l5a_0p88>;
++	vdda-pll-supply = <&vreg_l9a_1p2>;
++	status = "okay";
++
++	ports {
++		port@0 {
++			csiphy0_ep: endpoint {
++				clock-lanes = <7>;
++				/* Wired in reverse on this board */
++				data-lanes = <3 2 1 0>;
++				bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
++				remote-endpoint = <&cam_rear_ep>;
++			};
++		};
++	};
++};
++
++&cci0 {
++	status = "okay";
++};
++
++&cci0_i2c0 {
++	/* Rear 13MP. Stock only switches VANA and VIO, the digital rail hangs off VANA */
++	camera@2d {
++		compatible = "samsung,s5k3m5";
++		reg = <0x2d>;
++
++		clocks = <&camcc CAM_CC_MCLK0_CLK>;
++		assigned-clocks = <&camcc CAM_CC_MCLK0_CLK>;
++		assigned-clock-rates = <19200000>;
++
++		reset-gpios = <&tlmm 73 GPIO_ACTIVE_LOW>;
++
++		afvdd-supply = <&cam_rear_vana>;
++		vdda-supply = <&cam_rear_vana>;
++		vddd-supply = <&cam_rear_vana>;
++		vddio-supply = <&cam_vio>;
++
++		pinctrl-0 = <&cam_rear_default>;
++		pinctrl-names = "default";
++
++		orientation = <1>;
++		rotation = <90>;
++
++		port {
++			cam_rear_ep: endpoint {
++				data-lanes = <1 2 3 4>;
++				link-frequencies = /bits/ 64 <691200000>;
++				remote-endpoint = <&csiphy0_ep>;
++			};
++		};
++	};
++};
++
+ &q6asmdai {
+ 	dai@0 {
+ 		reg = <0>;
+@@ -921,6 +1000,29 @@ dout-pins {
+ 		};
+ 	};
+ 
++	cam_rear_default: cam-rear-default-state {
++		mclk-pins {
++			pins = "gpio94";
++			function = "cam_mclk";
++			drive-strength = <2>;
++			bias-disable;
++		};
++
++		rst-pins {
++			pins = "gpio73";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-disable;
++		};
++
++		pwr-pins {
++			pins = "gpio37", "gpio39";
++			function = "gpio";
++			drive-strength = <2>;
++			bias-disable;
++		};
++	};
++
+ 	hall_default: hall-default-state {
+ 		pins = "gpio157";
+ 		function = "gpio";
+diff --git a/drivers/media/i2c/s5k3m5.c b/drivers/media/i2c/s5k3m5.c
+index c591b580d..36ee4df47 100644
+--- a/drivers/media/i2c/s5k3m5.c
++++ b/drivers/media/i2c/s5k3m5.c
+@@ -14,8 +14,8 @@
+ #include <media/v4l2-device.h>
+ #include <media/v4l2-fwnode.h>
+ 
+-#define S5K3M5_LINK_FREQ_602P5MHZ	(602500ULL * HZ_PER_KHZ)
+-#define S5K3M5_MCLK_FREQ_24MHZ		(24 * HZ_PER_MHZ)
++#define S5K3M5_LINK_FREQ_691P2MHZ	(691200ULL * HZ_PER_KHZ)
++#define S5K3M5_MCLK_FREQ_19P2MHZ		(19200 * HZ_PER_KHZ)
+ #define S5K3M5_DATA_LANES		4
+ 
+ /* Register map is similar to MIPI CCS compliant camera sensors */
+@@ -56,7 +56,7 @@
+ #define to_s5k3m5(_sd)			container_of(_sd, struct s5k3m5, sd)
+ 
+ static const s64 s5k3m5_link_freq_menu[] = {
+-	S5K3M5_LINK_FREQ_602P5MHZ,
++	S5K3M5_LINK_FREQ_691P2MHZ,
+ };
+ 
+ /* List of supported formats to cover horizontal and vertical flip controls */
+@@ -566,151 +566,60 @@ static const struct cci_reg_sequence init_array_setting[] = {
+ 	{ CCI_REG16(0x0b36), 0x0001 },
+ };
+ 
+-static const struct cci_reg_sequence s5k3m5_4208x3120_30fps_mode[] = {
+-	{ CCI_REG16(0x6214), 0x7971 },
+-	{ CCI_REG16(0x6218), 0x7150 },
+-	{ S5K3M5_REG_X_ADDR_START,  0x0000 },
+-	{ S5K3M5_REG_Y_ADDR_START,  0x0008 },
+-	{ S5K3M5_REG_X_ADDR_END,    0x1077 },
+-	{ S5K3M5_REG_Y_ADDR_END,    0x0c37 },
+-	{ S5K3M5_REG_X_OUTPUT_SIZE, 0x1070 },
+-	{ S5K3M5_REG_Y_OUTPUT_SIZE, 0x0c30 },
+-	{ S5K3M5_REG_VTS, 0x0cf2 },
+-	{ S5K3M5_REG_HTS, 0x12f0 },
+-
+-	{ CCI_REG16(0x0900), 0x0011 },
+-	{ CCI_REG16(0x0380), 0x0001 },
+-	{ CCI_REG16(0x0382), 0x0001 },
+-	{ CCI_REG16(0x0384), 0x0001 },
+-	{ CCI_REG16(0x0386), 0x0001 },
+-	{ CCI_REG16(0x0402), 0x1010 },
+-	{ CCI_REG16(0x0404), 0x1000 },
+-	{ CCI_REG16(0x0350), 0x0008 },
+-	{ CCI_REG16(0x0352), 0x0000 },
+-
+-	/* Clock settings */
+-	{ CCI_REG16(0x0136), 0x1800 },
+-	{ CCI_REG16(0x013e), 0x0000 },
+-	{ CCI_REG16(0x0300), 0x0008 },
+-	{ CCI_REG16(0x0302), 0x0001 },
++static const struct cci_reg_sequence s5k3m5_4128x3096_30fps_mode[] = {
++	{ CCI_REG16(0x6000), 0x0005 },
++	{ CCI_REG16(0xfcfc), 0x2000 },
++	{ CCI_REG16(0x0e4c), 0x0101 },
++	{ CCI_REG16(0x0e4a), 0x00a6 },
++	{ CCI_REG16(0xfcfc), 0x4000 },
++	{ CCI_REG16(0x6000), 0x0085 },
++	{ CCI_REG16(0x0114), 0x0301 },
++	{ CCI_REG16(0x0136), 0x1333 },
++	{ CCI_REG16(0x0202), 0x0100 },
++	{ CCI_REG16(0x0204), 0x0020 },
++	{ CCI_REG16(0x020e), 0x0100 },
++	{ CCI_REG16(0x021e), 0x0000 },
++	{ CCI_REG16(0x0226), 0x0100 },
++	{ CCI_REG16(0x0230), 0x0100 },
+ 	{ CCI_REG16(0x0304), 0x0006 },
+-	{ CCI_REG16(0x0306), 0x00f1 },
+-	{ CCI_REG16(0x0308), 0x0008 },
+-	{ CCI_REG16(0x030a), 0x0001 },
++	{ CCI_REG16(0x0306), 0x012e },
+ 	{ CCI_REG16(0x030c), 0x0000 },
+-	{ CCI_REG16(0x030e), 0x0003 },
+-	{ CCI_REG16(0x0310), 0x005a },
++	{ CCI_REG16(0x030e), 0x0002 },
++	{ CCI_REG16(0x0310), 0x0048 },
+ 	{ CCI_REG16(0x0312), 0x0000 },
+-
+-	{ CCI_REG16(0x0b06), 0x0101 },
+-	{ CCI_REG16(0x6028), 0x2000 },
+-	{ CCI_REG16(0x602a), 0x1ff6 },
+-	{ CCI_REG16(0x6f12), 0x0000 },
+-	{ CCI_REG16(0x021e), 0x0000 },
+-	{ CCI_REG16(0x0202), 0x0100 },
+-	{ CCI_REG16(0x0204), 0x0020 },
+-	{ CCI_REG16(0x0d00), 0x0100 },
+-	{ CCI_REG16(0x0d02), 0x0001 },
+-	{ CCI_REG16(0x0114), 0x0301 },
+-	{ CCI_REG16(0x0d06), 0x0208 },
+-	{ CCI_REG16(0x0d08), 0x0300 },
+-	{ CCI_REG16(0x6028), 0x2000 },
+-	{ CCI_REG16(0x602a), 0x0f10 },
+-	{ CCI_REG16(0x6f12), 0x0003 },
+-	{ CCI_REG16(0x602a), 0x0f12 },
+-	{ CCI_REG16(0x6f12), 0x0200 },
+-	{ CCI_REG16(0x602a), 0x2bc0 },
+-	{ CCI_REG16(0x6f12), 0x0001 },
+-	{ CCI_REG16(0x0b30), 0x0000 },
+-	{ CCI_REG16(0x0b32), 0x0000 },
+-	{ CCI_REG16(0x0b34), 0x0001 },
+-	{ CCI_REG16(0x0804), 0x0200 },
+-	{ CCI_REG16(0x0810), 0x0020 },
+-};
+-
+-static const struct cci_reg_sequence s5k3m5_2104x1184_60fps_mode[] = {
+-	{ CCI_REG16(0x6214), 0x7971 },
+-	{ CCI_REG16(0x6218), 0x7150 },
+-	{ S5K3M5_REG_X_ADDR_START,  0x0000 },
+-	{ S5K3M5_REG_Y_ADDR_START,  0x0180 },
+-	{ S5K3M5_REG_X_ADDR_END,    0x1077 },
+-	{ S5K3M5_REG_Y_ADDR_END,    0x0abf },
+-	{ S5K3M5_REG_X_OUTPUT_SIZE, 0x0838 },
+-	{ S5K3M5_REG_Y_OUTPUT_SIZE, 0x04a0 },
+-	{ S5K3M5_REG_VTS, 0x0658 },
+-	{ S5K3M5_REG_HTS, 0x1340 },
+-
+-	{ CCI_REG16(0x0900), 0x0112 },
++	{ CCI_REG16(0x0340), 0x0cfa },
++	{ CCI_REG16(0x0342), 0x12f0 },
++	{ CCI_REG16(0x0344), 0x0030 },
++	{ CCI_REG16(0x0346), 0x0014 },
++	{ CCI_REG16(0x0348), 0x104f },
++	{ CCI_REG16(0x034a), 0x0c2b },
++	{ CCI_REG16(0x034c), 0x1020 },
++	{ CCI_REG16(0x034e), 0x0c18 },
++	{ CCI_REG16(0x0350), 0x0000 },
++	{ CCI_REG16(0x0352), 0x0000 },
+ 	{ CCI_REG16(0x0380), 0x0001 },
+ 	{ CCI_REG16(0x0382), 0x0001 },
+ 	{ CCI_REG16(0x0384), 0x0001 },
+-	{ CCI_REG16(0x0386), 0x0003 },
++	{ CCI_REG16(0x0386), 0x0001 },
+ 	{ CCI_REG16(0x0402), 0x1010 },
+-	{ CCI_REG16(0x0404), 0x2000 },
+-	{ CCI_REG16(0x0350), 0x0004 },
+-	{ CCI_REG16(0x0352), 0x0000 },
+-
+-	/* Clock settings */
+-	{ CCI_REG16(0x0136), 0x1800 },
+-	{ CCI_REG16(0x013e), 0x0000 },
+-	{ CCI_REG16(0x0300), 0x0008 },
+-	{ CCI_REG16(0x0302), 0x0001 },
+-	{ CCI_REG16(0x0304), 0x0006 },
+-	{ CCI_REG16(0x0306), 0x00f1 },
+-	{ CCI_REG16(0x0308), 0x0008 },
+-	{ CCI_REG16(0x030a), 0x0001 },
+-	{ CCI_REG16(0x030c), 0x0000 },
+-	{ CCI_REG16(0x030e), 0x0003 },
+-	{ CCI_REG16(0x0310), 0x0063 },
+-	{ CCI_REG16(0x0312), 0x0001 },
+-
+-	{ CCI_REG16(0x0b06), 0x0101 },
+-	{ CCI_REG16(0x6028), 0x2000 },
+-	{ CCI_REG16(0x602a), 0x1ff6 },
+-	{ CCI_REG16(0x6f12), 0x0000 },
+-	{ CCI_REG16(0x021e), 0x0000 },
+-	{ CCI_REG16(0x0202), 0x0100 },
+-	{ CCI_REG16(0x0204), 0x0020 },
+-	{ CCI_REG16(0x0d00), 0x0101 },
+-	{ CCI_REG16(0x0d02), 0x0101 },
+-	{ CCI_REG16(0x0114), 0x0301 },
+-	{ CCI_REG16(0x0d06), 0x0208 },
+-	{ CCI_REG16(0x0d08), 0x0300 },
+-	{ CCI_REG16(0x6028), 0x2000 },
+-	{ CCI_REG16(0x602a), 0x0f10 },
+-	{ CCI_REG16(0x6f12), 0x0003 },
+-	{ CCI_REG16(0x602a), 0x0f12 },
+-	{ CCI_REG16(0x6f12), 0x0200 },
+-	{ CCI_REG16(0x602a), 0x2bc0 },
+-	{ CCI_REG16(0x6f12), 0x0001 },
+-	{ CCI_REG16(0x0b30), 0x0000 },
+-	{ CCI_REG16(0x0b32), 0x0000 },
+-	{ CCI_REG16(0x0b34), 0x0001 },
+-	{ CCI_REG16(0x0804), 0x0200 },
+-	{ CCI_REG16(0x0810), 0x0020 },
++	{ CCI_REG16(0x0404), 0x1000 },
++	{ CCI_REG16(0x0900), 0x0011 },
++	{ CCI_REG16(0x0d00), 0x0000 },
++	{ CCI_REG16(0x0d02), 0x0000 },
++	{ CCI_REG16(0x0d06), 0x0000 },
++	{ CCI_REG16(0x0d08), 0x0000 },
+ };
+ 
+ static const struct s5k3m5_mode s5k3m5_supported_modes[] = {
+ 	{
+-		.width = 4208,
+-		.height = 3120,
++		.width = 4128,
++		.height = 3096,
+ 		.hts = 4848,
+-		.vts = 3314,
+-		.exposure = 256,
+-		.reg_list = {
+-			.regs = s5k3m5_4208x3120_30fps_mode,
+-			.num_regs = ARRAY_SIZE(s5k3m5_4208x3120_30fps_mode),
+-		},
+-	},
+-	{
+-		.width = 2104,
+-		.height = 1184,
+-		.hts = 4928,
+-		.vts = 1624,
++		.vts = 3322,
+ 		.exposure = 256,
+ 		.reg_list = {
+-			.regs = s5k3m5_2104x1184_60fps_mode,
+-			.num_regs = ARRAY_SIZE(s5k3m5_2104x1184_60fps_mode),
++			.regs = s5k3m5_4128x3096_30fps_mode,
++			.num_regs = ARRAY_SIZE(s5k3m5_4128x3096_30fps_mode),
+ 		},
+ 	},
+ };
+@@ -1236,7 +1145,7 @@ static int s5k3m5_probe(struct i2c_client *client)
+ 				     "failed to get MCLK clock\n");
+ 
+ 	freq = clk_get_rate(s5k3m5->mclk);
+-	if (freq != S5K3M5_MCLK_FREQ_24MHZ)
++	if (freq != S5K3M5_MCLK_FREQ_19P2MHZ)
+ 		return dev_err_probe(s5k3m5->dev, -EINVAL,
+ 				     "MCLK clock frequency %lu is not supported\n",
+ 				     freq);
+-- 
+2.56.0
+
