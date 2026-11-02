@@ -90,6 +90,8 @@ See the status tables in `README.md`.
 - [ ] Focus motor powers down when its device closes, so a manual position only holds while something keeps it open
 - [x] Front (`s5k4ha`) and ultrawide (`s5k5e9`) cameras through `s5k-tab`, raw frames and chip IDs confirmed
 - [ ] Front and ultrawide: check colour order and gain scale, tuning, more modes
+- [x] `gts7xl-webcam`: front camera as `/dev/video42` for apps such as Telegram, runs only while read
+- [ ] Webcam: choose which camera it uses; other apps through PipeWire
 
 ## Not started
 

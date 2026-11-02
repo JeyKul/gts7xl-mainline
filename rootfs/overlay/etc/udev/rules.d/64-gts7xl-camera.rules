@@ -1,1 +1,2 @@
 SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"
+SUBSYSTEM=="video4linux", KERNEL=="video42", GROUP="video", MODE="0660"

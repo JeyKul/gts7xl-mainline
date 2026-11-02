@@ -1,0 +1,10 @@
+[Unit]
+Description=Front camera as a V4L2 webcam
+
+[Service]
+ExecStart=/usr/local/sbin/gts7xl-webcam
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -12,9 +12,9 @@ from gi.repository import GLib, Gst, Gtk
 PREVIEW = (1024, 768)
 # Name, libcamera id, photo size, has a focus motor
 CAMERAS = [
-    ("Rear", "/base/soc@0/cci@ac4f000/i2c-bus@0/camera@2d", (4128, 3096), True),
-    ("Ultrawide", "/base/soc@0/cci@ac50000/i2c-bus@0/camera@10", (2576, 1932), False),
-    ("Front", "/base/soc@0/cci@ac4f000/i2c-bus@1/camera@2d", (3264, 2448), False),
+    ("Rear", "/base/soc@0/cci@ac4f000/i2c-bus@0/camera@2d", (4120, 3096), True),
+    ("Ultrawide", "/base/soc@0/cci@ac50000/i2c-bus@0/camera@10", (2568, 1932), False),
+    ("Front", "/base/soc@0/cci@ac4f000/i2c-bus@1/camera@2d", (3256, 2448), False),
 ]
 FOCUS_MAX = 1023
 VIDIOC_S_CTRL = 0xc008561c
