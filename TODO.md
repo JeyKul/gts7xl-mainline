@@ -83,7 +83,7 @@ See the status tables in `README.md`.
 - [ ] Main mic (DMIC1) reads zero: pins, clock and L5C on, cause unknown
 - [ ] L5C mic rail is always on; tie it to capture
 - [ ] Check UFS `ufshcd_query_attr` errors and `DSI PLL lock failed` warning seen at boot during mic work
-- [ ] Cameras: rear `s5k3m5` streams at about 30 fps and the driver binds, no frames reach memory yet; `csid0` sees no data, test pattern gave nothing either. Work in progress, not committed
+- [ ] Cameras: rear `s5k3m5` streams at about 30 fps and the driver binds, no frames reach memory yet; `csid0` sees start and end of transmission on all 4 lanes but decodes no packets and reports no packet errors (`CSI2_RX_IRQ_STATUS` 0x1000ff). Settle sweep 6 to 90 did not help; 10 gives lane FIFO overflows. RDI output config is right. Test pattern gave nothing, setup unverified. Next: try 19.2 MHz as on stock, check whether stock uses this link rate or a different mode. Device tree not committed
 
 ## Not started
 
