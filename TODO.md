@@ -84,7 +84,9 @@ See the status tables in `README.md`.
 - [ ] L5C mic rail is always on; tie it to capture
 - [ ] Check UFS `ufshcd_query_attr` errors and `DSI PLL lock failed` warning seen at boot during mic work
 - [x] Rear camera: raw frames through CAMSS, 4128x3096; `libcamera` lists it
-- [ ] Rear camera: libcamera works at 30 fps on the CPU debayer. Needs a sensor helper for gain (`s5k3m5` unknown to libcamera, gain stuck at 1), GPU debayer fails, autofocus actuator, flash in apps
+- [x] Rear camera focus motor: dw9808 through `dw9807-vcm`, position set by hand gives a sharp image
+- [ ] Rear camera: autofocus in libcamera (no focus algorithm in its soft ISP), colour tuning, GPU debayer fails, a camera app
+- [ ] Focus motor powers down when its device closes, so a manual position only holds while something keeps it open
 - [ ] Front and ultrawide cameras: no mainline sensor driver
 
 ## Not started
