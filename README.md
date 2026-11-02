@@ -107,6 +107,14 @@ The zip contains GNOME. Log in as `user`, password `user`, and change the passwo
 
 Android: restore `boot`, `dtbo` and `cache` from your backup, then format `userdata`.
 
+## Optional kernel modules
+
+Extra drivers live in a small pacman repo instead of the system, for example:
+
+    sudo pacman -Sy hid-apple hid-magicmouse
+
+To add one, set its option to `=m` in `config/gts7xl_defconfig` and add a line to `modules-repo/packages.txt`. The next build publishes it. Packages match the kernel of the same build, so update the kernel and packages together.
+
 ## Firmware and legal notice
 
 The installer downloads GPU, audio DSP and amplifier firmware from the `Installer` release of this repository, and first boot falls back to the tablet's own `apnhlos` and `vendor` partitions. Those firmware files belong to Samsung and Qualcomm, are not covered by this project's license, and are not relicensed by being hosted here. Speaker calibration and the Bluetooth address are specific to each tablet and always come from that tablet.
@@ -124,6 +132,7 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 - `docs/display.md`: what the native display needs
 - `initramfs/init`: first code to run, picks the system or the installer
 - `kmod/`: panel register tool used for display research
+- `modules-repo/`: list of optional module packages
 - `tools/`: serial shell helper, USB deploy, test programs
 - `uefi/`: earlier Mu-Silicium attempt, not used; copy over a Mu-Silicium checkout. It needs blobs and a dump of your own device tree, which aren't published because they contain device identifiers
 

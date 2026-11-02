@@ -1,0 +1,5 @@
+# Optional kernel modules, one pacman package each. Install with: pacman -S <name>
+# To add one: set its option to =m in config/gts7xl_defconfig, then add a line here.
+# name | description | module files under kernel/, separated by spaces
+hid-apple | Apple keyboards and function key handling | drivers/hid/hid-apple.ko
+hid-magicmouse | Apple Magic Mouse and Magic Trackpad | drivers/hid/hid-magicmouse.ko
