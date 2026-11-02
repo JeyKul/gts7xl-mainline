@@ -74,6 +74,7 @@ See the status tables in `README.md`.
 
 - [ ] Minimal repo: strip what is no longer used, when the user decides it is time
 - [ ] S Pen: test the built-in pen, reporting its charge toggle discovery; handle the Pro's `13` and `ff....` events
+- [ ] S Pen rotation actions, as Samsung uses for camera zoom: check which pens report it, add to `gts7xl-spen` and Pen Actions
 
 ## Next hardware
 
