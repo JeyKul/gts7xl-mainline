@@ -20,7 +20,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Thermal sensors and throttling | 🟡 | SoC, battery and charger sensors read; third thermistor reads high; throttling not checked |
 | Real-time clock | 🟡 | Driver loaded, runs from 1970; time still set over Wi-Fi |
 | Hardware buttons: power, volume | ✅ | Emergency reboot combo works |
-| Vibration motor | ⬜ | |
+| Vibration motor | ✅ | `regulator-haptic`, buzz confirmed |
 
 ### Display and input
 
@@ -76,11 +76,11 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| Accelerometer, auto-rotate | ⬜ | |
-| Gyroscope | ⬜ | |
-| Magnetometer | ⬜ | |
-| Ambient light | ⬜ | |
-| Hall sensor (cover) | ⬜ | |
+| Accelerometer, auto-rotate | ❌ | On the sensor DSP bus, no direct CPU route known |
+| Gyroscope | ❌ | On the sensor DSP bus |
+| Magnetometer | ❌ | On the sensor DSP bus |
+| Ambient light | ❌ | On the sensor DSP bus |
+| Hall sensor (cover) | 🟡 | `gpio157` as a lid switch, polarity from stock, does not react to the keyboard cover; lid suspend is off |
 
 ### Cameras
 

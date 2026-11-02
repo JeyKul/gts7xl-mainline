@@ -81,7 +81,8 @@ See the status tables in `README.md`.
 
 ## Not started
 
-- [ ] Sensors (SLPI DSP, rotation)
+- [ ] Sensors: motion, compass and light chips sit on the SLPI bus (`qcom-ssc-block-bus` only covers SDM630 here). Goal is native, minimal Android parts; no direct route known
+- [ ] Detect the keyboard cover closing: `gpio157`, `gpio110` and the MCU hall message do not change
 - [ ] USB host mode
 - [ ] Suspend: wakes, but the screen stays black until reboot on the firmware framebuffer; targets masked on Arch
 - [ ] Retest GPU zap without the dynamic buffer hack, now that the memory map is right
