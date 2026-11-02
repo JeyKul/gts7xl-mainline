@@ -87,8 +87,8 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Hardware | State | Notes |
 |---|---|---|
 | Rear: 13 MP wide | 🟡 | 4128x3096 at 30 fps through libcamera, focus motor works by hand; no autofocus or tuned colour |
-| Rear: 5 MP ultrawide | ⬜ | |
-| Front: 8 MP | ⬜ | |
+| Rear: 5 MP ultrawide | 🟡 | 2576x1932 through `s5k-tab`, colour not tuned |
+| Front: 8 MP | 🟡 | 3264x2448 through `s5k-tab`, colour not tuned |
 | Flash LED | ✅ | `Flashlight` app, up to 100mA |
 
 ## Installing
