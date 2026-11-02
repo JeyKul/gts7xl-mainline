@@ -1,0 +1,68 @@
+#!/usr/bin/python3
+# Offer the front camera as a plain V4L2 webcam, for apps that don't know libcamera.
+# The camera only runs while another program has the device open.
+import glob, os, subprocess, time
+
+DEVICE = "/dev/video42"
+CAMERA = "/base/soc@0/cci@ac4f000/i2c-bus@1/camera@2d"
+WIDTH, HEIGHT = 1280, 720
+IGNORE = {"pipewire", "wireplumber", "gst-launch-1.0", "gts7xl-webcam", "v4l_id", "udevadm"}
+
+
+def readers():
+    found = []
+    for fd in glob.glob("/proc/[0-9]*/fd/*"):
+        try:
+            if os.readlink(fd) != DEVICE:
+                continue
+            pid = fd.split("/")[2]
+            comm = open(f"/proc/{pid}/comm").read().strip()
+        except OSError:
+            continue
+        if comm not in IGNORE and pid not in found:
+            found.append(pid)
+    return found
+
+
+def feed():
+    env = dict(os.environ, LIBCAMERA_SOFTISP_MODE="cpu", HOME="/root")
+    return subprocess.Popen(
+        ["gst-launch-1.0", "-q", "libcamerasrc", f"camera-name={CAMERA}", "!",
+         "video/x-raw,width=1280,height=960", "!", "videoconvert", "!", "videocrop",
+         "top=120", "bottom=120", "!", "videorate", "!", "videoconvert", "!",
+         f"video/x-raw,format=I420,width={WIDTH},height={HEIGHT},framerate=30/1", "!",
+         "v4l2sink", f"device={DEVICE}", "sync=false"], env=env,
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+while not os.path.exists(DEVICE):
+    time.sleep(1)
+
+# A reader can only start once a writer has run, so run one briefly and keep its format
+CAPS = f"video/x-raw,format=I420,width={WIDTH},height={HEIGHT},framerate=30/1"
+first = subprocess.Popen(["gst-launch-1.0", "-q", "videotestsrc", "pattern=black", "!", CAPS, "!",
+                          "v4l2sink", f"device={DEVICE}", "sync=false"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+time.sleep(2)
+subprocess.run(["v4l2-ctl", "-d", DEVICE, "--set-ctrl=keep_format=1,sustain_framerate=1"],
+               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+first.terminate()
+first.wait()
+
+
+proc = None
+idle = 0
+while True:
+    time.sleep(1)
+    wanted = readers()
+    if proc and proc.poll() is not None:
+        proc = None
+    if wanted and not proc:
+        print("starting for", wanted, flush=True)
+        proc = feed()
+    idle = 0 if wanted else idle + 1
+    if proc and idle >= 3:
+        print("stopping", flush=True)
+        proc.terminate()
+        proc.wait()
+        proc = None
