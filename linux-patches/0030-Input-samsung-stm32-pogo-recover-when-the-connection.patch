@@ -1,0 +1,296 @@
+From 77fd7146815317c20590a2c04854b050b5c5a5bc Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 2 Nov 2026 18:58:15 +0100
+Subject: [PATCH] Input: samsung-stm32-pogo: recover when the connection line
+ drops
+
+Trackpad use drops the detect line about once a second, also on the stock kernel
+in TWRP. As stock, cut the power on a low level and restore it once the line is
+stable. Leave the MCU reset and SWCLK lines undriven, and don't log frames.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/input/keyboard/samsung-stm32-pogo.c | 123 ++++++++++++++------
+ 1 file changed, 89 insertions(+), 34 deletions(-)
+
+diff --git a/drivers/input/keyboard/samsung-stm32-pogo.c b/drivers/input/keyboard/samsung-stm32-pogo.c
+index 356a7049f..323d0fe23 100644
+--- a/drivers/input/keyboard/samsung-stm32-pogo.c
++++ b/drivers/input/keyboard/samsung-stm32-pogo.c
+@@ -34,8 +34,11 @@
+ #define POGO_CMD_TC_VERSION	0x18
+ #define POGO_CMD_TC_CRC		0x19
+ #define POGO_CMD_TC_RESOLUTION	0x1a
++#define POGO_CMD_ABORT		0x17
++
++#define POGO_MODE_APP		1
++#define POGO_MODE_EXCEPTION	3
+ 
+-#define POGO_FRAME_LOG		60
+ #define POGO_TP_FINGERS		3
+ #define POGO_TP_EVENT_SIZE	22
+ #define POGO_TP_MAX_X		2560
+@@ -55,6 +58,10 @@ struct pogo_kbd {
+ 	struct regulator *vdd;
+ 	struct gpio_desc *conn;
+ 	struct delayed_work conn_work;
++	struct delayed_work check_ic_work;
++	struct mutex i2c_lock;
++	struct mutex power_lock;
++	bool powered;
+ 	unsigned int rows;
+ 	unsigned int cols;
+ 	bool connected;
+@@ -140,10 +147,15 @@ static void pogo_report_keys(struct pogo_kbd *kbd, const u8 *data, unsigned int
+ 	}
+ }
+ 
+-static int pogo_xfer(struct i2c_client *client, const u8 *tx, int txlen, u8 *rx, int rxlen)
++static int pogo_xfer(struct pogo_kbd *kbd, const u8 *tx, int txlen, u8 *rx, int rxlen)
+ {
++	struct i2c_client *client = kbd->client;
+ 	int retry, ret = 0;
+ 
++	/* As stock: no bus traffic while the power is cut */
++	if (!READ_ONCE(kbd->powered))
++		return -ENODEV;
++
+ 	for (retry = 0; retry < POGO_I2C_RETRIES; retry++) {
+ 		ret = tx ? i2c_master_send(client, tx, txlen) : i2c_master_recv(client, rx, rxlen);
+ 		if (ret == (tx ? txlen : rxlen))
+@@ -154,31 +166,51 @@ static int pogo_xfer(struct i2c_client *client, const u8 *tx, int txlen, u8 *rx,
+ 	return ret < 0 ? ret : -EIO;
+ }
+ 
+-static int pogo_reg_read(struct i2c_client *client, u8 id, u8 reg, u8 *val, unsigned int len)
++static int pogo_reg_read(struct pogo_kbd *kbd, u8 id, u8 reg, u8 *val, unsigned int len)
+ {
+ 	u8 req[POGO_HDR_SIZE] = { POGO_HDR_SIZE + 1, 0, id };
+ 	u8 hdr[POGO_HDR_SIZE];
+ 	unsigned int size;
+ 	int ret;
+ 
+-	ret = pogo_xfer(client, req, sizeof(req), NULL, 0);
++	mutex_lock(&kbd->i2c_lock);
++	ret = pogo_xfer(kbd, req, sizeof(req), NULL, 0);
+ 	if (!ret)
+-		ret = pogo_xfer(client, &reg, 1, NULL, 0);
++		ret = pogo_xfer(kbd, &reg, 1, NULL, 0);
+ 	if (!ret)
+-		ret = pogo_xfer(client, NULL, 0, hdr, sizeof(hdr));
++		ret = pogo_xfer(kbd, NULL, 0, hdr, sizeof(hdr));
+ 	if (ret)
+-		return ret;
++		goto out;
+ 
+ 	size = get_unaligned_le16(hdr);
+-	if (size <= POGO_HDR_SIZE || size - POGO_HDR_SIZE > len)
+-		return -EIO;
++	if (size <= POGO_HDR_SIZE || size - POGO_HDR_SIZE > len) {
++		ret = -EIO;
++		goto out;
++	}
++
++	ret = pogo_xfer(kbd, NULL, 0, val, size - POGO_HDR_SIZE);
++out:
++	mutex_unlock(&kbd->i2c_lock);
++	return ret;
++}
++
++static int pogo_reg_write(struct pogo_kbd *kbd, u8 id, u8 reg)
++{
++	u8 req[POGO_HDR_SIZE] = { POGO_HDR_SIZE + 1, 0, id };
++	int ret;
+ 
+-	return pogo_xfer(client, NULL, 0, val, size - POGO_HDR_SIZE);
++	mutex_lock(&kbd->i2c_lock);
++	ret = pogo_xfer(kbd, req, sizeof(req), NULL, 0);
++	if (!ret)
++		ret = pogo_xfer(kbd, &reg, 1, NULL, 0);
++	mutex_unlock(&kbd->i2c_lock);
++	return ret;
+ }
+ 
+ /* The MCU expects these queries after it announces itself with an empty frame */
+-static void pogo_handshake(struct pogo_kbd *kbd)
++static void pogo_check_ic_work(struct work_struct *work)
+ {
++	struct pogo_kbd *kbd = container_of(work, struct pogo_kbd, check_ic_work.work);
+ 	static const struct {
+ 		u8 id;
+ 		u8 reg;
+@@ -199,13 +231,18 @@ static void pogo_handshake(struct pogo_kbd *kbd)
+ 
+ 	for (i = 0; i < ARRAY_SIZE(steps); i++) {
+ 		memset(val, 0, sizeof(val));
+-		ret = pogo_reg_read(kbd->client, steps[i].id, steps[i].reg, val, steps[i].len);
++		if (!READ_ONCE(kbd->powered))
++			return;
++		ret = pogo_reg_read(kbd, steps[i].id, steps[i].reg, val, steps[i].len);
+ 		if (ret)
+ 			dev_err(dev, "%s read failed: %d\n", steps[i].name, ret);
+ 		else
+ 			dev_info(dev, "%s: %*ph\n", steps[i].name, steps[i].len, val);
+-		if (steps[i].reg == POGO_CMD_GET_MODE)
++		if (steps[i].reg == POGO_CMD_GET_MODE) {
++			if (!ret && val[0] != POGO_MODE_APP && val[0] != POGO_MODE_EXCEPTION)
++				pogo_reg_write(kbd, POGO_ID_MCU, POGO_CMD_ABORT);
+ 			msleep(200);
++		}
+ 	}
+ }
+ 
+@@ -219,42 +256,34 @@ static irqreturn_t pogo_irq(int irq, void *dev_id)
+ 	unsigned int size;
+ 	int ret;
+ 
+-	ret = pogo_xfer(client, req, sizeof(req), NULL, 0);
++	mutex_lock(&kbd->i2c_lock);
++	ret = pogo_xfer(kbd, req, sizeof(req), NULL, 0);
+ 	if (ret) {
+ 		dev_err_ratelimited(&client->dev, "header write failed: %d\n", ret);
+ 		goto err;
+ 	}
+ 
+-	ret = pogo_xfer(client, NULL, 0, hdr, sizeof(hdr));
++	ret = pogo_xfer(kbd, NULL, 0, hdr, sizeof(hdr));
+ 	if (ret) {
+ 		dev_err_ratelimited(&client->dev, "header read failed: %d\n", ret);
+ 		goto err;
+ 	}
+ 
+ 	size = get_unaligned_le16(hdr);
+-	dev_dbg(&client->dev, "frame size=%u id=%u\n", size, hdr[2]);
+ 	/* The MCU sends an empty frame after it (re)starts */
+ 	if (size <= POGO_HDR_SIZE || size - POGO_HDR_SIZE > sizeof(data)) {
+-		pogo_handshake(kbd);
++		mutex_unlock(&kbd->i2c_lock);
++		pogo_check_ic_work(&kbd->check_ic_work.work);
+ 		return IRQ_HANDLED;
+ 	}
+ 	size -= POGO_HDR_SIZE;
+ 
+-	ret = pogo_xfer(client, NULL, 0, data, size);
++	ret = pogo_xfer(kbd, NULL, 0, data, size);
+ 	if (ret) {
+ 		dev_err_ratelimited(&client->dev, "payload read failed: %d (id=%u len=%u)\n", ret, hdr[2], size);
+ 		goto err;
+ 	}
+-
+-	{
+-		static int logged;
+-
+-		if (hdr[2] != POGO_ID_KEYPAD && logged < POGO_FRAME_LOG) {
+-			logged++;
+-			dev_info(&client->dev, "frame id=%u len=%u: %*ph\n", hdr[2], size,
+-				 min_t(int, size, 24), data);
+-		}
+-	}
++	mutex_unlock(&kbd->i2c_lock);
+ 
+ 	/* Noise from the connector settling */
+ 	if (size >= 3 && data[0] == 0x03 && data[1] == 0x00 && data[2] == 0x05)
+@@ -278,35 +307,47 @@ static irqreturn_t pogo_irq(int irq, void *dev_id)
+ 	return IRQ_HANDLED;
+ 
+ err:
++	mutex_unlock(&kbd->i2c_lock);
+ 	pogo_release_keys(kbd);
+ 	pogo_release_touchpad(kbd);
+ 	return IRQ_HANDLED;
+ }
+ 
+-static void pogo_set_connected(struct pogo_kbd *kbd, bool connected)
++static void pogo_set_power(struct pogo_kbd *kbd, bool on)
+ {
+ 	int ret;
+ 
+-	if (connected == kbd->connected)
++	if (on == kbd->powered)
+ 		return;
+ 
+-	if (connected) {
++	if (on) {
+ 		ret = regulator_enable(kbd->vdd);
+ 		if (ret) {
+ 			dev_err(&kbd->client->dev, "failed to enable vdd: %d\n", ret);
+ 			return;
+ 		}
+ 		msleep(50);
++		WRITE_ONCE(kbd->powered, true);
+ 		enable_irq(kbd->client->irq);
+ 	} else {
++		WRITE_ONCE(kbd->powered, false);
++		cancel_delayed_work(&kbd->check_ic_work);
+ 		disable_irq(kbd->client->irq);
+ 		pogo_release_keys(kbd);
+ 		pogo_release_touchpad(kbd);
+ 		regulator_disable(kbd->vdd);
+ 	}
++}
++
++static void pogo_set_connected(struct pogo_kbd *kbd, bool connected)
++{
++	mutex_lock(&kbd->power_lock);
++	pogo_set_power(kbd, connected);
++	mutex_unlock(&kbd->power_lock);
+ 
++	if (connected != kbd->connected)
++		dev_info(&kbd->client->dev, "keyboard %s\n", connected ? "attached" : "detached");
+ 	kbd->connected = connected;
+-	dev_info(&kbd->client->dev, "keyboard %s\n", connected ? "attached" : "detached");
+ }
+ 
+ static void pogo_conn_work(struct work_struct *work)
+@@ -320,6 +361,16 @@ static irqreturn_t pogo_conn_irq(int irq, void *dev_id)
+ {
+ 	struct pogo_kbd *kbd = dev_id;
+ 
++	/*
++	 * Trackpad use makes this line drop about once a second, on the stock kernel
++	 * too outside One UI. As stock: cut the power on a low level and restore it
++	 * once the line is stable, so the keyboard comes back.
++	 */
++	if (!gpiod_get_value_cansleep(kbd->conn)) {
++		mutex_lock(&kbd->power_lock);
++		pogo_set_power(kbd, false);
++		mutex_unlock(&kbd->power_lock);
++	}
+ 	mod_delayed_work(system_wq, &kbd->conn_work, msecs_to_jiffies(250));
+ 	return IRQ_HANDLED;
+ }
+@@ -329,6 +380,7 @@ static void pogo_shutdown_action(void *data)
+ 	struct pogo_kbd *kbd = data;
+ 
+ 	cancel_delayed_work_sync(&kbd->conn_work);
++	cancel_delayed_work_sync(&kbd->check_ic_work);
+ 	pogo_set_connected(kbd, false);
+ }
+ 
+@@ -346,6 +398,9 @@ static int pogo_probe(struct i2c_client *client)
+ 
+ 	kbd->client = client;
+ 	INIT_DELAYED_WORK(&kbd->conn_work, pogo_conn_work);
++	INIT_DELAYED_WORK(&kbd->check_ic_work, pogo_check_ic_work);
++	mutex_init(&kbd->i2c_lock);
++	mutex_init(&kbd->power_lock);
+ 
+ 	kbd->vdd = devm_regulator_get(dev, "vdd");
+ 	if (IS_ERR(kbd->vdd))
+@@ -355,11 +410,11 @@ static int pogo_probe(struct i2c_client *client)
+ 	if (IS_ERR(kbd->conn))
+ 		return dev_err_probe(dev, PTR_ERR(kbd->conn), "failed to get conn gpio\n");
+ 
+-	reset = devm_gpiod_get(dev, "reset", GPIOD_OUT_LOW);
++	reset = devm_gpiod_get(dev, "reset", GPIOD_IN);
+ 	if (IS_ERR(reset))
+ 		return dev_err_probe(dev, PTR_ERR(reset), "failed to get reset gpio\n");
+ 
+-	boot = devm_gpiod_get(dev, "boot", GPIOD_OUT_LOW);
++	boot = devm_gpiod_get(dev, "boot", GPIOD_IN);
+ 	if (IS_ERR(boot))
+ 		return dev_err_probe(dev, PTR_ERR(boot), "failed to get boot gpio\n");
+ 
+-- 
+2.56.0
+
