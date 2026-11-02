@@ -121,7 +121,7 @@ class Pen:
         self.bus.add_signal_receiver(self.props_changed, "PropertiesChanged", PROPS,
                                      path_keyword="path")
         GLib.timeout_add_seconds(5, self.tick)
-        GLib.idle_add(self.tick)
+        GLib.idle_add(lambda: self.tick() and False)
 
     def objects(self):
         manager = dbus.Interface(self.bus.get_object(BLUEZ, "/"), "org.freedesktop.DBus.ObjectManager")
