@@ -1,0 +1,204 @@
+#!/usr/bin/python3
+# Rear camera: libcamera preview, contrast autofocus through the focus motor, full size photos.
+import fcntl, glob, os, struct, sys, time
+
+os.environ.setdefault("LIBCAMERA_SOFTISP_MODE", "cpu")
+
+import gi
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gst", "1.0")
+from gi.repository import GLib, Gst, Gtk
+
+PREVIEW = (1032, 774)
+PHOTO = (4128, 3096)
+FOCUS_MAX = 1023
+VIDIOC_S_CTRL = 0xc008561c
+V4L2_CID_FOCUS_ABSOLUTE = 0x009a090a
+SETTLE_MS = 170
+
+
+class Focus:
+    """Holding the device open keeps the motor powered"""
+
+    def __init__(self):
+        self.fd = None
+        for name in glob.glob("/sys/class/video4linux/v4l-subdev*/name"):
+            if open(name).read().startswith("dw9807"):
+                self.fd = os.open("/dev/" + name.split("/")[-2], os.O_RDWR)
+
+    def set(self, pos):
+        if self.fd is not None:
+            fcntl.ioctl(self.fd, VIDIOC_S_CTRL, struct.pack("<Ii", V4L2_CID_FOCUS_ABSOLUTE, pos))
+
+
+class Camera(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="org.gts7xl.Camera")
+        self.focus = Focus()
+        self.pipeline = None
+        self.sweep = None
+        self.spot = (0.5, 0.5)
+        self.best = (0, 500)
+        self.position = 500
+        self.busy = False
+
+    def do_activate(self):
+        self.win = Gtk.ApplicationWindow(application=self, title="Camera")
+        self.win.set_default_size(1100, 760)
+        overlay = Gtk.Overlay()
+        self.win.set_child(overlay)
+        self.picture = Gtk.Picture(hexpand=True, vexpand=True)
+        self.picture.set_content_fit(Gtk.ContentFit.CONTAIN)
+        overlay.set_child(self.picture)
+        click = Gtk.GestureClick()
+        click.connect("released", self.tapped)
+        self.picture.add_controller(click)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, halign=Gtk.Align.END,
+                      valign=Gtk.Align.CENTER, margin_end=16)
+        shoot = Gtk.Button(label="Photo")
+        shoot.connect("clicked", lambda _b: self.photo())
+        focus = Gtk.Button(label="Focus")
+        focus.connect("clicked", lambda _b: self.autofocus())
+        box.append(shoot)
+        box.append(focus)
+        overlay.add_overlay(box)
+        self.status = Gtk.Label(halign=Gtk.Align.START, valign=Gtk.Align.END, margin_start=16, margin_bottom=12)
+        overlay.add_overlay(self.status)
+        self.win.connect("close-request", self.closing)
+        self.win.present()
+        self.start_preview()
+        GLib.timeout_add(1500, self.first_focus)
+
+    def first_focus(self):
+        self.autofocus()
+        return False
+
+    def start_preview(self):
+        w, h = PREVIEW
+        self.pipeline = Gst.parse_launch(
+            f"libcamerasrc name=src ! video/x-raw,width={w},height={h} ! videoconvert ! "
+            "video/x-raw,format=BGRA ! tee name=t "
+            "t. ! queue leaky=downstream max-size-buffers=1 ! gtk4paintablesink name=view "
+            "t. ! queue leaky=downstream max-size-buffers=1 ! appsink name=meter drop=true max-buffers=1 sync=false")
+        self.picture.set_paintable(self.pipeline.get_by_name("view").get_property("paintable"))
+        self.meter = self.pipeline.get_by_name("meter")
+        self.pipeline.get_bus().add_signal_watch()
+        self.pipeline.get_bus().connect("message::error", self.gst_error)
+        self.pipeline.set_state(Gst.State.PLAYING)
+
+    def stop_preview(self):
+        if self.pipeline:
+            self.pipeline.get_bus().remove_signal_watch()
+            self.pipeline.set_state(Gst.State.NULL)
+            self.pipeline = None
+
+    def gst_error(self, _bus, msg):
+        err, _dbg = msg.parse_error()
+        self.status.set_text(f"Camera error: {err.message}")
+        print(err.message, file=sys.stderr, flush=True)
+
+    def sharpness(self):
+        sample = self.meter.emit("try-pull-sample", 200 * Gst.MSECOND)
+        if not sample:
+            return None
+        caps = sample.get_caps().get_structure(0)
+        w, h = caps.get_value("width"), caps.get_value("height")
+        buf = sample.get_buffer()
+        ok, info = buf.map(Gst.MapFlags.READ)
+        if not ok:
+            return None
+        stride = len(info.data) // h
+        cx, cy = int(self.spot[0] * w), int(self.spot[1] * h)
+        total = 0
+        for y in range(max(0, cy - 60), min(h, cy + 60), 6):
+            row = info.data[y * stride + max(0, cx - 80) * 4 + 1:y * stride + min(w, cx + 80) * 4 + 1:4]
+            total += sum(abs(row[i] - row[i + 2]) for i in range(len(row) - 2))
+        buf.unmap(info)
+        return total
+
+    def tapped(self, gesture, _n, x, y):
+        width, height = self.picture.get_width(), self.picture.get_height()
+        scale = min(width / PREVIEW[0], height / PREVIEW[1])
+        fx = (x - (width - PREVIEW[0] * scale) / 2) / (PREVIEW[0] * scale)
+        fy = (y - (height - PREVIEW[1] * scale) / 2) / (PREVIEW[1] * scale)
+        self.spot = (min(0.95, max(0.05, fx)), min(0.95, max(0.05, fy)))
+        self.autofocus()
+
+    def autofocus(self):
+        if self.busy or self.sweep is not None or not self.pipeline or self.focus.fd is None:
+            return
+        self.status.set_text("Focusing")
+        self.best = (0, self.position)
+        self.fine = False
+        self.sweep = list(range(0, FOCUS_MAX + 1, 80))
+        self.step_sweep(True)
+
+    def step_sweep(self, first=False):
+        if not first:
+            value = self.sharpness()
+            if value is not None and value > self.best[0]:
+                self.best = (value, self.current)
+        if not self.sweep:
+            if not self.fine:
+                self.fine = True
+                c = self.best[1]
+                self.sweep = [p for p in range(c - 60, c + 61, 20) if 0 <= p <= FOCUS_MAX]
+            else:
+                self.sweep = None
+                self.position = self.best[1]
+                self.focus.set(self.position)
+                self.status.set_text(f"Focus {self.position}")
+                return False
+        self.current = self.sweep.pop(0)
+        self.focus.set(self.current)
+        GLib.timeout_add(SETTLE_MS, self.step_sweep)
+        return False
+
+    def photo(self):
+        if self.busy or self.sweep is not None:
+            return
+        self.busy = True
+        self.status.set_text("Taking photo")
+        self.stop_preview()
+        self.picture.set_paintable(None)
+        w, h = PHOTO
+        folder = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) or os.path.expanduser("~/Pictures")
+        os.makedirs(folder, exist_ok=True)
+        self.path = os.path.join(folder, time.strftime("IMG_%Y%m%d_%H%M%S.jpg"))
+        self.shot = Gst.parse_launch(
+            f"libcamerasrc ! video/x-raw,width={w},height={h} ! videoconvert ! jpegenc quality=92 ! "
+            "appsink name=out max-buffers=1 drop=true sync=false")
+        self.out = self.shot.get_by_name("out")
+        self.frames = 0
+        self.shot.set_state(Gst.State.PLAYING)
+        GLib.timeout_add(100, self.wait_photo)
+
+    def wait_photo(self):
+        # Let exposure settle before keeping a frame
+        sample = self.out.emit("try-pull-sample", 10 * Gst.MSECOND)
+        if not sample:
+            return True
+        self.frames += 1
+        if self.frames < 10:
+            return True
+        buf = sample.get_buffer()
+        ok, info = buf.map(Gst.MapFlags.READ)
+        with open(self.path, "wb") as f:
+            f.write(bytes(info.data))
+        buf.unmap(info)
+        self.shot.set_state(Gst.State.NULL)
+        self.shot = None
+        self.busy = False
+        self.status.set_text("Saved " + self.path)
+        print("saved", self.path, flush=True)
+        self.start_preview()
+        return False
+
+    def closing(self, _win):
+        self.stop_preview()
+        return False
+
+
+Gst.init(None)
+sys.exit(Camera().run(None))
