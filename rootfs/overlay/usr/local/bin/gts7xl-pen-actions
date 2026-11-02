@@ -1,0 +1,72 @@
+#!/usr/bin/python3
+# Choose what the S Pen button and air gestures do. gts7xl-spen reads the file on each event.
+import os
+import sys
+
+import gi
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gtk
+
+ACTIONS_FILE = "/var/lib/gts7xl-spen/actions"
+ROWS = [
+    ("click", "Button click", "playpause"),
+    ("swipe_right", "Swipe right", "next"),
+    ("swipe_left", "Swipe left", "previous"),
+    ("swipe_up", "Swipe up", "volumeup"),
+    ("swipe_down", "Swipe down", "volumedown"),
+]
+CHOICES = [
+    ("none", "Nothing"), ("playpause", "Play or pause"), ("next", "Next track"),
+    ("previous", "Previous track"), ("volumeup", "Volume up"), ("volumedown", "Volume down"),
+    ("mute", "Mute"), ("pagedown", "Next slide or page"), ("pageup", "Previous slide or page"),
+    ("up", "Arrow up"), ("down", "Arrow down"), ("left", "Arrow left"), ("right", "Arrow right"),
+    ("enter", "Enter"), ("escape", "Escape"), ("space", "Space"), ("screenshot", "Screenshot"),
+]
+
+
+def load():
+    actions = {name: default for name, _, default in ROWS}
+    try:
+        with open(ACTIONS_FILE) as f:
+            for line in f:
+                name, _, value = line.strip().partition("=")
+                actions[name] = value
+    except OSError:
+        pass
+    return actions
+
+
+def save(actions):
+    tmp = ACTIONS_FILE + ".tmp"
+    with open(tmp, "w") as f:
+        f.writelines(f"{name}={value}\n" for name, value in actions.items())
+    os.replace(tmp, ACTIONS_FILE)
+
+
+def activate(app):
+    actions = load()
+    win = Gtk.ApplicationWindow(application=app, title="Pen Actions")
+    grid = Gtk.Grid(row_spacing=12, column_spacing=24, margin_top=24, margin_bottom=24,
+                    margin_start=24, margin_end=24)
+    win.set_child(grid)
+    ids = [c[0] for c in CHOICES]
+    for row, (name, label, _) in enumerate(ROWS):
+        grid.attach(Gtk.Label(label=label, xalign=0, hexpand=True), 0, row, 1, 1)
+        drop = Gtk.DropDown.new_from_strings([c[1] for c in CHOICES])
+        drop.set_selected(ids.index(actions[name]) if actions[name] in ids else 0)
+
+        def changed(widget, _param, name=name):
+            actions[name] = ids[widget.get_selected()]
+            try:
+                save(actions)
+            except OSError as e:
+                print(e, file=sys.stderr)
+
+        drop.connect("notify::selected", changed)
+        grid.attach(drop, 1, row, 1, 1)
+    win.present()
+
+
+app = Gtk.Application(application_id="org.gts7xl.PenActions")
+app.connect("activate", activate)
+app.run(None)

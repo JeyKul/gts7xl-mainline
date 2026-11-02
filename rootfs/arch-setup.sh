@@ -12,7 +12,7 @@ pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -Rdd --noconfirm linux-aarch64 || true
 DESKTOP=${DESKTOP:-gnome}
-BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils alsa-utils mesa swh-plugins sudo psmisc python linux-firmware"
+BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils alsa-utils mesa swh-plugins sudo psmisc python python-dbus python-gobject gtk4 linux-firmware"
 GNOME="gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome adwaita-fonts"
 case "$DESKTOP" in
 gnome) PKGS="$GNOME"; DM=gdm ;;
@@ -49,7 +49,7 @@ systemctl mask alsa-restore alsa-state
 # /etc/resolv.conf points at systemd-resolved, and NetworkManager feeds it
 systemctl enable systemd-resolved
 systemctl enable NetworkManager "$DM" bluetooth systemd-timesyncd \
-  gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log
+  gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log gts7xl-spen
 systemctl set-default graphical.target
 sed -i 's/^load-module module-suspend-on-idle/#&/' /etc/pulse/default.pa
 sed -i 's/^#\?AutoEnable=.*/AutoEnable=true/' /etc/bluetooth/main.conf

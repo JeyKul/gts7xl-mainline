@@ -1,0 +1,68 @@
+From 7c960f85cf6768e6cb84fd0dd3d8dc488820b8d9 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 2 Nov 2026 19:32:58 +0100
+Subject: [PATCH] Input: samsung-w90xx: add a BLE charge control for the S Pen
+
+Writing 0 then 1 sends the disable and enable charging commands, which makes
+the pen advertise over Bluetooth LE for a few seconds, as on stock.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/input/touchscreen/samsung-w90xx.c | 34 +++++++++++++++++++++++
+ 1 file changed, 34 insertions(+)
+
+diff --git a/drivers/input/touchscreen/samsung-w90xx.c b/drivers/input/touchscreen/samsung-w90xx.c
+index f837fe8ae..389c6befe 100644
+--- a/drivers/input/touchscreen/samsung-w90xx.c
++++ b/drivers/input/touchscreen/samsung-w90xx.c
+@@ -132,6 +132,39 @@ static int w90xx_probe(struct i2c_client *client)
+ 	return 0;
+ }
+ 
++/* Pen charging commands: 0xe8 disable, then 0xe9 enable makes the pen advertise over BLE */
++#define W90XX_BLE_CHARGE_BASE	0xe8
++#define W90XX_BLE_CHARGE_MAX	5
++
++static ssize_t ble_charge_store(struct device *dev, struct device_attribute *attr,
++				const char *buf, size_t count)
++{
++	struct i2c_client *client = to_i2c_client(dev);
++	unsigned int mode;
++	u8 cmd;
++	int ret;
++
++	ret = kstrtouint(buf, 0, &mode);
++	if (ret)
++		return ret;
++	if (mode > W90XX_BLE_CHARGE_MAX)
++		return -EINVAL;
++
++	cmd = W90XX_BLE_CHARGE_BASE + mode;
++	ret = i2c_master_send(client, &cmd, 1);
++	if (ret != 1)
++		return ret < 0 ? ret : -EIO;
++
++	return count;
++}
++static DEVICE_ATTR_WO(ble_charge);
++
++static struct attribute *w90xx_attrs[] = {
++	&dev_attr_ble_charge.attr,
++	NULL
++};
++ATTRIBUTE_GROUPS(w90xx);
++
+ static const struct of_device_id w90xx_of_match[] = {
+ 	{ .compatible = "samsung,wacom-w90xx" },
+ 	{ }
+@@ -142,6 +175,7 @@ static struct i2c_driver w90xx_driver = {
+ 	.driver = {
+ 		.name = "samsung-w90xx",
+ 		.of_match_table = w90xx_of_match,
++		.dev_groups = w90xx_groups,
+ 	},
+ 	.probe = w90xx_probe,
+ };
+-- 
+2.56.0
+

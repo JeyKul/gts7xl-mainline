@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Pen Actions
+Comment=Choose what the S Pen button and air gestures do
+Exec=/usr/local/bin/gts7xl-pen-actions
+Icon=input-tablet
+Categories=Settings;

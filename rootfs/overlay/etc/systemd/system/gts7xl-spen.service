@@ -1,0 +1,12 @@
+[Unit]
+Description=S Pen button over Bluetooth
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+ExecStart=/usr/local/sbin/gts7xl-spen
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

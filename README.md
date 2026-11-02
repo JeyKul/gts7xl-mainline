@@ -30,7 +30,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Backlight, brightness | ✅ | Panel backlight control |
 | Touchscreen | ✅ | Multitouch |
 | S Pen digitizer | 🟡 | Position and pressure work, range hand-calibrated; side button, hover, tilt unconfirmed |
-| S Pen Bluetooth remote | ⬜ | |
+| S Pen Bluetooth remote | 🟡 | S Pen Pro button and air gestures work through `gts7xl-spen`, `Pen Actions` app to change them; built-in S Pen untested |
 | Fingerprint reader (under display) | ⬜ | |
 | Pogo keyboard | ✅ | Recovers by itself after trackpad use |
 | Pogo trackpad | 🟡 | Moves for under a second, then drops and recovers; also on the stock kernel in TWRP, fine on One UI |
