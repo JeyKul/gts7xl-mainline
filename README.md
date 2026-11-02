@@ -86,7 +86,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| Rear: 13 MP wide | ⬜ | |
+| Rear: 13 MP wide | 🟡 | Raw frames work, 4128x3096 at 30 fps; colour and focus not done |
 | Rear: 5 MP ultrawide | ⬜ | |
 | Front: 8 MP | ⬜ | |
 | Flash LED | ✅ | `Flashlight` app, up to 100mA |
