@@ -1,7 +1,7 @@
-From f92ff031a7dbeb78f22eb8665898359752264495 Mon Sep 17 00:00:00 2001
+From b3d87654f544796fecc0bfaaa350706ccbbc2876 Mon Sep 17 00:00:00 2001
 From: JeyKul <jey@kulovac.de>
 Date: Wed, 4 Nov 2026 21:01:32 +0100
-Subject: [PATCH] Input: samsung-w90xx: report hover
+Subject: [PATCH 50/50] Input: samsung-w90xx: report hover
 
 Header bit 0x80 is 'in range', 0x10 is 'tip down'. The driver took 0x10
 as proximity and dropped packets without 0x80, so hover never reached
