@@ -31,3 +31,9 @@ Short dated findings, newest first. Status lives in README.md.
 - Auto-rotate: sensord --uinput -> iio-sensor-proxy input-accel; monitor-sensor reports all 4 orientations.
 - kwin "Atomic commit failed: EBUSY" 2-22 per boot, only during startup/use, 0 when idle. Not the rails. Open.
 - Readback of undefined rails (name-only nodes for L1/3/7/11/15/18A, L1/2/3/6/9/10/11C, +/- BOB): both boots had a dark panel, and SSH didn't answer on the second. Defining these nodes is not side-effect free. Dropped. DT kept at research/sensord/dts-readback-allrails.dts.
+
+## 2026-11-04: trackpad test C (live SLPI vs stopped)
+- 60 s each, finger moving, /dev/input/event5 SYN_REPORT gaps >150 ms (research/../gaps.py logic).
+- Run 1: serving 2854 frames, 12 gaps, 8 s stalled (max 2.7 s) | stopped 721 frames, 43 gaps, 47 s stalled (max 5.4 s).
+- Run 2 (reversed): stopped 1076 frames, 49 gaps, 42 s (max 5.7 s) | serving 2242 frames, 23 gaps, 31 s, but one gap was 22 s (~9 s without it).
+- Supports cause 1 (MCU blocks on a silent SLPI) in both orders. Trackpad still stalls with the SLPI serving: bridge_driver_0 (bus 7, 0x2a, the likely lid-angle link) never probes. Next: get bridge_driver_0 up.
