@@ -57,3 +57,4 @@ Short dated findings, newest first. Status lives in README.md.
 
 ## 2026-11-04: pen calibration
 - gts7xl-pen-calibrate (GTK4, 4 targets) fitted x -16..26732, y -5..16703 (was 0..26750 x 0..16700). Applied as /etc/udev/hwdb.d/61-gts7xl-pen.hwdb; needs python-cairo.
+- 3x3 recalibration: x 4..26754, y 10..16705. Edge residuals up to ~9-13 px with mixed signs (bottom corners opposite in y, right edge mid -13 x): non-linear, an affine matrix does not help. Hover fixed (0050): 0x80 in range, 0x10 tip, 0x01 leave.

@@ -8,7 +8,8 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import GLib, Gtk
 
-TARGETS = [(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]
+# A 3x3 grid reaching close to the edges, where the error shows first
+TARGETS = [(x, y) for y in (0.03, 0.5, 0.97) for x in (0.03, 0.5, 0.97)]
 EV_ABS, EV_SYN, ABS_X, ABS_Y, ABS_PRESSURE = 3, 0, 0, 1, 24
 
 
@@ -91,7 +92,7 @@ class App(Gtk.Application):
             cr.arc(cx, cy, 6, 0, 6.3)
             cr.stroke()
             cr.set_source_rgb(1, 1, 1)
-            msg = "Tap the centre of the cross with the pen (%d/4)" % (len(self.taps) + 1)
+            msg = "Tap the centre of the cross with the pen (%d/%d)" % (len(self.taps) + 1, len(TARGETS))
         else:
             msg = "Done. Result printed in the terminal. Tap to close."
         ext = cr.text_extents(msg)
@@ -113,6 +114,11 @@ class App(Gtk.Application):
         ymin, ymax = fit([t[1] for t in TARGETS], [t[1] for t in self.taps])
         print("taps:", self.taps)
         print("x %d..%d  y %d..%d" % (xmin, xmax, ymin, ymax))
+        w, h = self.area.get_width(), self.area.get_height()
+        for (tx, ty), (rx, ry) in zip(TARGETS, self.taps):
+            ex = ((rx - xmin) / (xmax - xmin) - tx) * w
+            ey = ((ry - ymin) / (ymax - ymin) - ty) * h
+            print("target %.2f,%.2f  error %+.1f,%+.1f px" % (tx, ty, ex, ey))
         print("# /etc/udev/hwdb.d/61-gts7xl-pen.hwdb")
         print('evdev:name:Wacom W90xx Pen:*')
         print(" EVDEV_ABS_00=%d:%d" % (xmin, xmax))

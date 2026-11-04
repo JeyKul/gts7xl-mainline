@@ -1,0 +1,84 @@
+From f92ff031a7dbeb78f22eb8665898359752264495 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Wed, 4 Nov 2026 21:01:32 +0100
+Subject: [PATCH] Input: samsung-w90xx: report hover
+
+Header bit 0x80 is 'in range', 0x10 is 'tip down'. The driver took 0x10
+as proximity and dropped packets without 0x80, so hover never reached
+userspace. Header 0x81 hovers, 0x91 touches, 0x01 leaves range. Adds a
+dump parameter that logs packets whose header changed.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/input/touchscreen/samsung-w90xx.c | 33 ++++++++++++++++-------
+ 1 file changed, 23 insertions(+), 10 deletions(-)
+
+diff --git a/drivers/input/touchscreen/samsung-w90xx.c b/drivers/input/touchscreen/samsung-w90xx.c
+index 389c6befe..81cc2f150 100644
+--- a/drivers/input/touchscreen/samsung-w90xx.c
++++ b/drivers/input/touchscreen/samsung-w90xx.c
+@@ -25,14 +25,19 @@ struct w90xx {
+ 	struct i2c_client *client;
+ 	struct input_dev *input;
+ 	unsigned int tool;
++	u8 last_hdr;
+ };
+ 
++static bool dump;
++module_param(dump, bool, 0644);
++MODULE_PARM_DESC(dump, "Log packets whose header byte changed");
++
+ static irqreturn_t w90xx_irq(int irq, void *dev_id)
+ {
+ 	struct w90xx *pen = dev_id;
+ 	struct input_dev *input = pen->input;
+ 	u8 d[W90XX_COORD_LEN];
+-	bool prox;
++	bool prox, tip;
+ 	int pressure, ret;
+ 
+ 	ret = i2c_master_recv(pen->client, d, sizeof(d));
+@@ -41,23 +46,31 @@ static irqreturn_t w90xx_irq(int irq, void *dev_id)
+ 		return IRQ_HANDLED;
+ 	}
+ 
+-	if ((d[0] & 0x0f) != W90XX_COORD_PACKET || !(d[0] & 0x80))
++	if (dump && d[0] != pen->last_hdr)
++		dev_info(&pen->client->dev, "pkt %*ph\n", 10, d);
++	pen->last_hdr = d[0];
++
++	if ((d[0] & 0x0f) != W90XX_COORD_PACKET)
+ 		return IRQ_HANDLED;
+ 
+-	prox = d[0] & 0x10;
++	/* 0x80: pen in range (hovering or touching), 0x10: tip down */
++	prox = d[0] & 0x80;
++	tip = d[0] & 0x10;
+ 	pressure = ((d[5] & 0x0f) << 8) | d[6];
+ 
+ 	if (prox && !pen->tool)
+ 		pen->tool = (d[0] & 0x40) ? BTN_TOOL_RUBBER : BTN_TOOL_PEN;
+ 
+ 	if (pen->tool) {
+-		input_report_abs(input, ABS_X, (d[1] << 8) | d[2]);
+-		input_report_abs(input, ABS_Y, (d[3] << 8) | d[4]);
+-		input_report_abs(input, ABS_PRESSURE, prox ? pressure : 0);
+-		input_report_abs(input, ABS_DISTANCE, d[7]);
+-		input_report_abs(input, ABS_TILT_X, (s8)d[8]);
+-		input_report_abs(input, ABS_TILT_Y, (s8)d[9]);
+-		input_report_key(input, BTN_TOUCH, prox && pressure > 0);
++		if (prox) {
++			input_report_abs(input, ABS_X, (d[1] << 8) | d[2]);
++			input_report_abs(input, ABS_Y, (d[3] << 8) | d[4]);
++			input_report_abs(input, ABS_DISTANCE, tip ? 0 : d[7]);
++			input_report_abs(input, ABS_TILT_X, (s8)d[8]);
++			input_report_abs(input, ABS_TILT_Y, (s8)d[9]);
++		}
++		input_report_abs(input, ABS_PRESSURE, tip ? pressure : 0);
++		input_report_key(input, BTN_TOUCH, tip && pressure > 0);
+ 		input_report_key(input, BTN_STYLUS, prox && (d[0] & 0x20));
+ 		input_report_key(input, pen->tool, prox);
+ 		input_sync(input);
+-- 
+2.56.0
+
