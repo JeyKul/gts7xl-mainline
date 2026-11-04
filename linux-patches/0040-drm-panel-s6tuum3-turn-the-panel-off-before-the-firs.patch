@@ -1,0 +1,115 @@
+From 386c42e4a04e9e1cf56a717729baaca4b69a9c58 Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Wed, 4 Nov 2026 16:07:13 +0000
+Subject: [PATCH 40/41] drm/panel: s6tuum3: turn the panel off before the first
+ reset
+
+The bootloader leaves the panel on. Send display off and sleep in on the
+first prepare, then reset, with stock's 100ms wait. Wait for the TCON as
+stock does: 200ms, then poll for up to 300ms. Polling alone can pass at once
+if the line still reads high just after reset.
+
+clean_handoff=0 restores the old behaviour for comparison.
+---
+ drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 60 +++++++++++++++++--
+ 1 file changed, 55 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+index 95fd69444..d00b68841 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+@@ -24,6 +24,14 @@
+ /* Top of the stock normal range: 51h takes 11 bits, 420 cd */
+ #define S6TUUM3_MAX_BRIGHTNESS	2047
+ 
++/*
++ * The bootloader leaves the panel on. 0 keeps the old behaviour for comparison,
++ * 1 turns the panel off over DSI in the first prepare.
++ */
++static int clean_handoff = 1;
++module_param(clean_handoff, int, 0444);
++MODULE_PARM_DESC(clean_handoff, "Bootloader handoff: 0 off, 1 panel off in first prepare");
++
+ struct s6tuum3 {
+ 	struct drm_panel panel;
+ 	struct mipi_dsi_device *dsi;
+@@ -32,6 +40,7 @@ struct s6tuum3 {
+ 	struct gpio_desc *tcon_ready;
+ 	struct drm_dsc_config dsc;
+ 	struct drm_connector *connector;
++	bool first_prepare_done;
+ 	bool first_on_done;
+ 	bool enabled;
+ 	struct delayed_work on_work;
+@@ -64,6 +73,38 @@ static bool s6tuum3_is_60hz(struct s6tuum3 *ctx)
+ 	return drm_mode_vrefresh(&state->crtc->state->adjusted_mode) <= 60;
+ }
+ 
++/*
++ * Stock sends 28h then 10h, and waits 100ms after 10h (display_off_tx_cmds_revA).
++ * One 60Hz frame between them lets the off take effect first. Failure isn't
++ * fatal: the reset that follows clears the panel either way.
++ */
++static void s6tuum3_handoff_off(struct s6tuum3 *ctx)
++{
++	struct mipi_dsi_multi_context dsi_ctx = { .dsi = ctx->dsi };
++
++	mipi_dsi_dcs_set_display_off_multi(&dsi_ctx);
++	mipi_dsi_msleep(&dsi_ctx, 20);
++	mipi_dsi_dcs_enter_sleep_mode_multi(&dsi_ctx);
++	mipi_dsi_msleep(&dsi_ctx, 100);
++	dev_info(&ctx->dsi->dev, "handoff: panel off sent: %d\n", dsi_ctx.accum_err);
++}
++
++/*
++ * Stock wait_tcon_ready() waits a fixed 200ms and then polls for up to 300ms.
++ * A running panel may still read ready just after reset, so polling alone could
++ * send the init sequence to a TCON that is restarting.
++ */
++static void s6tuum3_wait_tcon_ready(struct s6tuum3 *ctx)
++{
++	int i;
++
++	msleep(200);
++	for (i = 0; i < 300 && !gpiod_get_value_cansleep(ctx->tcon_ready); i++)
++		usleep_range(1000, 1010);
++	dev_info(&ctx->dsi->dev, "tcon ready after %d ms: %d\n", 200 + i,
++		 gpiod_get_value_cansleep(ctx->tcon_ready));
++}
++
+ static int s6tuum3_prepare(struct drm_panel *panel)
+ {
+ 	struct s6tuum3 *ctx = to_s6tuum3(panel);
+@@ -75,15 +116,24 @@ static int s6tuum3_prepare(struct drm_panel *panel)
+ 		return ret;
+ 	msleep(10);
+ 
++	if (clean_handoff && !ctx->first_prepare_done)
++		s6tuum3_handoff_off(ctx);
++	ctx->first_prepare_done = true;
++
++	/* Stock qcom,mdss-dsi-reset-sequence: low 1ms, high 1ms, with the link in LP11 */
+ 	gpiod_set_value_cansleep(ctx->reset, 1);
+ 	usleep_range(1000, 2000);
+ 	gpiod_set_value_cansleep(ctx->reset, 0);
+ 
+-	/* The bootloader log shows the TCON raising this within about 350ms */
+-	for (i = 0; i < 100 && !gpiod_get_value_cansleep(ctx->tcon_ready); i++)
+-		msleep(10);
+-	dev_info(&ctx->dsi->dev, "tcon ready after %d ms: %d\n", i * 10,
+-		 gpiod_get_value_cansleep(ctx->tcon_ready));
++	if (clean_handoff) {
++		s6tuum3_wait_tcon_ready(ctx);
++	} else {
++		/* The bootloader log shows the TCON raising this within about 350ms */
++		for (i = 0; i < 100 && !gpiod_get_value_cansleep(ctx->tcon_ready); i++)
++			msleep(10);
++		dev_info(&ctx->dsi->dev, "tcon ready after %d ms: %d\n", i * 10,
++			 gpiod_get_value_cansleep(ctx->tcon_ready));
++	}
+ 
+ 	/* Exactly the stock on sequence: no sleep out or tear on */
+ 	ctx->dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
+-- 
+2.43.0
+

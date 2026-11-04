@@ -80,6 +80,26 @@ The native image needs no `protected-clocks`; the working framebuffer image need
 
 The panel has gone green whenever Linux takes over the display path and no panel driver runs. Next test: load the panel driver straight after `msm` at boot, with the auto power-off running and logs in `/var/log/early`.
 
+## Taking over from the bootloader
+
+Loading `msm` resets MDSS in `msm_mdss_init()`, before the DSI host and the panel device exist. That stops the bootloader's link. The panel then shows green garbage until the first `prepare`, which can be seconds later (run 3 above saw this with no panel driver loaded). The DSI host refuses commands until it is powered on, so only the reset line can reach the panel in that time.
+
+`clean_handoff` in `panel-samsung-s6tuum3` selects the behaviour:
+
+| Value | Behaviour |
+|---|---|
+| 0 | Old behaviour: reset pulse in `prepare`, then poll the TCON |
+| 1 | First `prepare` sends `28`, waits 20ms, sends `10`, waits 100ms, then resets. Stock TCON wait |
+| 2 | Default. Holds reset from probe until the first `prepare`. Stock TCON wait |
+
+The panel driver now loads before `msm`, so it probes during the `msm` load instead of after it. Not yet tested on the tablet. See `PANEL-TEST.md`.
+
+Stock values, from `techpack/display/msm` in the T970XXS7DXH1 source: off sequence `samsung,display_off_tx_cmds_revA`, reset `<0 1>, <1 1>`, TCON wait of 200ms then up to 300ms in `wait_tcon_ready()`. `samsung,delay-after-tcon-ready` is not set for S6TUUM3, unlike S6TUUM0 to 2.
+
+### DSC against stock
+
+The PPS is byte identical to the stock dtsi, and all values mainline calculates match it except one: the last rate control range has min QP 13 in the encoder and 12 in the PPS. Stock's encoder table uses 12 (`dsi_dsc_rc_range_min_qp_1_1`). The bootloader also uses 13, and this applies only when the rate buffer is nearly full, so it doesn't explain the takeover glitch.
+
 ## Still unexplained
 
 - `INTF_CONFIG` bit 23 and `INTF_CONFIG2` bit 8 are set by the bootloader. Neither mainline nor the stock driver code read so far names them.

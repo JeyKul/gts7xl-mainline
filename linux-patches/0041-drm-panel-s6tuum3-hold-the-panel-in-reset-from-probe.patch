@@ -1,0 +1,67 @@
+From 11234eec2a45fb66439a5588afc710208aa4b789 Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Wed, 4 Nov 2026 16:07:13 +0000
+Subject: [PATCH 41/41] drm/panel: s6tuum3: hold the panel in reset from probe
+
+The green starts when msm resets MDSS, before the first prepare and before
+the DSI host accepts commands. Only the reset line can reach the panel in
+that time, so hold it from probe until the first prepare.
+
+clean_handoff=1 selects the DSI only path for comparison.
+---
+ drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 23 +++++++++++++++----
+ 1 file changed, 19 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+index d00b68841..541a91001 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+@@ -26,11 +26,18 @@
+ 
+ /*
+  * The bootloader leaves the panel on. 0 keeps the old behaviour for comparison,
+- * 1 turns the panel off over DSI in the first prepare.
++ * 1 turns the panel off over DSI in the first prepare, 2 holds it in reset from
++ * probe instead.
++ *
++ * msm resets MDSS before it creates this device, which stops the bootloader's
++ * link. The panel shows green garbage from then until the first prepare, seconds
++ * later, and no DSI command can reach it in that time: the host refuses transfers
++ * until it is powered on. The reset line is the only control available, so 2 is
++ * the default. This driver must load before msm for it to take effect early.
+  */
+-static int clean_handoff = 1;
++static int clean_handoff = 2;
+ module_param(clean_handoff, int, 0444);
+-MODULE_PARM_DESC(clean_handoff, "Bootloader handoff: 0 off, 1 panel off in first prepare");
++MODULE_PARM_DESC(clean_handoff, "Bootloader handoff: 0 off, 1 panel off in first prepare, 2 hold reset from probe");
+ 
+ struct s6tuum3 {
+ 	struct drm_panel panel;
+@@ -116,7 +123,8 @@ static int s6tuum3_prepare(struct drm_panel *panel)
+ 		return ret;
+ 	msleep(10);
+ 
+-	if (clean_handoff && !ctx->first_prepare_done)
++	/* Commands can't reach a panel held in reset, and it is already dark */
++	if (clean_handoff == 1 && !ctx->first_prepare_done)
+ 		s6tuum3_handoff_off(ctx);
+ 	ctx->first_prepare_done = true;
+ 
+@@ -358,6 +366,13 @@ static int s6tuum3_probe(struct mipi_dsi_device *dsi)
+ 	if (IS_ERR(ctx->tcon_ready))
+ 		return dev_err_probe(dev, PTR_ERR(ctx->tcon_ready), "failed to get tcon-ready\n");
+ 
++	if (clean_handoff == 2) {
++		ret = gpiod_direction_output(ctx->reset, 1);
++		if (ret)
++			return dev_err_probe(dev, ret, "failed to hold reset\n");
++		dev_info(dev, "handoff: holding reset until first prepare\n");
++	}
++
+ 	INIT_DELAYED_WORK(&ctx->on_work, s6tuum3_display_on);
+ 
+ 	ctx->dsi = dsi;
+-- 
+2.43.0
+
