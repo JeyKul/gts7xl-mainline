@@ -62,6 +62,9 @@ Short dated findings, newest first. Status lives in README.md.
 ## 2026-11-04: bad DT in 0046 (fixed)
 - My `git commit -a` for 0046 swept in the uncommitted readback rail nodes (rb_*), which leave the panel dark/green and stop regulators-0 probing (ldo14/ldo9 suppliers missing). Every DTB built from the tree since had them; my test images used a saved DTB, so it showed only when the usbc-dp test rebuilt the DTB. 0046 regenerated without the DT part.
 
+## Review (branch review-cleanup, untested)
+- docs/review-findings.md. Camera breakage: no camera supply changed since 0042, DTS only gained rails; suspects and tests are at the top of that file. MAX77705 pin in 0001 corrected to stock.
+
 ## 2026-11-04: USB-C (branch usbc-dp)
 - Plan, protocol and full results: docs/usbc-dp-research.md. Patches 0051-0053 on the usbc-dp branch only.
 - Works: forced host DTB + OTG VBUS by hand: unpowered hubs, sticks, mouse at 480M.
