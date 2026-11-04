@@ -1,7 +1,8 @@
-From d71ead8b9c1f3de69a66a909fa6cc51398e87137 Mon Sep 17 00:00:00 2001
+From 1e67c80d7f8d7f69c3e9c47099738677d9e7a844 Mon Sep 17 00:00:00 2001
 From: Claudius <claudiusthebot@gmail.com>
 Date: Wed, 4 Nov 2026 20:00:12 +0000
-Subject: [PATCH] usb: typec: add an UNTESTED minimal MAX77705 port driver
+Subject: [PATCH 53/53] usb: typec: add an UNTESTED minimal MAX77705 port
+ driver
 
 Reports attach, power and data role and orientation from the CCIC
 firmware, and follows them with the USB role switch, the orientation
@@ -22,7 +23,7 @@ only write masks and a one-byte mailbox. Never run on hardware.
  create mode 100644 drivers/usb/typec/max77705_typec.c
 
 diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
-index e5f84c6b..cc457761 100644
+index e5f84c6b7..cc4577610 100644
 --- a/arch/arm64/boot/dts/qcom/Makefile
 +++ b/arch/arm64/boot/dts/qcom/Makefile
 @@ -366,6 +366,7 @@ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-hdk.dtb
@@ -35,7 +36,7 @@ index e5f84c6b..cc457761 100644
  dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-sony-xperia-edo-pdx203.dtb
 diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts
 new file mode 100644
-index 00000000..81312ad2
+index 000000000..81312ad23
 --- /dev/null
 +++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts
 @@ -0,0 +1,102 @@
@@ -142,7 +143,7 @@ index 00000000..81312ad2
 +};
 +#endif
 diff --git a/drivers/usb/typec/Kconfig b/drivers/usb/typec/Kconfig
-index 2f80c279..266af247 100644
+index 2f80c2792..266af2477 100644
 --- a/drivers/usb/typec/Kconfig
 +++ b/drivers/usb/typec/Kconfig
 @@ -77,6 +77,21 @@ config TYPEC_RT1719
@@ -168,7 +169,7 @@ index 2f80c279..266af247 100644
  	tristate "TI HD3SS3220 Type-C DRP Port controller driver"
  	depends on I2C
 diff --git a/drivers/usb/typec/Makefile b/drivers/usb/typec/Makefile
-index 8a6a1c66..b92f73a2 100644
+index 8a6a1c663..b92f73a2a 100644
 --- a/drivers/usb/typec/Makefile
 +++ b/drivers/usb/typec/Makefile
 @@ -8,6 +8,7 @@ obj-$(CONFIG_TYPEC_UCSI)	+= ucsi/
@@ -181,7 +182,7 @@ index 8a6a1c66..b92f73a2 100644
  obj-$(CONFIG_TYPEC_WUSB3801)	+= wusb3801.o
 diff --git a/drivers/usb/typec/max77705_typec.c b/drivers/usb/typec/max77705_typec.c
 new file mode 100644
-index 00000000..39abc366
+index 000000000..39abc3663
 --- /dev/null
 +++ b/drivers/usb/typec/max77705_typec.c
 @@ -0,0 +1,505 @@
@@ -691,5 +692,5 @@ index 00000000..39abc366
 +MODULE_DESCRIPTION("Maxim MAX77705 CCIC minimal Type-C port driver");
 +MODULE_LICENSE("GPL");
 -- 
-2.43.0
+2.56.0
 
