@@ -1,0 +1,57 @@
+From 5618c63bebb7976e82d0336027176d75eeb590df Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Wed, 4 Nov 2026 21:10:02 +0000
+Subject: [PATCH 57/58] media: dw9807-vcm: fix the vdd balance in probe and
+ remove
+
+If enabling vdd failed, probe returned with the subdev still registered with v4l2-async: enable it first. remove() left vdd enabled when the device was runtime active.
+---
+ drivers/media/i2c/dw9807-vcm.c | 14 ++++++++++----
+ 1 file changed, 10 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/media/i2c/dw9807-vcm.c b/drivers/media/i2c/dw9807-vcm.c
+index 3437e372..72702546 100644
+--- a/drivers/media/i2c/dw9807-vcm.c
++++ b/drivers/media/i2c/dw9807-vcm.c
+@@ -205,21 +205,23 @@ static int dw9807_probe(struct i2c_client *client)
+ 
+ 	dw9807_dev->sd.entity.function = MEDIA_ENT_F_LENS;
+ 
+-	rval = v4l2_async_register_subdev(&dw9807_dev->sd);
+-	if (rval < 0)
+-		goto err_cleanup;
+-
+ 	rval = regulator_enable(dw9807_dev->vdd);
+ 	if (rval)
+ 		goto err_cleanup;
+ 	usleep_range(12000, 15000);
+ 
++	rval = v4l2_async_register_subdev(&dw9807_dev->sd);
++	if (rval < 0)
++		goto err_disable;
++
+ 	pm_runtime_set_active(&client->dev);
+ 	pm_runtime_enable(&client->dev);
+ 	pm_runtime_idle(&client->dev);
+ 
+ 	return 0;
+ 
++err_disable:
++	regulator_disable(dw9807_dev->vdd);
+ err_cleanup:
+ 	v4l2_ctrl_handler_free(&dw9807_dev->ctrls_vcm);
+ 	media_entity_cleanup(&dw9807_dev->sd.entity);
+@@ -233,6 +235,10 @@ static void dw9807_remove(struct i2c_client *client)
+ 	struct dw9807_device *dw9807_dev = sd_to_dw9807_vcm(sd);
+ 
+ 	pm_runtime_disable(&client->dev);
++	if (!pm_runtime_status_suspended(&client->dev)) {
++		regulator_disable(dw9807_dev->vdd);
++		pm_runtime_set_suspended(&client->dev);
++	}
+ 
+ 	dw9807_subdev_cleanup(dw9807_dev);
+ }
+-- 
+2.43.0
+
