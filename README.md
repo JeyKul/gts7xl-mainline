@@ -76,7 +76,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| Accel, gyro, compass (SLPI) | 🟡 | gts7xl-sensord: 11 sensors listed, no crash with L8C on. Auto-rotate not wired yet; light sensor missing |
+| Accel, gyro, compass (SLPI) | 🟡 | gts7xl-sensord: 12 sensors incl. ambient light. Auto-rotate not wired yet; 2nd light sensor, rgb missing |
 | Gyroscope | ❌ | On the sensor DSP bus |
 | Magnetometer | ❌ | On the sensor DSP bus |
 | Ambient light | ❌ | On the sensor DSP bus |

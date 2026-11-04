@@ -18,3 +18,9 @@ Short dated findings, newest first. Status lives in README.md.
 
 ## 2026-11-04: regulator_ignore_unused dropped
 - Removed from CONFIG_CMDLINE. Wi-Fi, display, audio, 15 video nodes and 11 SLPI sensors still OK.
+
+## 2026-11-04: rails L4C/L10A/L16A test
+- Samsung overlay sets all three always-on. Added them; user saw something break, went to TWRP. Kernel log clean (irq 156 "nobody cared" is old). Reverted; DT kept at research/sensord/dts-rails-l4c-l10a-l16a.dts.
+- gpio67 (stock proxy_int, no pull): no effect on veml3328. Reverted.
+- Cause of the blank panel: the forced voltages. Readback (rpmh_read) of the bootloader's votes: L10A 2.96 V, L16A 2.704 V, L4C 1.808 V. Forcing 2.9 V/2.8 V blanks the panel. Without min/max the rails read "unknown" and regulator-output can't probe.
+- Fix (0045): all three always-on at the bootloader voltages, HPM. Panel OK, no deferred probes, L8C on, SLPI stable, 12 sensors including ambient_light (veml3328_0). Still missing: the second veml3328 (bus 5), rgb, bridge_driver_0 (bus 7, 0x2a), device_orient.

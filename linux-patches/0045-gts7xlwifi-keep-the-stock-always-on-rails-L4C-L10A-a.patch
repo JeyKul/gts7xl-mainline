@@ -1,0 +1,63 @@
+From dfd4ab8aaf1a54d22d1e0c1cfe3d60120539434c Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Wed, 4 Nov 2026 19:32:08 +0100
+Subject: [PATCH] gts7xlwifi: keep the stock always-on rails L4C, L10A and L16A
+ on
+
+Samsung's DT keeps all three always on; the light sensor (veml3328)
+needs them. Their voltages match what the bootloader votes. Forcing
+other values in range blanks the panel.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 27 +++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index fd3f3fbba..8b43d5cb7 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -638,6 +638,15 @@ vreg_l8c_1p8: ldo8 {
+ 			regulator-always-on;
+ 		};
+ 
++		/* Stock pm8150a_l4, always on; voltage as the bootloader leaves it, else the panel fails */
++		vreg_l4c_1p8: ldo4 {
++			regulator-name = "vreg_l4c_1p8";
++			regulator-min-microvolt = <1808000>;
++			regulator-max-microvolt = <1808000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			regulator-always-on;
++		};
++
+ 		/* Stock pm8150a_l7, the vibrator motor */
+ 		vreg_l7c_2p856: ldo7 {
+ 			regulator-name = "vreg_l7c_2p856";
+@@ -698,6 +707,24 @@ vreg_l14a_1p8: ldo14 {
+ 			regulator-max-microvolt = <1800000>;
+ 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+ 		};
++
++		/* Stock pm8150_l10, always on; voltage as the bootloader leaves it, else the panel fails */
++		vreg_l10a_2p9: ldo10 {
++			regulator-name = "vreg_l10a_2p9";
++			regulator-min-microvolt = <2960000>;
++			regulator-max-microvolt = <2960000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			regulator-always-on;
++		};
++
++		/* Stock pm8150_l16, always on; voltage as the bootloader leaves it, else the panel fails */
++		vreg_l16a_2p8: ldo16 {
++			regulator-name = "vreg_l16a_2p8";
++			regulator-min-microvolt = <2704000>;
++			regulator-max-microvolt = <2704000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			regulator-always-on;
++		};
+ 	};
+ };
+ 
+-- 
+2.56.0
+
