@@ -1,0 +1,36 @@
+From f7f529284db2e5dac0da5d61a21beed8c2602c0e Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Wed, 4 Nov 2026 18:54:11 +0100
+Subject: [PATCH 44/44] gts7xlwifi: keep the sensor rail L8C on
+
+Stock's SSC node switches pm8150a_l8 (1.8 V) on as sensor_vdd. Without it
+the SLPI watchdog fires on the sensor probe.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 38441fecd..fd3f3fbba 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -629,6 +629,15 @@ regulators-1 {
+ 		compatible = "qcom,pm8150l-rpmh-regulators";
+ 		qcom,pmic-id = "c";
+ 
++		/* Stock pm8150a_l8: the sensor rail, which Samsung's SSC driver switches on */
++		vreg_l8c_1p8: ldo8 {
++			regulator-name = "vreg_l8c_1p8";
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <1800000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++			regulator-always-on;
++		};
++
+ 		/* Stock pm8150a_l7, the vibrator motor */
+ 		vreg_l7c_2p856: ldo7 {
+ 			regulator-name = "vreg_l7c_2p856";
+-- 
+2.56.0
+

@@ -1,0 +1,33 @@
+From 71f8df268aca6dc67dfd76a06c1b3f0d4a306226 Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Wed, 4 Nov 2026 16:17:47 +0000
+Subject: [PATCH 43/44] gts7xlwifi: enable the sensor DSP
+
+The SoC tree has the SLPI remoteproc and its sdsp FastRPC node, disabled.
+The carveout already follows the stock map. Firmware is this tablet's own,
+from apnhlos like the ADSP.
+
+Not tested on a device yet.
+---
+ arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 48dd4d4b2..38441fecd 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -279,6 +279,11 @@ &adsp {
+ 	status = "okay";
+ };
+ 
++&slpi {
++	firmware-name = "qcom/sm8250/gts7xl/slpi.mbn";
++	status = "okay";
++};
++
+ &sound {
+ 	compatible = "qcom,sm8250-sndcard";
+ 	model = "Galaxy Tab S7+";
+-- 
+2.56.0
+

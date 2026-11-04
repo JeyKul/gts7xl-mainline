@@ -76,7 +76,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| Accelerometer, auto-rotate | ❌ | On the sensor DSP bus, no direct CPU route known |
+| Accel, gyro, compass (SLPI) | 🟡 | gts7xl-sensord: 11 sensors listed, no crash with L8C on. Auto-rotate not wired yet; light sensor missing |
 | Gyroscope | ❌ | On the sensor DSP bus |
 | Magnetometer | ❌ | On the sensor DSP bus |
 | Ambient light | ❌ | On the sensor DSP bus |
@@ -132,6 +132,7 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 - `docs/display.md`: what the native display needs
 - `initramfs/init`: first code to run, picks the system or the installer
 - `kmod/`: panel register tool used for display research
+- `sensord/`: sensor DSP file service, sensor client and accelerometer input, untested
 - `modules-repo/`: list of optional module packages
 - `tools/`: serial shell helper, USB deploy, test programs
 - `uefi/`: earlier Mu-Silicium attempt, not used; copy over a Mu-Silicium checkout. It needs blobs and a dump of your own device tree, which aren't published because they contain device identifiers

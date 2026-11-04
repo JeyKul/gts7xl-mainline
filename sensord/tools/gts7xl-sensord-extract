@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""Copy this tablet's own SLPI firmware and sensor files from its stock partitions.
+
+Partitions are mounted read-only and nothing is redistributed. Uses the helpers
+in the repo's gts7xl-firstboot. Values marked GUESS are explained in RESEARCH.md.
+"""
+import argparse, importlib.machinery, importlib.util, os, re, shutil, sys
+
+FIRSTBOOT = os.environ.get('GTS7XL_FIRSTBOOT', '/usr/local/sbin/gts7xl-firstboot')
+
+
+def load_firstboot():
+    loader = importlib.machinery.SourceFileLoader('gts7xl_firstboot', FIRSTBOOT)
+    spec = importlib.util.spec_from_loader('gts7xl_firstboot', loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def tree(src, dst):
+    n = 0
+    for root, _, files in os.walk(src):
+        out = os.path.join(dst, os.path.relpath(root, src))
+        os.makedirs(out, exist_ok=True)
+        for f in files:
+            shutil.copyfile(os.path.join(root, f), os.path.join(out, f))
+            n += 1
+    return n
+
+
+def put(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        f.write(text + '\n')
+
+
+def firmware(fb, out):
+    if os.path.exists(out + '/slpi.mbn'):
+        print('firmware: already present')
+        return
+    with fb.Ro(fb.PL + 'apnhlos', 'vfat', 'ro,shortname=lower') as m:
+        img = m + '/image'
+        names = sorted(f for f in os.listdir(img) if f.startswith('slpi.'))
+        if 'slpi.mdt' not in names:
+            raise RuntimeError('apnhlos/image has no slpi.mdt; contents: ' + ' '.join(sorted(os.listdir(img))))
+        os.makedirs(out, exist_ok=True)
+        for f in names:
+            shutil.copyfile(img + '/' + f, out + '/' + ('slpi.mbn' if f == 'slpi.mdt' else f))
+    print('firmware: %d files in %s' % (len(names), out))
+
+
+def vendor(fb, dest):
+    ext = fb.super_extents('vendor')
+    if len(ext) > 1:
+        raise RuntimeError('vendor is split into %d pieces, not supported yet' % len(ext))
+    sectors, start = ext[0]
+    dev = fb.run('losetup', '--find', '--show', '--read-only', '--offset', str(start * 512),
+                 '--sizelimit', str(sectors * 512), os.path.realpath(fb.PL + 'super')).strip()
+    try:
+        with fb.Ro(dev, None, 'ro') as m:
+            src = m + '/etc/sensors'
+            if not os.path.isdir(src):
+                raise RuntimeError('vendor has no etc/sensors')
+            print('vendor: %d files' % tree(src, dest + '/vendor/etc/sensors'))
+    finally:
+        fb.run('losetup', '--detach', dev)
+
+
+def persist(fb, dest, refresh):
+    reg = dest + '/mnt/vendor/persist/sensors/registry/registry'
+    os.makedirs(reg, exist_ok=True)
+    if os.listdir(reg) and not refresh:
+        print('persist: registry already present, left alone')
+        return
+    if not os.path.exists(fb.PL + 'persist'):
+        print('persist: no such partition; the DSP will generate its registry')
+        return
+    with fb.Ro(fb.PL + 'persist', None, 'ro,noload') as m:
+        src = m + '/sensors'
+        if not os.path.isdir(src):
+            print('persist: no sensors directory; the DSP will generate its registry')
+            return
+        print('persist: %d files' % tree(src, dest + '/mnt/vendor/persist/sensors'))
+    # The DSP checks this against its own version and re-parses when it is missing.
+    try:
+        os.unlink(dest + '/mnt/vendor/persist/sensors/registry/sns_reg_version')
+    except FileNotFoundError:
+        pass
+
+
+def board_revision(given):
+    if given is not None:
+        return given, 'from --revision'
+    with open('/proc/cmdline') as f:
+        m = re.search(r'androidboot\.revision=(\d+)', f.read())
+    if m:
+        return m.group(1), 'from the bootloader command line'
+    return '6', 'GUESS: newest gts7xlwifi board tree (r06); pass --revision if you know yours'
+
+
+def soc(dest, revision):
+    d = dest + '/sys/devices/soc0/'
+    real = {}
+    for k in ('soc_id', 'revision'):
+        try:
+            with open('/sys/devices/soc0/' + k) as f:
+                real[k] = f.read().strip()
+        except OSError:
+            pass
+    put(d + 'soc_id', real.get('soc_id', '356'))
+    put(d + 'revision', real.get('revision', '2.1'))
+    put(d + 'hw_platform', 'MTP')          # stock DT: qcom,kona-mtp, board-id 8
+    put(d + 'platform_subtype', 'Unknown')  # GUESS
+    put(d + 'platform_subtype_id', '0')     # GUESS
+    put(d + 'platform_version', '65536')    # GUESS
+    put(dest + '/sys/class/sensors/ssc_core/ssc_hw_rev', revision)
+    put(dest + '/props', 'ro.revision=' + revision)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument('--dest', default='/var/lib/gts7xl-sensord')
+    ap.add_argument('--firmware', default='/usr/lib/firmware/qcom/sm8250/gts7xl')
+    ap.add_argument('--revision', help='board revision for sensor config selection')
+    ap.add_argument('--refresh-registry', action='store_true', help='recopy the registry from persist')
+    a = ap.parse_args()
+
+    fb = load_firstboot()
+    rev, why = board_revision(a.revision)
+    print('board revision %s (%s)' % (rev, why))
+    failed = False
+    for name, fn in (('firmware', lambda: firmware(fb, a.firmware)),
+                     ('vendor', lambda: vendor(fb, a.dest)),
+                     ('persist', lambda: persist(fb, a.dest, a.refresh_registry)),
+                     ('soc', lambda: soc(a.dest, rev))):
+        try:
+            fn()
+        except Exception as e:
+            print('FAILED: %s: %s' % (name, e))
+            failed = True
+    return 1 if failed else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

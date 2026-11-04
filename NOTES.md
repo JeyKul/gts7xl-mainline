@@ -10,3 +10,8 @@ Short dated findings, newest first. Status lives in README.md.
 - Panel handoff test, 5 boots (modes 1,1,2,2,0): all reach desktop, no DSI errors. Only boot 2 (mode 1) clean by eye; the others showed one glitch line at the start. Log: research/display/handoff-test.txt (local).
 - Reviewed branches. `panel-handoff`: patches apply and build, installed for testing (backups in /var/lib/*.before-handoff), boot test pending. `sensord`: reads stock partitions read-only, implements the `sns_registry` interface hexagonrpcd lacked; untested. Both add a patch 0040: renumber on merge.
 - CLAUDE.md added. Optional modules come from the `gts7xl` pacman repo (`modules-repo/`).
+
+## 2026-11-04: SLPI crash fixed by sensor rail L8C
+- Stock SSC has `sensor_vdd-supply = <&pm8150a_l8>` (1.8 V). Mainline had no ldo8 on pmic c.
+- Added `vreg_l8c_1p8` always-on. Full registry + config set: no watchdog crash, SLPI stays running.
+- `--list`: accel/gyro lsm6dso, mag ak0991x, gravity, rotv, game_rv, gyro_cal, mag_cal, amd, tilt. Light (veml3328) still missing.
