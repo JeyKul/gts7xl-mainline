@@ -1,0 +1,201 @@
+From afd34b77daff7f6b61ba743225e4841e9e90b337 Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Wed, 4 Nov 2026 19:56:20 +0000
+Subject: [PATCH] power: supply: max77705_charger: add an OTG VBUS regulator
+
+Sets the boost and OTG bits on top of the current mode nibble, keeps the
+system buck on, refuses while CHGIN is present, and stops the boost at
+shutdown: on the Tab S8+ a reboot with the boost running left the tablet
+dark until a charger was plugged in.
+
+Taken from aaronsb/sm-x800-linux at 6f3248548258 (GPL-2.0), where it runs
+on the same chip. No consumer in the default DTB. Untested on this tablet.
+---
+ .../sm8250-samsung-gts7xlwifi-usbhost.dts     | 20 ++++
+ drivers/power/supply/Kconfig                  |  2 +-
+ drivers/power/supply/max77705_charger.c       | 94 +++++++++++++++++++
+ 3 files changed, 115 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-usbhost.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-usbhost.dts
+index 19907153..ea222818 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-usbhost.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-usbhost.dts
+@@ -14,3 +14,23 @@
+ &usb_1_dwc3 {
+ 	dr_mode = "host";
+ };
++
++/*
++ * Stage (b), manual VBUS: needs CONFIG_REGULATOR_USERSPACE_CONSUMER, then
++ * echo enabled > /sys/devices/platform/usb-vbus-test/state
++ * Unplug any charger first: the regulator refuses while CHGIN is present.
++ */
++&max77705_charger {
++	max77705_otg_vbus: usb-otg-vbus {
++		regulator-name = "usb-otg-vbus";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++	};
++};
++
++/ {
++	usb-vbus-test {
++		compatible = "regulator-output";
++		vout-supply = <&max77705_otg_vbus>;
++	};
++};
+diff --git a/drivers/power/supply/Kconfig b/drivers/power/supply/Kconfig
+index b89ef40d..38b77f03 100644
+--- a/drivers/power/supply/Kconfig
++++ b/drivers/power/supply/Kconfig
+@@ -638,7 +638,7 @@ config CHARGER_MAX77693
+ 
+ config CHARGER_MAX77705
+ 	tristate "Maxim MAX77705 battery charger driver"
+-	depends on MFD_MAX77705
++	depends on MFD_MAX77705 && REGULATOR
+ 	help
+ 	  Say Y to enable support for the Maxim MAX77705 battery charger.
+ 
+diff --git a/drivers/power/supply/max77705_charger.c b/drivers/power/supply/max77705_charger.c
+index 63b0b4f0..bd74f3cc 100644
+--- a/drivers/power/supply/max77705_charger.c
++++ b/drivers/power/supply/max77705_charger.c
+@@ -17,6 +17,7 @@
+ #include <linux/platform_device.h>
+ #include <linux/power_supply.h>
+ #include <linux/regmap.h>
++#include <linux/regulator/driver.h>
+ 
+ static const char *max77705_charger_model		= "max77705";
+ static const char *max77705_charger_manufacturer	= "Maxim Integrated";
+@@ -102,6 +103,74 @@ static const struct regmap_irq_chip max77705_charger_irq_chip = {
+ 	.num_irqs		= ARRAY_SIZE(max77705_charger_irqs),
+ };
+ 
++/*
++ * OTG VBUS: the boost and OTG bits are added to the current mode nibble
++ * (buck + charge 0x5 -> 0xf, buck 0x4 -> 0xe) and removed again, so the
++ * system buck and charging state are kept. The boost drives the pins
++ * CHGIN is fed from; it is refused while a charger input is present.
++ */
++static int max77705_otg_enable(struct regulator_dev *rdev)
++{
++	struct max77705_charger_data *chg = rdev_get_drvdata(rdev);
++	unsigned int val, mode;
++	int err;
++
++	err = regmap_read(chg->regmap, MAX77705_CHG_REG_INT_OK, &val);
++	if (err)
++		return err;
++
++	if (val & MAX77705_CHGIN_OK)
++		return -EBUSY;
++
++	err = regmap_field_read(chg->rfield[MAX77705_MODE], &mode);
++	if (err)
++		return err;
++
++	return regmap_field_write(chg->rfield[MAX77705_MODE], mode | MAX77705_OTG_CTRL);
++}
++
++static int max77705_otg_disable(struct regulator_dev *rdev)
++{
++	struct max77705_charger_data *chg = rdev_get_drvdata(rdev);
++	unsigned int mode;
++	int err;
++
++	err = regmap_field_read(chg->rfield[MAX77705_MODE], &mode);
++	if (err)
++		return err;
++
++	return regmap_field_write(chg->rfield[MAX77705_MODE], mode & ~MAX77705_OTG_CTRL);
++}
++
++static int max77705_otg_is_enabled(struct regulator_dev *rdev)
++{
++	struct max77705_charger_data *chg = rdev_get_drvdata(rdev);
++	unsigned int mode;
++	int err;
++
++	err = regmap_field_read(chg->rfield[MAX77705_MODE], &mode);
++	if (err)
++		return err;
++
++	return (mode & MAX77705_OTG_CTRL) == MAX77705_OTG_CTRL;
++}
++
++static const struct regulator_ops max77705_otg_ops = {
++	.enable		= max77705_otg_enable,
++	.disable	= max77705_otg_disable,
++	.is_enabled	= max77705_otg_is_enabled,
++};
++
++static const struct regulator_desc max77705_otg_desc = {
++	.name		= "usb-otg-vbus",
++	.of_match	= "usb-otg-vbus",
++	.type		= REGULATOR_VOLTAGE,
++	.owner		= THIS_MODULE,
++	.ops		= &max77705_otg_ops,
++	.fixed_uV	= 5000000,
++	.n_voltages	= 1,
++};
++
+ static int max77705_charger_enable(struct max77705_charger_data *chg)
+ {
+ 	int rv;
+@@ -599,6 +668,8 @@ static int max77705_charger_initialize(struct max77705_charger_data *chg)
+ static int max77705_charger_probe(struct i2c_client *i2c)
+ {
+ 	struct power_supply_config pscfg = {};
++	struct regulator_config rcfg = {};
++	struct regulator_dev *rdev;
+ 	struct max77705_charger_data *chg;
+ 	struct regmap_irq_chip *chip_desc;
+ 	struct device *dev;
+@@ -676,6 +747,12 @@ static int max77705_charger_probe(struct i2c_client *i2c)
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "failed to enable charge\n");
+ 
++	rcfg.dev = dev;
++	rcfg.driver_data = chg;
++	rdev = devm_regulator_register(dev, &max77705_otg_desc, &rcfg);
++	if (IS_ERR(rdev))
++		return dev_err_probe(dev, PTR_ERR(rdev), "failed to register OTG regulator\n");
++
+ 	return devm_add_action_or_reset(dev, max77705_charger_disable, chg);
+ }
+ 
+@@ -685,12 +762,29 @@ static const struct of_device_id max77705_charger_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, max77705_charger_of_match);
+ 
++/*
++ * A reset with the OTG boost running leaves the system unable to come
++ * back up: the boost keeps VBUS alive through the reset. Stop it first.
++ */
++static void max77705_charger_shutdown(struct i2c_client *i2c)
++{
++	struct max77705_charger_data *chg = i2c_get_clientdata(i2c);
++	unsigned int mode;
++
++	if (regmap_field_read(chg->rfield[MAX77705_MODE], &mode))
++		return;
++
++	if (mode & MAX77705_OTG_CTRL)
++		regmap_field_write(chg->rfield[MAX77705_MODE], mode & ~MAX77705_OTG_CTRL);
++}
++
+ static struct i2c_driver max77705_charger_driver = {
+ 	.driver = {
+ 		.name = "max77705-charger",
+ 		.of_match_table = max77705_charger_of_match,
+ 	},
+ 	.probe = max77705_charger_probe,
++	.shutdown = max77705_charger_shutdown,
+ };
+ module_i2c_driver(max77705_charger_driver);
+ 
+-- 
+2.43.0
+
