@@ -12,7 +12,7 @@ pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -Rdd --noconfirm linux-aarch64 || true
 DESKTOP=${DESKTOP:-gnome}
-BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils alsa-utils mesa swh-plugins sudo psmisc python python-dbus python-gobject gtk4 libcamera libcamera-tools gst-plugin-libcamera gst-plugin-gtk4 gst-plugins-base gst-plugins-good gst-python v4l-utils vulkan-icd-loader vulkan-freedreno vulkan-tools linux-firmware"
+BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils alsa-utils mesa swh-plugins sudo psmisc python python-dbus iio-sensor-proxy python-gobject gtk4 libcamera libcamera-tools gst-plugin-libcamera gst-plugin-gtk4 gst-plugins-base gst-plugins-good gst-python v4l-utils vulkan-icd-loader vulkan-freedreno vulkan-tools linux-firmware"
 GNOME="gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome adwaita-fonts"
 case "$DESKTOP" in
 gnome) PKGS="$GNOME"; DM=gdm ;;
@@ -30,6 +30,14 @@ grep -q '^\[gts7xl\]' /etc/pacman.conf || cat >> /etc/pacman.conf <<'CONF'
 SigLevel = Optional TrustAll
 Server = https://github.com/JeyKul/gts7xl-mainline/releases/download/modules
 CONF
+# Sensor DSP client, see sensord/ in the project. gcc only for the build.
+if [ -d /tmp/gts7xl-sensord-src ]; then
+	pacman -Q gcc >/dev/null 2>&1 && HAD_GCC=1 || HAD_GCC=
+	pacman -S --noconfirm --needed gcc make
+	make -C /tmp/gts7xl-sensord-src install install-autostart
+	[ -n "$HAD_GCC" ] || pacman -Rns --noconfirm gcc
+	rm -rf /tmp/gts7xl-sensord-src
+fi
 userdel -r alarm 2>/dev/null || true
 useradd -m -G wheel,video,input,audio,tty,network -s /bin/bash "$NEW_USER"
 printf '%s:%s\n' "$NEW_USER" "$NEW_PASS" | chpasswd
@@ -57,7 +65,8 @@ systemctl mask alsa-restore alsa-state
 # /etc/resolv.conf points at systemd-resolved, and NetworkManager feeds it
 systemctl enable systemd-resolved
 systemctl enable NetworkManager "$DM" bluetooth systemd-timesyncd \
-  gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log gts7xl-spen gts7xl-webcam
+  gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log gts7xl-spen gts7xl-webcam \
+  $([ -e /etc/systemd/system/gts7xl-sensord-setup.service ] && echo gts7xl-sensord-setup)
 systemctl set-default graphical.target
 sed -i 's/^load-module module-suspend-on-idle/#&/' /etc/pulse/default.pa
 sed -i 's/^#\?AutoEnable=.*/AutoEnable=true/' /etc/bluetooth/main.conf
