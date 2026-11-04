@@ -1,0 +1,69 @@
+From f2bb765e2dfd86aba4d762ea8d314bd8fe289c4a Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Wed, 4 Nov 2026 21:10:02 +0000
+Subject: [PATCH 55/58] Input: samsung-stm32-pogo: drop the unused delayed work
+
+check_ic_work was initialised and cancelled but never scheduled: the check runs directly from the interrupt thread. Make it a plain function. No change in behaviour.
+---
+ drivers/input/keyboard/samsung-stm32-pogo.c | 9 ++-------
+ 1 file changed, 2 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/input/keyboard/samsung-stm32-pogo.c b/drivers/input/keyboard/samsung-stm32-pogo.c
+index 3b9b03f1..b571d0ab 100644
+--- a/drivers/input/keyboard/samsung-stm32-pogo.c
++++ b/drivers/input/keyboard/samsung-stm32-pogo.c
+@@ -59,7 +59,6 @@ struct pogo_kbd {
+ 	struct regulator *vdd;
+ 	struct gpio_desc *conn;
+ 	struct delayed_work conn_work;
+-	struct delayed_work check_ic_work;
+ 	struct delayed_work tablet_work;
+ 	struct mutex i2c_lock;
+ 	struct mutex power_lock;
+@@ -209,9 +208,8 @@ static int pogo_reg_write(struct pogo_kbd *kbd, u8 id, u8 reg)
+ }
+ 
+ /* The MCU expects these queries after it announces itself with an empty frame */
+-static void pogo_check_ic_work(struct work_struct *work)
++static void pogo_check_ic(struct pogo_kbd *kbd)
+ {
+-	struct pogo_kbd *kbd = container_of(work, struct pogo_kbd, check_ic_work.work);
+ 	static const struct {
+ 		u8 id;
+ 		u8 reg;
+@@ -274,7 +272,7 @@ static irqreturn_t pogo_irq(int irq, void *dev_id)
+ 	/* The MCU sends an empty frame after it (re)starts */
+ 	if (size <= POGO_HDR_SIZE || size - POGO_HDR_SIZE > sizeof(data)) {
+ 		mutex_unlock(&kbd->i2c_lock);
+-		pogo_check_ic_work(&kbd->check_ic_work.work);
++		pogo_check_ic(kbd);
+ 		return IRQ_HANDLED;
+ 	}
+ 	size -= POGO_HDR_SIZE;
+@@ -332,7 +330,6 @@ static void pogo_set_power(struct pogo_kbd *kbd, bool on)
+ 		enable_irq(kbd->client->irq);
+ 	} else {
+ 		WRITE_ONCE(kbd->powered, false);
+-		cancel_delayed_work(&kbd->check_ic_work);
+ 		disable_irq(kbd->client->irq);
+ 		pogo_release_keys(kbd);
+ 		pogo_release_touchpad(kbd);
+@@ -393,7 +390,6 @@ static void pogo_shutdown_action(void *data)
+ 
+ 	cancel_delayed_work_sync(&kbd->conn_work);
+ 	cancel_delayed_work_sync(&kbd->tablet_work);
+-	cancel_delayed_work_sync(&kbd->check_ic_work);
+ 	pogo_set_connected(kbd, false);
+ }
+ 
+@@ -411,7 +407,6 @@ static int pogo_probe(struct i2c_client *client)
+ 
+ 	kbd->client = client;
+ 	INIT_DELAYED_WORK(&kbd->conn_work, pogo_conn_work);
+-	INIT_DELAYED_WORK(&kbd->check_ic_work, pogo_check_ic_work);
+ 	INIT_DELAYED_WORK(&kbd->tablet_work, pogo_tablet_work);
+ 	mutex_init(&kbd->i2c_lock);
+ 	mutex_init(&kbd->power_lock);
+-- 
+2.43.0
+
