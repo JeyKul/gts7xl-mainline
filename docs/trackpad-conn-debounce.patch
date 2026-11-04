@@ -1,0 +1,64 @@
+Input: samsung-stm32-pogo: don't restart the MCU on a short connection dip
+
+Untested experiment, see docs/trackpad-research.md. Apply on top of 0030.
+Wait for gpio43 to be stable before cutting the power, run the handshake from
+delayed work as stock does, and add conn_trace to log line edges.
+
+diff --git a/drivers/input/keyboard/samsung-stm32-pogo.c b/drivers/input/keyboard/samsung-stm32-pogo.c
+index 323d0fe..b6bd7fd 100644
+--- a/drivers/input/keyboard/samsung-stm32-pogo.c
++++ b/drivers/input/keyboard/samsung-stm32-pogo.c
+@@ -11,6 +11,7 @@
+ #include <linux/input/matrix_keypad.h>
+ #include <linux/input/mt.h>
+ #include <linux/interrupt.h>
++#include <linux/ktime.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
+ #include <linux/pinctrl/consumer.h>
+@@ -51,6 +52,10 @@
+ #define POGO_KEY_COL(v)		(((v) >> 1) & 0x1f)
+ #define POGO_KEY_ROW(v)		(((v) >> 6) & 0x7)
+ 
++static bool conn_trace;
++module_param(conn_trace, bool, 0644);
++MODULE_PARM_DESC(conn_trace, "Log each edge of the connection line with a timestamp");
++
+ struct pogo_kbd {
+ 	struct i2c_client *client;
+ 	struct input_dev *input;
+@@ -273,7 +278,8 @@ static irqreturn_t pogo_irq(int irq, void *dev_id)
+ 	/* The MCU sends an empty frame after it (re)starts */
+ 	if (size <= POGO_HDR_SIZE || size - POGO_HDR_SIZE > sizeof(data)) {
+ 		mutex_unlock(&kbd->i2c_lock);
+-		pogo_check_ic_work(&kbd->check_ic_work.work);
++		/* As stock: the handshake sleeps, so keep it out of the IRQ thread */
++		schedule_delayed_work(&kbd->check_ic_work, msecs_to_jiffies(10));
+ 		return IRQ_HANDLED;
+ 	}
+ 	size -= POGO_HDR_SIZE;
+@@ -361,16 +367,16 @@ static irqreturn_t pogo_conn_irq(int irq, void *dev_id)
+ {
+ 	struct pogo_kbd *kbd = dev_id;
+ 
++	if (conn_trace)
++		dev_info(&kbd->client->dev, "conn=%d t=%lld\n",
++			 gpiod_get_value_cansleep(kbd->conn),
++			 ktime_to_us(ktime_get_real()));
++
+ 	/*
+-	 * Trackpad use makes this line drop about once a second, on the stock kernel
+-	 * too outside One UI. As stock: cut the power on a low level and restore it
+-	 * once the line is stable, so the keyboard comes back.
++	 * Trackpad use makes this line dip. Stock cuts the power on any low level,
++	 * which turns each dip into a full MCU restart. Act only once the line has
++	 * been stable; every edge re-arms this, so a bouncing line keeps the power on.
+ 	 */
+-	if (!gpiod_get_value_cansleep(kbd->conn)) {
+-		mutex_lock(&kbd->power_lock);
+-		pogo_set_power(kbd, false);
+-		mutex_unlock(&kbd->power_lock);
+-	}
+ 	mod_delayed_work(system_wq, &kbd->conn_work, msecs_to_jiffies(250));
+ 	return IRQ_HANDLED;
+ }
