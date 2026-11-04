@@ -183,8 +183,9 @@ Limit stays 900 mA, so a dock with HDMI may brown out. Note it, don't raise it y
 | 0051 | `-usbhost.dts`, Makefile | dtc via kernel `make qcom/...dtb`, no warnings | never booted; schema (`dtbs_check`) not run |
 | 0052 | charger OTG regulator + shutdown (from X) + usbhost additions | compiled arm64 clang 18, W=1, clean | no hardware here (runs on S8+ in X); not linked |
 | 0053 | `max77705_typec.c`, Kconfig, Makefile, `-typec.dts` | compiled to `.o`, W=1, clean, against v7.3 headers with this repo's config; DTB with QMP 0 and 1 builds | **never run**; no modpost or link; no sparse or checkpatch; no DT binding, so schema would reject the compatible |
+| 0054 | MFD masks at init, `debug_irq` | compiled to `.o`, W=1, clean, same setup | never run; no modpost or link |
 
-Compile ran in a sparse v7.3 checkout with `COMPAT_VDSO` off (no 32-bit toolchain here); the DTS patches of the series were applied, the others were not, since none touch these files. 0051-0053 apply cleanly in order on that base. `git am` of the full series was not run.
+Compile ran in a sparse v7.3 checkout with `COMPAT_VDSO` off (no 32-bit toolchain here), full series applied with `git am`.
 
 Default builds: `TYPEC_MAX77705` stays unset, CI builds only the base DTB, and the new DTBs are extra. 0052 does register an unused regulator in every build; that part is live code. Drop it from a default build if you'd rather keep this branch fully inert.
 
@@ -201,7 +202,7 @@ Default builds: `TYPEC_MAX77705` stays unset, CI builds only the base DTB, and t
 
 ## Results on the tablet (2026-11-04)
 
-Patches renumbered to 0051-0053 on top of main. All tests over Wi-Fi SSH, kernel `usbc-dp` branch.
+Patches renumbered to 0051-0053 on top of main. These results predate the pin change in 0001 and 0054. All tests over Wi-Fi SSH, kernel `usbc-dp` branch.
 
 | Stage | Result |
 |---|---|
@@ -217,9 +218,68 @@ Other things seen:
 - One boot came up with a green panel while the HDMI hub was attached at boot. The next boot without the hub was fine. Hypothesis, unproven: the dock at boot upsets the bootloader's panel handoff. Until known, plug the hub in after boot.
 - Do not plug a charger into the hub while the boost is on. The regulator only checks CHGIN when enabling.
 
+## IRQ 156: what the source says
+
+Nothing here has run yet. Facts are from source; the cause is a hypothesis.
+
+- **The pin config differs from stock.** Stock `chg_int_default`: `bias-pull-up`, `power-source = <1>` (`DT:1129-1137`, used at `DT:11105`). 0001 had `bias-disable`, `power-source = <0>`. X has `power-source = <1>` on its board. Inferred, not checked on a schematic: VIN0 is a higher rail than the line's pull-up, so the pin reads low all the time. **This is now the lead hypothesis**, and 0001 is changed to the stock values.
+- **Top-level masking was already there.** regmap-irq writes 1 to all four INTSRC_MASK bits when the chip is added (`L:drivers/base/regmap/regmap-irq.c:839-853`), and USBC stays masked until a child requests it. So the old hypothesis (an unmasked CCIC source) does not explain the storm without the driver, unless the mask does not gate the pin.
+- **The evidence fits a stuck line.** The handler returns `IRQ_NONE` when no unmasked INTSRC bit is set (`regmap_irq_thread`), and "nobody cared" needs nearly all of them to be `IRQ_NONE`. 100001 in 77 s is about 1300/s, plausibly one I2C read per loop. An edge trigger stops the storm but loses later interrupts, as a line that stays low would.
+- **What it doesn't explain:** the driver's own IRQ at 66-140/s means INTSRC.USBC was set on those loops. That still needs `debug_irq`. If it continues after the pin fix, a CCIC source really is re-asserting.
+- 0053 already read all four INT registers. Clear semantics: read to clear, bulk read of 4 at 0x02 (`S:drivers/mfd/max77705-irq.c:331`). Stock also drops masked bits in software, which suggests they latch regardless of the mask.
+
+Top level: INTSRC 0x66 reg 0x22, mask 0x23, 1 masks: bit 0 CHG, 1 TOP, 2 FG, 3 USBC. TOP's source is SYSTEM_INT 0x24, mask 0x26. Charger: CHG_INT 0x69 reg 0xB0, mask 0xB1, read by mainline's charger. FG has no mask register here and stays masked at the top (stock's unmask is commented out, `S:max77705-irq.c:518`).
+
+Changes: 0001 pin config. 0053 inits by polling with the source masked, filters masked bits, unmasks VBUS, re-inits on lost masks, `debug_irq`. 0054 masks SYSTEM_INT and the CCIC groups at MFD probe unless a Type-C client exists, `debug_irq`.
+
+## Friday test plan
+
+Over Wi-Fi SSH. Stop charge-control first in tests 2 and 3, so its mailbox traffic doesn't appear in the counts: `sudo systemctl stop gts7xl-charge-control`. Unplug everything from USB-C unless a step says otherwise. Helper for all tests:
+
+```
+rate() { a=$(awk '/max77705/{print $2; exit}' /proc/interrupts); sleep 10; b=$(awk '/max77705/{print $2; exit}' /proc/interrupts); echo "$(( (b-a)/10 ))/s"; }
+pin() { sudo grep -h 'gpio11' /sys/kernel/debug/pinctrl/*pmic@4*gpio*/pinconf-pins; }
+```
+
+If `pin` prints nothing, look in `ls /sys/kernel/debug/pinctrl/` for the PM8150L GPIO entry (pmic@4).
+
+**Test 1: pin only.** Keep the old Image, append only the new default DTB (0001). This tests one thing.
+```
+pin; rate; sleep 120; rate; sudo dmesg | grep -E 'nobody cared|Disabling IRQ'; grep max77705 /proc/interrupts
+```
+- *Expected:* `pin` shows `vin-1`, `pull-up`, level high. Both rates about 0.
+- *Pass:* no "nobody cared" after 3 minutes. The pin hypothesis is proven; add a dated line to NOTES.
+- *Fail:* rate still about 1300/s. Then check whether something drives the line: `pin` low, and `sudo i2cget -f -y 0 0x66 0x22`. INTSRC 0 with the pin low means the chip isn't asserting, so look at the pad (pin config not applied?). INTSRC nonzero means a source that isn't gated: go on to test 2.
+- *Regression check, in both cases:* plug in a charger. `cat /sys/class/power_supply/max77705-charger/online` goes to 1, and back to 0 on unplug. The charger IRQ now really fires; a CHGIN storm would show in `rate`. Panel, Wi-Fi and sensors as before.
+
+**Test 2: kernel with 0054, default DTB.**
+```
+echo 1 | sudo tee /sys/module/max77705/parameters/debug_irq
+rate; sudo dmesg | grep 'INTSRC' | tail -5
+for r in 0x0e 0x0f 0x10 0x11; do sudo i2cget -f -y 0 0x25 $r; done
+sudo i2cget -f -y 0 0x66 0x23
+```
+- *Expected:* CCIC masks all `0xff`. INTSRC_MASK bit 3 set (`0x?e`/`0x?f`, CHG unmasked). No INTSRC lines at idle, one per charger event.
+- *Pass:* rate 0 at idle, gadget and charging as in test 1, and 9 V: start charge-control with a PD charger, `journalctl -u gts7xl-charge-control | tail` and `voltage_now` as today.
+- *Fail:* masks not `0xff` means something rewrites them or the CCIC reset: note who. `usbroute` in the initramfs runs after the MFD probe, so `0x02` bit 7 latches again but stays masked.
+
+**Test 3: Type-C driver, `-typec.dtb`.** Old module out of autoload.
+```
+sudo modprobe max77705_typec debug_irq=1
+rate; sudo dmesg | grep -E 'max77705-typec|irq [0-9]+ \(' | tail -20; ls /sys/class/typec/
+```
+Line format: `irq N (M empty): int UIC CC PD VDM status ... mask UIC CC PD VDM`.
+- *Expected:* `CCIC hw 0x1a fw 52.00`, no `-110`, no "interrupt masks" warning, mask `1f f0 df ff`, rate about 0 at idle.
+- Then plug and unplug, three times each and in both orientations: charger on hub, unpowered hub with a stick, PC. Check each: `cat /sys/class/typec/port0/{data_role,power_role,orientation}`; `lsusb`; the charger's `online`.
+- *Pass:* every replug switches roles, IRQ count grows only by a few per event, "empty" stays small, no "nobody cared", boost off after each unplug (`i2cget -f -y 0 0x69 0xb7`, mode 0x5 or 0x4).
+- *Fail tells you:* "empty" climbing with the pin high means a source outside the four registers; send the log. The same `int` bits every line, with the bit unmasked: that source is the re-asserter, and it's the next thing to mask or handle. Bits set in `int` and in `mask`: harmless, just filtered.
+- With 9 V: `sudo systemctl start gts7xl-charge-control` with a PD charger attached. Pass: 9 V as today, and no `answered by` warning storm. Occasional ones are the unlocked mailbox of next step 2.
+
+Back out at any point by appending the old DTB. No test here needs anything but `boot`.
+
 ## Next steps
 
-1. **IRQ storm.** Log every `ints[]` value in the handler and `INTSRC`/`SYSTEM_INT` on 0x66 for a few seconds. Find the source that re-asserts. Then compare with the S8+ driver (aaronsb/sm-x800-linux), which has working IRQ handling, and preferably move to that driver. Pass: IRQ 156 stays low, and replug of hub, charger and PC all switch roles.
+1. **IRQ storm.** Run the Friday test plan. Pass: IRQ 156 stays low, and replug of hub, charger and PC all switch roles.
 2. **Mailbox lock.** The kernel driver and `gts7xl-charge-control` share the CCIC mailbox with no lock. Move the 9 V PD request into the kernel driver (fixed PDO 9 V / 1.65 A only), then retire the mailbox code in charge-control.
 3. **Autoload.** Only after 1 and 2: load `max77705_typec` at boot and make `-typec.dtb` the default. Until then the default DTB stays peripheral mode, because the gadget is the debug path.
 4. **c2: orientation.** QMP PHY + L18A. Read L18A's bootloader voltage back first (voltage rule in docs/sensors.md).

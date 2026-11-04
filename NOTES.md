@@ -62,6 +62,9 @@ Short dated findings, newest first. Status lives in README.md.
 ## 2026-11-04: bad DT in 0046 (fixed)
 - My `git commit -a` for 0046 swept in the uncommitted readback rail nodes (rb_*), which leave the panel dark/green and stop regulators-0 probing (ldo14/ldo9 suppliers missing). Every DTB built from the tree since had them; my test images used a saved DTB, so it showed only when the usbc-dp test rebuilt the DTB. 0046 regenerated without the DT part.
 
+## IRQ 156 (branch usbc-dp, untested)
+- MAX77705 pin in 0001 differed from stock (`DT:1129-1137`): bias-disable, power-source 0 vs bias-pull-up, power-source 1. Changed to stock. regmap-irq already masks INTSRC, so the storm without a driver points at the line, not a CCIC source. Hypothesis until the Friday test plan in docs/usbc-dp-research.md runs.
+
 ## 2026-11-04: USB-C (branch usbc-dp)
 - Plan, protocol and full results: docs/usbc-dp-research.md. Patches 0051-0053 on the usbc-dp branch only.
 - Works: forced host DTB + OTG VBUS by hand: unpowered hubs, sticks, mouse at 480M.
