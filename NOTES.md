@@ -61,3 +61,10 @@ Short dated findings, newest first. Status lives in README.md.
 
 ## 2026-11-04: bad DT in 0046 (fixed)
 - My `git commit -a` for 0046 swept in the uncommitted readback rail nodes (rb_*), which leave the panel dark/green and stop regulators-0 probing (ldo14/ldo9 suppliers missing). Every DTB built from the tree since had them; my test images used a saved DTB, so it showed only when the usbc-dp test rebuilt the DTB. 0046 regenerated without the DT part.
+
+## 2026-11-04: USB-C (branch usbc-dp)
+- Plan, protocol and full results: docs/usbc-dp-research.md. Patches 0051-0053 on the usbc-dp branch only.
+- Works: forced host DTB + OTG VBUS by hand: unpowered hubs, sticks, mouse at 480M.
+- Type-C driver: first attach works (host + sink, charges through the hub); replug fails because IRQ 156 storms and gets disabled (pre-existing, every boot). Edge trigger loses mailbox replies (-110).
+- Next: find the re-asserting CCIC source, base on the S8+ driver, add a mailbox lock with charge-control.
+- Green panel once with the HDMI hub attached at boot; plug hubs in after boot until known.
