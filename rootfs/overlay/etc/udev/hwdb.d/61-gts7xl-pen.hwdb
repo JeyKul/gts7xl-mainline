@@ -1,0 +1,5 @@
+# S Pen digitizer range, fitted with gts7xl-pen-calibrate (3x3 targets, landscape).
+# Rerun the tool and replace these if the pen looks offset on your panel.
+evdev:name:Wacom W90xx Pen:*
+ EVDEV_ABS_00=4:26754
+ EVDEV_ABS_01=10:16705

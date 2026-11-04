@@ -113,9 +113,9 @@ class Pen:
         self.down = False
         self.gesture = False
         self.agent = Agent(self.bus, AGENT_PATH)
-        manager = dbus.Interface(self.bus.get_object(BLUEZ, "/org/bluez"), BLUEZ + ".AgentManager1")
-        manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
-        manager.RequestDefaultAgent(AGENT_PATH)
+        self.manager = dbus.Interface(self.bus.get_object(BLUEZ, "/org/bluez"), BLUEZ + ".AgentManager1")
+        self.manager.RegisterAgent(AGENT_PATH, "NoInputNoOutput")
+        self.manager.RequestDefaultAgent(AGENT_PATH)
         self.bus.add_signal_receiver(self.interfaces_added, "InterfacesAdded",
                                      "org.freedesktop.DBus.ObjectManager")
         self.bus.add_signal_receiver(self.props_changed, "PropertiesChanged", PROPS,
@@ -149,8 +149,24 @@ class Pen:
         try:
             self.step()
         except dbus.DBusException as e:
-            print("bluez:", e.get_dbus_message(), flush=True)
+            msg = e.get_dbus_message()
+            print("bluez:", msg, flush=True)
+            # The pen forgot the bond (paired elsewhere): drop ours and pair again
+            if "Not Authorized" in msg or "Authentication" in msg:
+                self.auth_failures = getattr(self, "auth_failures", 0) + 1
+                if self.auth_failures >= 3:
+                    self.auth_failures = 0
+                    self.forget_pen()
         return True
+
+    def forget_pen(self):
+        path, _ = self.adapter()
+        for dev, ifaces in self.objects().items():
+            props = ifaces.get(DEVICE)
+            if props and (str(props["Address"]) == self.known() or self.is_pen(props)):
+                print("stale pairing, removing", props["Address"], flush=True)
+                adapter = dbus.Interface(self.bus.get_object(BLUEZ, path), ADAPTER)
+                adapter.RemoveDevice(dev)
 
     def step(self):
         path, adapter = self.adapter()
@@ -177,7 +193,15 @@ class Pen:
         if not props["Connected"]:
             self.char = None
             print("connecting", props["Address"], props.get("Name", ""), flush=True)
+            # Desktop agents (KDE's bluedevil) take over as default after login
+            # and refuse the pen's pairing; claim it back first
+            self.manager.RequestDefaultAgent(AGENT_PATH)
             if not props["Paired"]:
+                # The pen only authorizes its button service for a bond made in
+                # pairing mode: a charge toggle starts it for the built-in pen,
+                # the S Pen Pro needs its button held
+                toggle_charging()
+                time.sleep(1)
                 device.Pair(timeout=30)
             device.Connect(timeout=30)
             return
@@ -192,6 +216,7 @@ class Pen:
             if uuid == BUTTON_EVENT:
                 obj.StartNotify()
                 self.char = path
+                self.auth_failures = 0
                 print("connected", props["Address"], flush=True)
             elif uuid == BATTERY_LEVEL:
                 try:

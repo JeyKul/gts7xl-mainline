@@ -1,7 +1,7 @@
-From 3c9b1406a18db6be19b34996909dab19b754d428 Mon Sep 17 00:00:00 2001
+From 91c33b1d62c6a3589e2399b1abca59f4dcd8eed2 Mon Sep 17 00:00:00 2001
 From: JeyKul <jey@kulovac.de>
 Date: Wed, 4 Nov 2026 20:23:52 +0100
-Subject: [PATCH 47/48] iio: light: add ssc-light-bridge, a light value fed
+Subject: [PATCH 47/50] iio: light: add ssc-light-bridge, a light value fed
  from userspace
 
 Light sensors behind the Qualcomm sensor DSP have no kernel driver.
