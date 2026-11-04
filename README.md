@@ -132,6 +132,7 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 - `docs/display.md`: what the native display needs, brightness
 - `docs/sensors.md`: sensor DSP stack, power rails, rotation and light, troubleshooting
 - `docs/keyboard-cover.md`: keyboard, trackpad stalls, tablet mode
+- `docs/usbc-dp-research.md`: USB-C host and DisplayPort plan, MAX77705 CCIC protocol, safety rules
 - `initramfs/init`: first code to run, picks the system or the installer
 - `kmod/`: panel register tool used for display research
 - `sensord/`: sensor DSP file service and client; accelerometer and light into iio-sensor-proxy
