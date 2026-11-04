@@ -61,8 +61,8 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Bluetooth: QCA6390 | ✅ | Audio to a speaker works; RFCOMM profiles not built yet |
 | GPS | ⬜ | |
 | USB gadget (serial, network) | ✅ | |
-| USB host | ⬜ | |
-| DisplayPort over USB-C | ⬜ | |
+| USB host | 🟡 | USB 2.0 hubs, sticks, mouse work with the host test DTB (`-usbhost`) and VBUS switched on by hand; automatic roles and charging through a hub pending (Type-C driver IRQ storm). See `docs/usbc-dp-research.md` (patches on branch `usbc-dp`) |
+| DisplayPort over USB-C | ⬜ | Planned: needs DP alt mode, PS5169 redriver, `mdss_dp`; see `docs/usbc-dp-research.md` |
 
 ### Power
 
@@ -132,6 +132,7 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 - `docs/display.md`: what the native display needs, brightness
 - `docs/sensors.md`: sensor DSP stack, power rails, rotation and light, troubleshooting
 - `docs/keyboard-cover.md`: keyboard, trackpad stalls, tablet mode
+- `docs/usbc-dp-research.md`: USB-C host and DisplayPort plan, MAX77705 CCIC protocol, safety rules, test results
 - `initramfs/init`: first code to run, picks the system or the installer
 - `kmod/`: panel register tool used for display research
 - `sensord/`: sensor DSP file service and client; accelerometer and light into iio-sensor-proxy
