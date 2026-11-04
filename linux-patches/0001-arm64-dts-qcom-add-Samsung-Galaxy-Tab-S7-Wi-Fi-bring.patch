@@ -151,8 +151,8 @@ index 000000000..b44951f7f
 +		pins = "gpio11";
 +		function = "normal";
 +		input-enable;
-+		bias-disable;
-+		power-source = <0>;
++		bias-pull-up;
++		power-source = <1>;
 +	};
 +};
 +
