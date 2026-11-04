@@ -49,3 +49,8 @@ Short dated findings, newest first. Status lives in README.md.
 - KWin learned autoBrightnessCurve [[0,1]] (0 lux -> 100%) and stuck at 100%. Fixed by editing it with sddm stopped (KWin rewrites on exit).
 - Installer now builds and installs sensord (gcc only during the build), adds iio-sensor-proxy, enables gts7xl-sensord-setup (extract once + start the SLPI). Extractor defaults set to the tested strange/2/65536/r06.
 - Docs: docs/sensors.md, docs/keyboard-cover.md, display.md brightness; README status rows updated.
+
+## 2026-11-04: S Pen Pro reconnect loop
+- Not Bluetooth instability. The pen's bond went stale: the pen answers its button characteristic (9ee7ba08-...) with ATT Insufficient Authorization, and the daemon retried Connect every 5 s ("Operation Not Authorized").
+- SMP re-pairing alone isn't enough: the pen only authorizes the button service for a bond made in pairing mode (Pro: hold the button; built-in pen: charge toggle).
+- gts7xl-spen now drops the bond after 3 auth failures, toggles the charger before pairing, and re-claims the default agent. User held the button: connected, battery 20%.
