@@ -1,0 +1,13 @@
+[Unit]
+Description=File service for the sensor DSP
+After=systemd-udevd.service
+
+[Service]
+ExecStart=/usr/local/bin/gts7xl-sensord --serve /var/lib/gts7xl-sensord
+Restart=always
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/gts7xl-sensord/mnt/vendor/persist/sensors

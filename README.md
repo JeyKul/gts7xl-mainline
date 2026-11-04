@@ -132,6 +132,7 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 - `docs/display.md`: what the native display needs
 - `initramfs/init`: first code to run, picks the system or the installer
 - `kmod/`: panel register tool used for display research
+- `sensord/`: sensor DSP file service, sensor client and accelerometer input, untested
 - `modules-repo/`: list of optional module packages
 - `tools/`: serial shell helper, USB deploy, test programs
 - `uefi/`: earlier Mu-Silicium attempt, not used; copy over a Mu-Silicium checkout. It needs blobs and a dump of your own device tree, which aren't published because they contain device identifiers
