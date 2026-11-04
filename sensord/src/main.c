@@ -297,7 +297,6 @@ static int run_stream(const char *type, float rate, unsigned long limit, int wai
 	/* The SSC may take a moment to spin a sensor up; on-change can be quiet forever. */
 	c.timeout_ms = a.on_change ? 86400000 : 10000;
 	install_signals();
-	stop_flag = 0;
 	ret = client_pump(&c, on_sample, &s, &stop_flag);
 	if (ret)
 		fprintf(stderr, "stream ended: %s\n", strerror(-ret));
