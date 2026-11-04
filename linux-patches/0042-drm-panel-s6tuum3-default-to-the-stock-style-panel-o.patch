@@ -1,4 +1,4 @@
-From ab236edf79d608c99e54ec2b26eed58c1ce4f37a Mon Sep 17 00:00:00 2001
+From c0df7af81d5347b6212efb15894fc245ecc6b663 Mon Sep 17 00:00:00 2001
 From: JeyKul <jey@kulovac.de>
 Date: Wed, 4 Nov 2026 18:12:10 +0100
 Subject: [PATCH] drm/panel: s6tuum3: default to the stock style panel off
@@ -8,20 +8,26 @@ line from msm stopping the link mid-frame.
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
 ---
- drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 5 +++--
- 1 file changed, 3 insertions(+), 2 deletions(-)
+ drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 11 +++++------
+ 1 file changed, 5 insertions(+), 6 deletions(-)
 
 diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
-index 541a91001..33c72bdaa 100644
+index 541a91001..055a1b618 100644
 --- a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
 +++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
-@@ -33,9 +33,10 @@
-  * link. The panel shows green garbage from then until the first prepare, seconds
-  * later, and no DSI command can reach it in that time: the host refuses transfers
-  * until it is powered on. The reset line is the only control available, so 2 is
+@@ -29,13 +29,12 @@
+  * 1 turns the panel off over DSI in the first prepare, 2 holds it in reset from
+  * probe instead.
+  *
+- * msm resets MDSS before it creates this device, which stops the bootloader's
+- * link. The panel shows green garbage from then until the first prepare, seconds
+- * later, and no DSI command can reach it in that time: the host refuses transfers
+- * until it is powered on. The reset line is the only control available, so 2 is
 - * the default. This driver must load before msm for it to take effect early.
-+ * not the default: tests showed no gain over 1. The remaining glitch line comes from
-+ * msm stopping the link mid-frame, before this driver runs.
++ * msm's DSI PHY probe stops the bootloader's link mid-frame, before this driver
++ * runs, and the panel keeps one half-written line until the first prepare. No
++ * mode here can prevent that line. 1 is the default, as the closest to stock;
++ * 2 gave no visible gain in testing.
   */
 -static int clean_handoff = 2;
 +static int clean_handoff = 1;

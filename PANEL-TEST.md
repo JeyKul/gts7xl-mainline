@@ -2,19 +2,19 @@
 
 Goal: from the bootloader splash to the desktop with at worst a black screen, never green garbage.
 
-Build with the patches in `linux-patches/` and the updated `rootfs/`. On an installed system, `gts7xl-hw` and `gts7xl-panel` must be updated too, because the load order matters.
+Build with the patches in `linux-patches/` too, because the load order matters.
 
 ## Modes
 
 Set the mode, then do a full reboot. The mode matters only at boot:
 
-    echo 'options panel-samsung-s6tuum3 clean_handoff=2' | sudo tee /etc/modprobe.d/panel-handoff.conf
+    echo 'options panel-samsung-s6tuum3 clean_handoff=1' | sudo tee /etc/modprobe.d/panel-handoff.conf
 
 | Mode | What it does |
 |---|---|
 | 0 | Old behaviour, for comparison |
-| 1 | Display off and sleep in over DSI on the first prepare, then reset |
-| 2 | Default. Holds reset from probe until the first prepare |
+| 1 | Default. Display off and sleep in over DSI on the first prepare, then reset |
+| 2 | Holds reset from probe until the first prepare |
 
 Check the mode with `cat /sys/module/panel_samsung_s6tuum3/parameters/clean_handoff`.
 
@@ -47,3 +47,7 @@ Useful lines:
 - Green before the `holding reset` line: the gap between the MDSS reset and panel probe is visible.
 - Green after the `holding reset` line: reset alone does not darken the panel.
 - Green after the `tcon ready` line: the cause is in the first frames, not the handoff.
+
+## Result, 2026-11-04
+
+Five boots across modes 0, 1 and 2: every mode keeps one glitch line at the start, from msm stopping the link mid-frame. Mode 1 is the default. The line could only be removed by blanking the panel before msm loads.
