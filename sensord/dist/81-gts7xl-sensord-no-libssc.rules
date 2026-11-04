@@ -1,0 +1,3 @@
+# gts7xl-sensord owns the sensor DSP. iio-sensor-proxy's own libssc driver
+# finds no hexagonrpcd, hangs, and holds up shutdown for 90 s.
+SUBSYSTEM=="misc", KERNEL=="fastrpc-[as]dsp*", ENV{IIO_SENSOR_PROXY_TYPE}=""

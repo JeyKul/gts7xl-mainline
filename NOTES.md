@@ -24,3 +24,10 @@ Short dated findings, newest first. Status lives in README.md.
 - gpio67 (stock proxy_int, no pull): no effect on veml3328. Reverted.
 - Cause of the blank panel: the forced voltages. Readback (rpmh_read) of the bootloader's votes: L10A 2.96 V, L16A 2.704 V, L4C 1.808 V. Forcing 2.9 V/2.8 V blanks the panel. Without min/max the rails read "unknown" and regulator-output can't probe.
 - Fix (0045): all three always-on at the bootloader voltages, HPM. Panel OK, no deferred probes, L8C on, SLPI stable, 12 sensors including ambient_light (veml3328_0). Still missing: the second veml3328 (bus 5), rgb, bridge_driver_0 (bus 7, 0x2a), device_orient.
+
+## 2026-11-04: shutdown hang, auto-rotate, rail readback
+- iio-sensor-proxy hung 90 s on stop: its own libssc driver (udev sets IIO_SENSOR_PROXY_TYPE=ssc-* on fastrpc-sdsp) waits for hexagonrpcd. 81-gts7xl-sensord-no-libssc.rules clears it; stop takes 28 ms.
+- 71-gts7xl-sensord-start.rules was never installed on the tablet, so sensord never autostarted. Installed; fs + accel services start at boot.
+- Auto-rotate: sensord --uinput -> iio-sensor-proxy input-accel; monitor-sensor reports all 4 orientations.
+- kwin "Atomic commit failed: EBUSY" 2-22 per boot, only during startup/use, 0 when idle. Not the rails. Open.
+- Readback of undefined rails (name-only nodes for L1/3/7/11/15/18A, L1/2/3/6/9/10/11C, +/- BOB): both boots had a dark panel, and SSH didn't answer on the second. Defining these nodes is not side-effect free. Dropped. DT kept at research/sensord/dts-readback-allrails.dts.
