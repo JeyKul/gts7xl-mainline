@@ -1,0 +1,27 @@
+From 6422c949bc8ea20c3d434d204bbf35759f2e95f0 Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Wed, 4 Nov 2026 21:10:03 +0000
+Subject: [PATCH 58/58] media: s5k-tab: refuse a mode change while streaming
+
+set_fmt changed the mode and the blanking and exposure controls of a running sensor, leaving the driver out of step with the registers it wrote at stream on.
+---
+ drivers/media/i2c/s5k-tab.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/media/i2c/s5k-tab.c b/drivers/media/i2c/s5k-tab.c
+index 0014b7d4..a4140c9a 100644
+--- a/drivers/media/i2c/s5k-tab.c
++++ b/drivers/media/i2c/s5k-tab.c
+@@ -536,6 +536,9 @@ static int s5ktab_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *stat
+ 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY || m == s->mode)
+ 		return 0;
+ 
++	if (v4l2_subdev_is_streaming(sd))
++		return -EBUSY;
++
+ 	s->mode = m;
+ 	__v4l2_ctrl_modify_range(s->hblank, m->hts - m->width, m->hts - m->width, 1,
+ 				 m->hts - m->width);
+-- 
+2.43.0
+
