@@ -1,0 +1,12 @@
+[Unit]
+Description=Sensor DSP accelerometer as an input device
+After=gts7xl-sensord-fs.service
+
+[Service]
+ExecStart=/usr/local/bin/gts7xl-sensord --uinput --wait 300
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
