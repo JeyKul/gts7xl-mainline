@@ -30,6 +30,7 @@ else
 	D=
 	for u in /sys/class/block/*/uevent; do
 		if grep -qx 'PARTNAME=userdata' "$u"; then
+			[ -z "$D" ] || fail "more than one userdata partition, unplug other disks"
 			D=/dev/$(basename "$(dirname "$u")")
 		fi
 	done
