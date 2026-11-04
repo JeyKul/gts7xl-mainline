@@ -32,11 +32,11 @@ install: gts7xl-sensord
 	install -Dm644 dist/gts7xl-sensord-fs.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-fs.service
 	install -Dm644 dist/gts7xl-sensord-accel.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-accel.service
 	install -Dm644 dist/70-gts7xl-sensord.rules $(DESTDIR)/etc/udev/rules.d/70-gts7xl-sensord.rules
+	install -Dm644 dist/81-gts7xl-sensord-no-libssc.rules $(DESTDIR)/etc/udev/rules.d/81-gts7xl-sensord-no-libssc.rules
 
 # Separate: with this in place, every SLPI restart starts the services.
 install-autostart:
 	install -Dm644 dist/71-gts7xl-sensord-start.rules $(DESTDIR)/etc/udev/rules.d/71-gts7xl-sensord-start.rules
-	install -Dm644 dist/81-gts7xl-sensord-no-libssc.rules $(DESTDIR)/etc/udev/rules.d/81-gts7xl-sensord-no-libssc.rules
 
 clean:
 	rm -f gts7xl-sensord tests/test tests/e2e src/*.o tests/*.o
