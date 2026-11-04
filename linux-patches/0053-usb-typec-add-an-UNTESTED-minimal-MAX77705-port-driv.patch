@@ -1,7 +1,7 @@
-From 1e67c80d7f8d7f69c3e9c47099738677d9e7a844 Mon Sep 17 00:00:00 2001
+From 7d5a1c7c7fce240530692f6329c821e38e98a51d Mon Sep 17 00:00:00 2001
 From: Claudius <claudiusthebot@gmail.com>
 Date: Wed, 4 Nov 2026 20:00:12 +0000
-Subject: [PATCH 53/53] usb: typec: add an UNTESTED minimal MAX77705 port
+Subject: [PATCH 53/54] usb: typec: add an UNTESTED minimal MAX77705 port
  driver
 
 Reports attach, power and data role and orientation from the CCIC
@@ -14,16 +14,16 @@ No PD requests and no firmware update path: the opcode allowlist holds
 only write masks and a one-byte mailbox. Never run on hardware.
 ---
  arch/arm64/boot/dts/qcom/Makefile             |   1 +
- .../qcom/sm8250-samsung-gts7xlwifi-typec.dts  | 102 ++++
+ .../qcom/sm8250-samsung-gts7xlwifi-typec.dts  | 102 +++
  drivers/usb/typec/Kconfig                     |  15 +
  drivers/usb/typec/Makefile                    |   1 +
- drivers/usb/typec/max77705_typec.c            | 505 ++++++++++++++++++
- 5 files changed, 624 insertions(+)
+ drivers/usb/typec/max77705_typec.c            | 594 ++++++++++++++++++
+ 5 files changed, 713 insertions(+)
  create mode 100644 arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts
  create mode 100644 drivers/usb/typec/max77705_typec.c
 
 diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
-index e5f84c6b7..cc4577610 100644
+index e5f84c6b..cc457761 100644
 --- a/arch/arm64/boot/dts/qcom/Makefile
 +++ b/arch/arm64/boot/dts/qcom/Makefile
 @@ -366,6 +366,7 @@ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-hdk.dtb
@@ -36,7 +36,7 @@ index e5f84c6b7..cc4577610 100644
  dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-sony-xperia-edo-pdx203.dtb
 diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts
 new file mode 100644
-index 000000000..81312ad23
+index 00000000..81312ad2
 --- /dev/null
 +++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts
 @@ -0,0 +1,102 @@
@@ -143,7 +143,7 @@ index 000000000..81312ad23
 +};
 +#endif
 diff --git a/drivers/usb/typec/Kconfig b/drivers/usb/typec/Kconfig
-index 2f80c2792..266af2477 100644
+index 2f80c279..266af247 100644
 --- a/drivers/usb/typec/Kconfig
 +++ b/drivers/usb/typec/Kconfig
 @@ -77,6 +77,21 @@ config TYPEC_RT1719
@@ -169,7 +169,7 @@ index 2f80c2792..266af2477 100644
  	tristate "TI HD3SS3220 Type-C DRP Port controller driver"
  	depends on I2C
 diff --git a/drivers/usb/typec/Makefile b/drivers/usb/typec/Makefile
-index 8a6a1c663..b92f73a2a 100644
+index 8a6a1c66..b92f73a2 100644
 --- a/drivers/usb/typec/Makefile
 +++ b/drivers/usb/typec/Makefile
 @@ -8,6 +8,7 @@ obj-$(CONFIG_TYPEC_UCSI)	+= ucsi/
@@ -182,10 +182,10 @@ index 8a6a1c663..b92f73a2a 100644
  obj-$(CONFIG_TYPEC_WUSB3801)	+= wusb3801.o
 diff --git a/drivers/usb/typec/max77705_typec.c b/drivers/usb/typec/max77705_typec.c
 new file mode 100644
-index 000000000..39abc3663
+index 00000000..1694c293
 --- /dev/null
 +++ b/drivers/usb/typec/max77705_typec.c
-@@ -0,0 +1,505 @@
+@@ -0,0 +1,594 @@
 +// SPDX-License-Identifier: GPL-2.0
 +/*
 + * Maxim MAX77705 CCIC: minimal USB Type-C port driver
@@ -228,6 +228,7 @@ index 000000000..39abc3663
 +#define REG_HW_REV		0x00
 +#define REG_FW_REV		0x01
 +#define REG_UIC_INT		0x02	/* UIC, CC, PD, VDM: clear on read */
++#define REG_USBC_STATUS1	0x06
 +#define REG_USBC_STATUS2	0x07	/* SYSMsg */
 +#define REG_FW_MINOR		0x09
 +#define REG_CC_STATUS0		0x0a
@@ -258,10 +259,12 @@ index 000000000..39abc3663
 +#define SYSMSG_BOOT_POR		0x05
 +
 +/*
-+ * 1 masks. Only command done, SYSMsg, CC pin/current/VCONN/state and data
-+ * role reach us. Stock unmasks more; nothing here would use it.
++ * 1 masks. Only command done, SYSMsg, VBUS, CC pin/current/VCONN/state and
++ * data role reach us. Stock unmasks more; nothing here would use it. VBUS
++ * stays on because stock uses it to catch a CCStat detach that never came
++ * (max77705-irq.c:342-353).
 + */
-+#define UIC_INT_M_VAL		0x3f
++#define UIC_INT_M_VAL		0x1f
 +#define CC_INT_M_VAL		0xf0
 +#define PD_INT_M_VAL		0xdf
 +#define VDM_INT_M_VAL		0xff
@@ -274,7 +277,14 @@ index 000000000..39abc3663
 +#define OP_ALTMODE_SRC_VDM	0x03	/* without it no source attach */
 +
 +#define OP_TIMEOUT_MS		3000	/* stock OPCODE_WAIT_TIMEOUT */
++#define OP_POLL_US		1000
 +#define OP_TRIES		2
++
++#define NUM_INT_REGS		4	/* UIC, CC, PD, VDM */
++
++static bool debug_irq;
++module_param(debug_irq, bool, 0644);
++MODULE_PARM_DESC(debug_irq, "Log the CCIC interrupt registers on each interrupt (rate limited)");
 +
 +struct max77705_typec {
 +	struct device *dev;
@@ -286,6 +296,9 @@ index 000000000..39abc3663
 +	struct work_struct work;
 +	struct completion op_done;
 +	struct mutex op_lock;		/* one mailbox command at a time */
++	unsigned long irq_count;	/* interrupt thread only */
++	unsigned long irq_empty;	/* same: all four registers read 0 */
++	bool irq_ready;			/* under op_lock */
 +	bool need_init;
 +	bool dr_changed;
 +	bool vbus_on;
@@ -329,6 +342,26 @@ index 000000000..39abc3663
 +}
 +
 +/*
++ * Probe polls with the interrupt not requested yet, so the USBC source stays
++ * masked at the top until the masks here are right. Same order as stock
++ * (usbc.c:3446-3460), and as aaronsb/sm-x800-linux. The read clears UIC_INT;
++ * the other bits are not lost, since probe syncs from levels afterwards.
++ */
++static int max77705_typec_op_wait(struct max77705_typec *tc)
++{
++	unsigned int val;
++
++	if (tc->irq_ready)
++		return wait_for_completion_timeout(&tc->op_done,
++						   msecs_to_jiffies(OP_TIMEOUT_MS)) ?
++		       0 : -ETIMEDOUT;
++
++	return regmap_read_poll_timeout(tc->regmap, REG_UIC_INT, val,
++					val & UIC_APCMDRES, OP_POLL_US,
++					OP_TIMEOUT_MS * USEC_PER_MSEC);
++}
++
++/*
 + * Must not run in the interrupt thread, which completes op_done.
 + *
 + * gts7xl-charge-control uses the same mailbox from userspace with no lock
@@ -357,9 +390,9 @@ index 000000000..39abc3663
 +		if (ret)
 +			return ret;
 +
-+		if (!wait_for_completion_timeout(&tc->op_done,
-+						 msecs_to_jiffies(OP_TIMEOUT_MS)))
-+			return -ETIMEDOUT;
++		ret = max77705_typec_op_wait(tc);
++		if (ret)
++			return ret;
 +
 +		ret = regmap_bulk_read(tc->regmap, REG_OP_READ, buf, sizeof(buf));
 +		if (ret)
@@ -498,17 +531,16 @@ index 000000000..39abc3663
 +	tc->ccstat = ccstat;
 +}
 +
++static const u8 max77705_typec_masks[NUM_INT_REGS] = {
++	UIC_INT_M_VAL, CC_INT_M_VAL, PD_INT_M_VAL, VDM_INT_M_VAL,
++};
++
 +static int max77705_typec_hw_init(struct max77705_typec *tc)
 +{
-+	static const struct reg_sequence masks[] = {
-+		{ REG_UIC_INT_M, UIC_INT_M_VAL },
-+		{ REG_CC_INT_M, CC_INT_M_VAL },
-+		{ REG_PD_INT_M, PD_INT_M_VAL },
-+		{ REG_VDM_INT_M, VDM_INT_M_VAL },
-+	};
 +	int ret;
 +
-+	ret = regmap_multi_reg_write(tc->regmap, masks, ARRAY_SIZE(masks));
++	ret = regmap_bulk_write(tc->regmap, REG_UIC_INT_M, max77705_typec_masks,
++				sizeof(max77705_typec_masks));
 +	if (ret)
 +		return ret;
 +
@@ -524,12 +556,29 @@ index 000000000..39abc3663
 +	return 0;
 +}
 +
++/* The masks return to their defaults with the firmware, SYSMsg seen or not. */
++static bool max77705_typec_masks_lost(struct max77705_typec *tc)
++{
++	u8 masks[NUM_INT_REGS];
++
++	if (regmap_bulk_read(tc->regmap, REG_UIC_INT_M, masks, sizeof(masks)))
++		return false;
++
++	if (!memcmp(masks, max77705_typec_masks, sizeof(masks)))
++		return false;
++
++	dev_warn(tc->dev, "interrupt masks %*ph, expected %*ph\n",
++		 (int)sizeof(masks), masks,
++		 (int)sizeof(max77705_typec_masks), max77705_typec_masks);
++	return true;
++}
++
 +static void max77705_typec_work(struct work_struct *work)
 +{
 +	struct max77705_typec *tc = container_of(work, struct max77705_typec, work);
 +
 +	/* A CCIC reset puts the masks and the opcodes back to their defaults. */
-+	if (READ_ONCE(tc->need_init)) {
++	if (READ_ONCE(tc->need_init) || max77705_typec_masks_lost(tc)) {
 +		WRITE_ONCE(tc->need_init, false);
 +		if (max77705_typec_hw_init(tc))
 +			dev_err(tc->dev, "reinit after CCIC reset failed\n");
@@ -538,14 +587,46 @@ index 000000000..39abc3663
 +	max77705_typec_sync(tc);
 +}
 +
++/*
++ * Status and mask registers don't clear on read, so this changes nothing.
++ * A bit set in UIC..VDM and in its mask means masking does not stop the latch.
++ */
++static void max77705_typec_log_irq(struct max77705_typec *tc, const u8 *ints)
++{
++	u8 st[REG_VDM_INT_M - REG_USBC_STATUS1 + 1];
++
++	if (regmap_bulk_read(tc->regmap, REG_USBC_STATUS1, st, sizeof(st)))
++		return;
++
++	dev_info_ratelimited(tc->dev,
++			     "irq %lu (%lu empty): int %*ph status %*ph mask %*ph\n",
++			     tc->irq_count, tc->irq_empty,
++			     NUM_INT_REGS, ints,
++			     REG_UIC_INT_M - REG_USBC_STATUS1, st,
++			     NUM_INT_REGS, &st[REG_UIC_INT_M - REG_USBC_STATUS1]);
++}
++
 +static irqreturn_t max77705_typec_irq(int irq, void *data)
 +{
 +	struct max77705_typec *tc = data;
 +	unsigned int sysmsg;
-+	u8 ints[4];
++	u8 ints[NUM_INT_REGS];
++	int i;
 +
++	/* All four, always: reading is what clears them (max77705-irq.c:331). */
 +	if (regmap_bulk_read(tc->regmap, REG_UIC_INT, ints, sizeof(ints)))
 +		return IRQ_NONE;
++
++	tc->irq_count++;
++	if (!memchr_inv(ints, 0, sizeof(ints)))
++		tc->irq_empty++;
++
++	if (READ_ONCE(debug_irq))
++		max77705_typec_log_irq(tc, ints);
++
++	/* Masked sources still latch here; stock drops them the same way. */
++	for (i = 0; i < NUM_INT_REGS; i++)
++		ints[i] &= ~max77705_typec_masks[i];
 +
 +	if (ints[0] & UIC_APCMDRES)
 +		complete(&tc->op_done);
@@ -583,6 +664,7 @@ index 000000000..39abc3663
 +	struct fwnode_handle *connector;
 +	struct max77705_typec *tc;
 +	unsigned int hw, fw, minor;
++	u8 ints[NUM_INT_REGS];
 +	int ret;
 +
 +	if (!client->irq)
@@ -648,15 +730,20 @@ index 000000000..39abc3663
 +	if (ret)
 +		return ret;
 +
-+	/* The mailbox needs the interrupt, so request it before hw_init. */
++	/* Drop anything latched before us, then init with the source masked. */
++	ret = regmap_bulk_read(tc->regmap, REG_UIC_INT, ints, sizeof(ints));
++	ret = ret ?: max77705_typec_hw_init(tc);
++	if (ret)
++		return dev_err_probe(dev, ret, "CCIC init\n");
++
 +	ret = devm_request_threaded_irq(dev, client->irq, NULL, max77705_typec_irq,
 +					IRQF_ONESHOT, dev_name(dev), tc);
 +	if (ret)
 +		return dev_err_probe(dev, ret, "interrupt\n");
 +
-+	ret = max77705_typec_hw_init(tc);
-+	if (ret)
-+		return dev_err_probe(dev, ret, "masks\n");
++	mutex_lock(&tc->op_lock);
++	tc->irq_ready = true;
++	mutex_unlock(&tc->op_lock);
 +
 +	/* Whatever is already plugged in has raised nothing we saw. */
 +	schedule_work(&tc->work);
@@ -669,6 +756,8 @@ index 000000000..39abc3663
 +{
 +	struct max77705_typec *tc = i2c_get_clientdata(client);
 +
++	/* Or the handler can queue the work again, and with it the boost. */
++	disable_irq(client->irq);
 +	cancel_work_sync(&tc->work);
 +	max77705_typec_vbus(tc, false);
 +}
@@ -692,5 +781,5 @@ index 000000000..39abc3663
 +MODULE_DESCRIPTION("Maxim MAX77705 CCIC minimal Type-C port driver");
 +MODULE_LICENSE("GPL");
 -- 
-2.56.0
+2.43.0
 
