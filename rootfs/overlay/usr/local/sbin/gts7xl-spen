@@ -156,7 +156,13 @@ class Pen:
                 self.auth_failures = getattr(self, "auth_failures", 0) + 1
                 if self.auth_failures >= 3:
                     self.auth_failures = 0
-                    self.forget_pen()
+                    try:
+                        self.forget_pen()
+                    except dbus.DBusException as e2:
+                        print("bluez:", e2.get_dbus_message(), flush=True)
+        except (OSError, KeyError) as e:
+            # Anything escaping here removes the GLib timer for good
+            print("spen:", e, flush=True)
         return True
 
     def forget_pen(self):
@@ -227,7 +233,9 @@ class Pen:
             device_props = dbus.Interface(self.bus.get_object(BLUEZ, dev), PROPS)
             device_props.Set(DEVICE, "Trusted", True)
             os.makedirs(os.path.dirname(STATE), exist_ok=True)
-            with open(STATE, "w") as f:
+            # The desktop user can write to this directory: don't follow a link as root
+            fd = os.open(STATE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, 0o644)
+            with os.fdopen(fd, "w") as f:
                 f.write(str(props["Address"]))
             adapter = dbus.Interface(self.bus.get_object(BLUEZ, self.adapter()[0]), ADAPTER)
             if self.adapter()[1]["Discovering"]:
