@@ -2,6 +2,11 @@
 
 Short dated findings, newest first. Status lives in README.md.
 
+## 2026-11-04: USB-C and DP research (branch usbc-dp, nothing run on the tablet)
+- Plan and protocol in docs/usbc-dp-research.md. Patches 0050-0052 are untested.
+- Found in stock: PS5169 redriver at i2c14 0x28 on gpio40/41, which our DT reserves. Needed for USB3 and DP, not USB 2.0.
+- Tab S8+ port (aaronsb/sm-x800-linux) has a working MAX77705 Type-C driver: source attach needs opcode 0x55 data 3.
+
 ## 2026-11-04
 - SLPI sensor bisect (configs and registry entries removed, 60-70 s per run): crash at t+10 s with every set except bridge_driver_0 + pah_8011 + veml3328 all removed (no crash, twice). Any two of those still crash. With all three gone: no crash but `--list` shows 0 sensors. Backup of the original registry and configs on the tablet: /var/lib/gts7xl-sensord-backup; restored afterwards.
 - SLPI crash: not unused regulators (regulator_ignore_unused, crash unchanged). Coredump text: `sns_thread_manager.c:437: SEE Sensor exceeded processing time limit`, the thread watchdog; no sensor named in readable strings. Non-verbose --serve: crash unchanged. --list at t+4 s: SSC up (node 9 port 13), only `registry` listed, crash before t+8 s. Dump: research/sensord/slpi.core (local, 21 MB).
