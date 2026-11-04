@@ -1,0 +1,148 @@
+From b6de2c7305dcf48a75199cd9563c517eb27d33bc Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Wed, 4 Nov 2026 20:55:04 +0000
+Subject: [PATCH 54/54] mfd: max77705: mask the unused interrupt sources at
+ init
+
+Stock masks every group before taking the interrupt and unmasks only what
+a driver uses (Samsung drivers/mfd/max77705-irq.c:453-466, 493, 519,
+max77705_irq_init()). Mainline's regmap-irq masks INTSRC, but SYSTEM_INT
+and the four CCIC groups at 0x25 keep whatever the bootloader left, and
+nothing ever reads them. Mask and clear them. A Type-C client at 0x25
+owns those registers, so skip them when it exists.
+
+debug_irq logs INTSRC after each interrupt, to tell a stuck line from a
+source that never clears.
+---
+ drivers/mfd/max77705.c | 92 +++++++++++++++++++++++++++++++++++++++++-
+ 1 file changed, 91 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/mfd/max77705.c b/drivers/mfd/max77705.c
+index 282e658f..6cd2ef4f 100644
+--- a/drivers/mfd/max77705.c
++++ b/drivers/mfd/max77705.c
+@@ -68,6 +68,36 @@ static const struct regmap_irq max77705_irqs[] = {
+ 	{ .mask = MAX77705_SRC_IRQ_USBC, },
+ };
+ 
++static bool debug_irq;
++module_param(debug_irq, bool, 0644);
++MODULE_PARM_DESC(debug_irq, "Log INTSRC after each interrupt (rate limited)");
++
++/*
++ * Runs after the handlers. INTSRC set here with its source masked, or a
++ * count that keeps climbing with INTSRC 0, tells a stuck line from a source
++ * that never clears. Debug only: if INTSRC clears on read, this can eat an
++ * event that arrived in between.
++ */
++static int max77705_irq_debug(void *data)
++{
++	struct max77693_dev *max77705 = data;
++	static unsigned long count;
++	unsigned int src, mask;
++
++	if (!READ_ONCE(debug_irq))
++		return 0;
++
++	count++;
++	if (regmap_read(max77705->regmap, MAX77705_PMIC_REG_INTSRC, &src) ||
++	    regmap_read(max77705->regmap, MAX77705_PMIC_REG_INTSRC_MASK, &mask))
++		return 0;
++
++	dev_info_ratelimited(&max77705->i2c->dev, "irq %lu: INTSRC 0x%02x mask 0x%02x\n",
++			     count, src, mask);
++
++	return 0;
++}
++
+ static const struct regmap_irq_chip max77705_irq_chip = {
+ 	.name		= "max77705",
+ 	.status_base	= MAX77705_PMIC_REG_INTSRC,
+@@ -76,12 +106,64 @@ static const struct regmap_irq_chip max77705_irq_chip = {
+ 	.num_regs	= 1,
+ 	.irqs		= max77705_irqs,
+ 	.num_irqs	= ARRAY_SIZE(max77705_irqs),
++	.handle_post_irq = max77705_irq_debug,
+ };
+ 
++#define MAX77705_CCIC_ADDR		0x25
++#define MAX77705_CCIC_REG_UIC_INT	0x02	/* UIC, CC, PD, VDM: clear on read */
++#define MAX77705_CCIC_REG_UIC_INT_M	0x0e	/* UIC, CC, PD, VDM: 1 masks */
++#define MAX77705_CCIC_NUM_INT		4
++
++/*
++ * Stock masks every group before it takes the interrupt (max77705-irq.c,
++ * max77705_irq_init()), and unmasks only what a driver uses. Nothing in
++ * mainline does that for the CCIC, so with no Type-C driver its sources stay
++ * as the bootloader left them and nobody ever reads them. They also stay
++ * latched: userspace mailbox commands (usbroute, charge-control) set
++ * APCmdRes with nobody to clear it.
++ *
++ * A Type-C client at this address owns these registers: skip it then.
++ */
++static void max77705_mask_ccic(struct i2c_client *i2c)
++{
++	struct i2c_client *ccic;
++	int i;
++
++	ccic = i2c_new_dummy_device(i2c->adapter, MAX77705_CCIC_ADDR);
++	if (IS_ERR(ccic))
++		return;
++
++	for (i = 0; i < MAX77705_CCIC_NUM_INT; i++) {
++		if (i2c_smbus_write_byte_data(ccic, MAX77705_CCIC_REG_UIC_INT_M + i, 0xff) < 0 ||
++		    i2c_smbus_read_byte_data(ccic, MAX77705_CCIC_REG_UIC_INT + i) < 0) {
++			dev_warn(&i2c->dev, "cannot mask CCIC interrupts\n");
++			break;
++		}
++	}
++
++	i2c_unregister_device(ccic);
++}
++
++static void max77705_mask_sources(struct max77693_dev *max77705)
++{
++	unsigned int val;
++
++	/* regmap-irq repeats this for INTSRC; here it covers what comes next. */
++	regmap_update_bits(max77705->regmap, MAX77705_PMIC_REG_INTSRC_MASK,
++			   MAX77705_SRC_IRQ_ALL, MAX77705_SRC_IRQ_ALL);
++
++	/* TOP has no user in mainline. */
++	regmap_write(max77705->regmap, MAX77705_PMIC_REG_SYSTEM_INT_MASK, 0xff);
++	regmap_read(max77705->regmap, MAX77705_PMIC_REG_SYSTEM_INT, &val);
++
++	max77705_mask_ccic(max77705->i2c);
++}
++
+ static int max77705_i2c_probe(struct i2c_client *i2c)
+ {
+ 	struct device *dev = &i2c->dev;
+ 	struct max77693_dev *max77705;
++	struct regmap_irq_chip *chip_desc;
+ 	struct regmap_irq_chip_data *irq_data;
+ 	struct irq_domain *domain;
+ 	enum max77705_hw_rev pmic_rev;
+@@ -120,10 +202,18 @@ static int max77705_i2c_probe(struct i2c_client *i2c)
+ 	/* Active Discharge Enable */
+ 	regmap_update_bits(max77705->regmap, MAX77705_PMIC_REG_MAINCTRL1, 1, 1);
+ 
++	chip_desc = devm_kmemdup(dev, &max77705_irq_chip, sizeof(max77705_irq_chip),
++				 GFP_KERNEL);
++	if (!chip_desc)
++		return -ENOMEM;
++	chip_desc->irq_drv_data = max77705;
++
++	max77705_mask_sources(max77705);
++
+ 	ret = devm_regmap_add_irq_chip(dev, max77705->regmap,
+ 					i2c->irq,
+ 					IRQF_ONESHOT, 0,
+-					&max77705_irq_chip,
++					chip_desc,
+ 					&irq_data);
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "Failed to add IRQ chip\n");
+-- 
+2.43.0
+
