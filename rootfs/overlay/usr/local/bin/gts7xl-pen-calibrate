@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+# S Pen calibration: tap the centre of four targets, get the digitizer range
+# that maps the pen exactly onto the screen. Prints a udev hwdb entry.
+# Needs read access to the pen's event node (the "input" group).
+import glob, os, select, struct, sys, threading
+
+import gi
+gi.require_version("Gtk", "4.0")
+from gi.repository import GLib, Gtk
+
+TARGETS = [(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]
+EV_ABS, EV_SYN, ABS_X, ABS_Y, ABS_PRESSURE = 3, 0, 0, 1, 24
+
+
+def pen_node():
+    for name in glob.glob("/sys/class/input/event*/device/name"):
+        if open(name).read().strip() == "Wacom W90xx Pen":
+            return "/dev/input/" + name.split("/")[4]
+    sys.exit("no Wacom W90xx Pen input device")
+
+
+class Reader(threading.Thread):
+    """Collects raw x/y while the tip touches; reports the median of each press."""
+
+    def __init__(self, node, on_tap):
+        super().__init__(daemon=True)
+        self.f = open(node, "rb", buffering=0)
+        self.on_tap = on_tap
+
+    def run(self):
+        x = y = p = 0
+        press = []
+        while True:
+            select.select([self.f], [], [])
+            data = self.f.read(24 * 64)
+            for i in range(0, len(data) - 23, 24):
+                _, _, typ, code, val = struct.unpack("qqHHi", data[i:i + 24])
+                if typ == EV_ABS and code == ABS_X:
+                    x = val
+                elif typ == EV_ABS and code == ABS_Y:
+                    y = val
+                elif typ == EV_ABS and code == ABS_PRESSURE:
+                    if p > 0 and val == 0 and len(press) >= 3:
+                        xs = sorted(a for a, _ in press)
+                        ys = sorted(b for _, b in press)
+                        GLib.idle_add(self.on_tap, xs[len(xs) // 2], ys[len(ys) // 2])
+                        press = []
+                    p = val
+                elif typ == EV_SYN and p > 0:
+                    press.append((x, y))
+
+
+def fit(screen, raw):
+    """Least squares screen = a * raw + b; returns the raw values at 0 and 1."""
+    n = len(raw)
+    mr, ms = sum(raw) / n, sum(screen) / n
+    a = sum((r - mr) * (s - ms) for r, s in zip(raw, screen)) / sum((r - mr) ** 2 for r in raw)
+    b = ms - a * mr
+    return round(-b / a), round((1 - b) / a)
+
+
+class App(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id="org.gts7xl.PenCalibrate")
+        self.taps = []
+
+    def do_activate(self):
+        self.win = Gtk.ApplicationWindow(application=self)
+        self.area = Gtk.DrawingArea()
+        self.area.set_draw_func(self.draw)
+        self.win.set_child(self.area)
+        self.win.fullscreen()
+        self.win.present()
+        Reader(pen_node(), self.tap).start()
+
+    def draw(self, area, cr, w, h):
+        cr.set_source_rgb(0.1, 0.1, 0.1)
+        cr.paint()
+        cr.set_source_rgb(1, 1, 1)
+        cr.select_font_face("sans")
+        cr.set_font_size(28)
+        if len(self.taps) < len(TARGETS):
+            tx, ty = TARGETS[len(self.taps)]
+            cx, cy = tx * w, ty * h
+            cr.set_source_rgb(1, 0.3, 0.2)
+            cr.set_line_width(2)
+            for dx, dy in ((40, 0), (0, 40)):
+                cr.move_to(cx - dx, cy - dy)
+                cr.line_to(cx + dx, cy + dy)
+            cr.stroke()
+            cr.arc(cx, cy, 6, 0, 6.3)
+            cr.stroke()
+            cr.set_source_rgb(1, 1, 1)
+            msg = "Tap the centre of the cross with the pen (%d/4)" % (len(self.taps) + 1)
+        else:
+            msg = "Done. Result printed in the terminal. Tap to close."
+        ext = cr.text_extents(msg)
+        cr.move_to((w - ext.width) / 2, h / 2)
+        cr.show_text(msg)
+
+    def tap(self, x, y):
+        if len(self.taps) >= len(TARGETS):
+            self.quit()
+            return False
+        self.taps.append((x, y))
+        if len(self.taps) == len(TARGETS):
+            self.report()
+        self.area.queue_draw()
+        return False
+
+    def report(self):
+        xmin, xmax = fit([t[0] for t in TARGETS], [t[0] for t in self.taps])
+        ymin, ymax = fit([t[1] for t in TARGETS], [t[1] for t in self.taps])
+        print("taps:", self.taps)
+        print("x %d..%d  y %d..%d" % (xmin, xmax, ymin, ymax))
+        print("# /etc/udev/hwdb.d/61-gts7xl-pen.hwdb")
+        print('evdev:name:Wacom W90xx Pen:*')
+        print(" EVDEV_ABS_00=%d:%d" % (xmin, xmax))
+        print(" EVDEV_ABS_01=%d:%d" % (ymin, ymax))
+        sys.stdout.flush()
+
+
+if __name__ == "__main__":
+    App().run([])

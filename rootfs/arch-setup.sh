@@ -12,7 +12,7 @@ pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -Rdd --noconfirm linux-aarch64 || true
 DESKTOP=${DESKTOP:-gnome}
-BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils alsa-utils mesa swh-plugins sudo psmisc python python-dbus iio-sensor-proxy python-gobject gtk4 libcamera libcamera-tools gst-plugin-libcamera gst-plugin-gtk4 gst-plugins-base gst-plugins-good gst-python v4l-utils vulkan-icd-loader vulkan-freedreno vulkan-tools linux-firmware"
+BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils alsa-utils mesa swh-plugins sudo psmisc python python-dbus python-cairo iio-sensor-proxy python-gobject gtk4 libcamera libcamera-tools gst-plugin-libcamera gst-plugin-gtk4 gst-plugins-base gst-plugins-good gst-python v4l-utils vulkan-icd-loader vulkan-freedreno vulkan-tools linux-firmware"
 GNOME="gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome adwaita-fonts"
 case "$DESKTOP" in
 gnome) PKGS="$GNOME"; DM=gdm ;;

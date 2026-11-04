@@ -29,7 +29,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Display: 2800x1752 AMOLED, S6TUUM3 | ✅ | Native DSC command mode driver at 60Hz; 120Hz mode offered, not confirmed |
 | Backlight, brightness | ✅ | 0% kept readable (`min_brightness`), automatic brightness from the light sensor |
 | Touchscreen | ✅ | Multitouch |
-| S Pen digitizer | 🟡 | Position and pressure work, range hand-calibrated; side button, hover, tilt unconfirmed |
+| S Pen digitizer | 🟡 | Position and pressure work, range fitted with `gts7xl-pen-calibrate` (4 targets, writes a udev hwdb entry); side button, hover, tilt unconfirmed |
 | S Pen Bluetooth remote | 🟡 | S Pen Pro button and air gestures work through `gts7xl-spen`, `Pen Actions` app to change them; built-in S Pen untested |
 | Fingerprint reader (under display) | ⬜ | |
 | Pogo keyboard | ✅ | Recovers by itself after trackpad use; tablet mode switch on detach, see [docs/keyboard-cover.md](docs/keyboard-cover.md) |
