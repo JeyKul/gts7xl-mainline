@@ -1,0 +1,695 @@
+From d71ead8b9c1f3de69a66a909fa6cc51398e87137 Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Wed, 4 Nov 2026 20:00:12 +0000
+Subject: [PATCH] usb: typec: add an UNTESTED minimal MAX77705 port driver
+
+Reports attach, power and data role and orientation from the CCIC
+firmware, and follows them with the USB role switch, the orientation
+switch and VBUS. Off by default: TYPEC_MAX77705 is not set in the config,
+and only the new -typec test DTB has the node.
+
+No PD requests and no firmware update path: the opcode allowlist holds
+0x06, 0x54 and 0x55 with one permitted payload each, and the regmap can
+only write masks and a one-byte mailbox. Never run on hardware.
+---
+ arch/arm64/boot/dts/qcom/Makefile             |   1 +
+ .../qcom/sm8250-samsung-gts7xlwifi-typec.dts  | 102 ++++
+ drivers/usb/typec/Kconfig                     |  15 +
+ drivers/usb/typec/Makefile                    |   1 +
+ drivers/usb/typec/max77705_typec.c            | 505 ++++++++++++++++++
+ 5 files changed, 624 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts
+ create mode 100644 drivers/usb/typec/max77705_typec.c
+
+diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
+index e5f84c6b..cc457761 100644
+--- a/arch/arm64/boot/dts/qcom/Makefile
++++ b/arch/arm64/boot/dts/qcom/Makefile
+@@ -366,6 +366,7 @@ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-hdk.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-mtp.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-gts7xlwifi.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-gts7xlwifi-usbhost.dtb
++dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-gts7xlwifi-typec.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-r8q.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-samsung-x1q.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= sm8250-sony-xperia-edo-pdx203.dtb
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts
+new file mode 100644
+index 00000000..81312ad2
+--- /dev/null
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-typec.dts
+@@ -0,0 +1,102 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * UNTESTED bring-up variant for stage (c) in docs/usbc-dp-research.md: the
++ * max77705-typec driver owns attach and roles. Not built by CI or the
++ * installer. Needs CONFIG_TYPEC_MAX77705=m. Until that module loads, dwc3
++ * stays a peripheral, so the gadget debug path survives a failed probe.
++ *
++ * USB 2.0 only. Stage c1 leaves the QMP PHY out; set GTS7XL_TYPEC_QMP to 1
++ * for c2, the orientation switch. The rail below is new to this board, and
++ * NOTES.md records dark panels from defining rails, so that is its own step.
++ */
++
++#define GTS7XL_TYPEC_QMP 0
++
++#include <dt-bindings/usb/pd.h>
++#include "sm8250-samsung-gts7xlwifi.dts"
++
++&i2c0 {
++	typec@25 {
++		compatible = "maxim,max77705-typec";
++		reg = <0x25>;
++		interrupt-parent = <&max77705>;
++		interrupts = <3>;
++		vbus-supply = <&max77705_otg_vbus>;
++
++		connector {
++			compatible = "usb-c-connector";
++			label = "USB-C";
++			power-role = "dual";
++			data-role = "dual";
++			try-power-role = "sink";
++			source-pdos = <PDO_FIXED(5000, 900, PDO_FIXED_USB_COMM)>;
++			sink-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)>;
++			op-sink-microwatt = <15000000>;
++
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				port@0 {
++					reg = <0>;
++
++					max77705_typec_hs: endpoint {
++						remote-endpoint = <&usb_1_dwc3_hs_out>;
++					};
++				};
++
++#if GTS7XL_TYPEC_QMP
++				port@1 {
++					reg = <1>;
++
++					max77705_typec_ss: endpoint {
++						remote-endpoint = <&usb_1_qmpphy_out>;
++					};
++				};
++#endif
++			};
++		};
++	};
++};
++
++&max77705_charger {
++	max77705_otg_vbus: usb-otg-vbus {
++		regulator-name = "usb-otg-vbus";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++	};
++};
++
++&usb_1_dwc3 {
++	dr_mode = "otg";
++	usb-role-switch;
++	role-switch-default-mode = "peripheral";
++};
++
++&usb_1_dwc3_hs_out {
++	remote-endpoint = <&max77705_typec_hs>;
++};
++
++#if GTS7XL_TYPEC_QMP
++&apps_rsc {
++	regulators-0 {
++		vreg_l18a_0p92: ldo18 {
++			regulator-name = "vreg_l18a_0p92";
++			regulator-min-microvolt = <880000>;
++			regulator-max-microvolt = <920000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++		};
++	};
++};
++
++&usb_1_qmpphy {
++	vdda-phy-supply = <&vreg_l18a_0p92>;
++	vdda-pll-supply = <&vreg_l9a_1p2>;
++
++	status = "okay";
++};
++
++&usb_1_qmpphy_out {
++	remote-endpoint = <&max77705_typec_ss>;
++};
++#endif
+diff --git a/drivers/usb/typec/Kconfig b/drivers/usb/typec/Kconfig
+index 2f80c279..266af247 100644
+--- a/drivers/usb/typec/Kconfig
++++ b/drivers/usb/typec/Kconfig
+@@ -77,6 +77,21 @@ config TYPEC_RT1719
+ 	  If you choose to build this driver as a dynamically linked module, the
+ 	  module will be called rt1719.ko
+ 
++config TYPEC_MAX77705
++	tristate "Maxim MAX77705 minimal Type-C port driver (UNTESTED)"
++	depends on I2C
++	depends on MFD_MAX77705
++	depends on REGULATOR
++	depends on USB_ROLE_SWITCH || !USB_ROLE_SWITCH
++	select REGMAP_I2C
++	help
++	  Reports attach, roles and orientation from the MAX77705 CCIC and
++	  follows them with the USB role switch and VBUS. It requests no
++	  USB PD contract and has no firmware update path. Never run on
++	  hardware.
++
++	  If unsure, say N.
++
+ config TYPEC_HD3SS3220
+ 	tristate "TI HD3SS3220 Type-C DRP Port controller driver"
+ 	depends on I2C
+diff --git a/drivers/usb/typec/Makefile b/drivers/usb/typec/Makefile
+index 8a6a1c66..b92f73a2 100644
+--- a/drivers/usb/typec/Makefile
++++ b/drivers/usb/typec/Makefile
+@@ -8,6 +8,7 @@ obj-$(CONFIG_TYPEC_UCSI)	+= ucsi/
+ obj-$(CONFIG_TYPEC_TPS6598X)	+= tipd/
+ obj-$(CONFIG_TYPEC_ANX7411)	+= anx7411.o
+ obj-$(CONFIG_TYPEC_HD3SS3220)	+= hd3ss3220.o
++obj-$(CONFIG_TYPEC_MAX77705)	+= max77705_typec.o
+ obj-$(CONFIG_TYPEC_STUSB160X) 	+= stusb160x.o
+ obj-$(CONFIG_TYPEC_RT1719)	+= rt1719.o
+ obj-$(CONFIG_TYPEC_WUSB3801)	+= wusb3801.o
+diff --git a/drivers/usb/typec/max77705_typec.c b/drivers/usb/typec/max77705_typec.c
+new file mode 100644
+index 00000000..39abc366
+--- /dev/null
++++ b/drivers/usb/typec/max77705_typec.c
+@@ -0,0 +1,505 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Maxim MAX77705 CCIC: minimal USB Type-C port driver
++ *
++ * UNTESTED: never run on hardware. It only reports what the CCIC firmware
++ * has decided (attach, power role, data role, orientation) and follows it
++ * with the USB role switch, the orientation switch and VBUS.
++ *
++ * Deliberately not a PD driver. Rules, see docs/usbc-dp-research.md:
++ *  - no firmware update path: opcode allowlist below, and the regmap cannot
++ *    reach the CCIC reset or anything but masks and a one-byte mailbox;
++ *  - no PD request of any kind: 0x32, 0x3a and 0x3c are not in the allowlist.
++ *    gts7xl-charge-control keeps doing 9 V over i2c-dev.
++ *
++ * Registers from Samsung's T970 tree: include/linux/ccic/max77705.h and
++ * drivers/ccic/max77705_{usbc,cc,pd}.c. The need for opcodes 0x55 and 0x06
++ * was found on the SM8450 Tab S8+, aaronsb/sm-x800-linux, whose complete
++ * max77705 driver is the better base once this skeleton has answered its
++ * questions.
++ */
++
++#include <linux/bitfield.h>
++#include <linux/cleanup.h>
++#include <linux/completion.h>
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/interrupt.h>
++#include <linux/jiffies.h>
++#include <linux/mod_devicetable.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++#include <linux/property.h>
++#include <linux/regmap.h>
++#include <linux/regulator/consumer.h>
++#include <linux/usb/pd.h>
++#include <linux/usb/role.h>
++#include <linux/usb/typec.h>
++#include <linux/workqueue.h>
++
++#define REG_HW_REV		0x00
++#define REG_FW_REV		0x01
++#define REG_UIC_INT		0x02	/* UIC, CC, PD, VDM: clear on read */
++#define REG_USBC_STATUS2	0x07	/* SYSMsg */
++#define REG_FW_MINOR		0x09
++#define REG_CC_STATUS0		0x0a
++#define REG_PD_STATUS1		0x0d
++#define REG_UIC_INT_M		0x0e
++#define REG_CC_INT_M		0x0f
++#define REG_PD_INT_M		0x10
++#define REG_VDM_INT_M		0x11
++#define REG_OP_WRITE		0x21	/* opcode, then data from 0x22 */
++#define REG_OP_DATA		0x22
++#define REG_OP_END		0x41	/* a write starts the command */
++#define REG_OP_READ		0x51	/* opcode echo, then response */
++
++#define UIC_APCMDRES		BIT(7)
++#define UIC_SYSMSG		BIT(6)
++
++#define CC_PINSTAT		GENMASK(7, 6)	/* 1 CC1, 2 CC2 */
++#define CC_VCNSTAT		BIT(3)
++#define CC_STAT			GENMASK(2, 0)
++#define CC_STAT_NONE		0
++#define CC_STAT_SINK		1	/* the tablet is the sink */
++#define CC_STAT_SOURCE		2	/* the tablet is the source */
++
++#define PD_DATAROLE		BIT(5)		/* in REG_UIC_INT + 2 */
++#define PD_STATUS1_DFP		BIT(7)
++
++#define SYSMSG_BOOT_WDT		0x03
++#define SYSMSG_BOOT_POR		0x05
++
++/*
++ * 1 masks. Only command done, SYSMsg, CC pin/current/VCONN/state and data
++ * role reach us. Stock unmasks more; nothing here would use it.
++ */
++#define UIC_INT_M_VAL		0x3f
++#define CC_INT_M_VAL		0xf0
++#define PD_INT_M_VAL		0xdf
++#define VDM_INT_M_VAL		0xff
++
++#define OP_CTRL1_W		0x06
++#define OP_CTRL1_COM_USB	0x09	/* D+/D- to the USB PHY */
++#define OP_FACTORY_TEST		0x54
++#define OP_AUTO_VBUS_OFF	0x00	/* the host owns VBUS */
++#define OP_SET_ALTMODE		0x55
++#define OP_ALTMODE_SRC_VDM	0x03	/* without it no source attach */
++
++#define OP_TIMEOUT_MS		3000	/* stock OPCODE_WAIT_TIMEOUT */
++#define OP_TRIES		2
++
++struct max77705_typec {
++	struct device *dev;
++	struct regmap *regmap;
++	struct regulator *vbus;
++	struct usb_role_switch *role_sw;
++	struct typec_port *port;
++	struct typec_partner *partner;
++	struct work_struct work;
++	struct completion op_done;
++	struct mutex op_lock;		/* one mailbox command at a time */
++	bool need_init;
++	bool dr_changed;
++	bool vbus_on;
++	enum typec_data_role role;
++	u8 ccstat;
++};
++
++static bool max77705_typec_writeable(struct device *dev, unsigned int reg)
++{
++	switch (reg) {
++	case REG_UIC_INT_M ... REG_VDM_INT_M:
++	case REG_OP_WRITE:
++	case REG_OP_DATA:
++	case REG_OP_END:
++		return true;
++	default:
++		return false;
++	}
++}
++
++static const struct regmap_config max77705_typec_regmap = {
++	.reg_bits = 8,
++	.val_bits = 8,
++	.max_register = REG_OP_READ + 1,
++	.writeable_reg = max77705_typec_writeable,
++};
++
++/* Every mailbox write there is. Nothing else can leave this driver. */
++static bool max77705_typec_op_allowed(u8 op, u8 data)
++{
++	switch (op) {
++	case OP_CTRL1_W:
++		return data == OP_CTRL1_COM_USB;
++	case OP_FACTORY_TEST:
++		return data == OP_AUTO_VBUS_OFF;
++	case OP_SET_ALTMODE:
++		return data == OP_ALTMODE_SRC_VDM;
++	default:
++		return false;
++	}
++}
++
++/*
++ * Must not run in the interrupt thread, which completes op_done.
++ *
++ * gts7xl-charge-control uses the same mailbox from userspace with no lock
++ * shared with us: its 0x30 and 0x32 can complete op_done or answer in our
++ * place, hence the echo check and the retry. An unlucky interleaving can
++ * still lose a command, ours or its. See the document.
++ */
++static int max77705_typec_op(struct max77705_typec *tc, u8 op, u8 data)
++{
++	u8 buf[2] = { op, data };
++	int tries, ret;
++
++	if (!max77705_typec_op_allowed(op, data))
++		return -EPERM;
++
++	guard(mutex)(&tc->op_lock);
++
++	for (tries = 0; tries < OP_TRIES; tries++) {
++		reinit_completion(&tc->op_done);
++
++		ret = regmap_bulk_write(tc->regmap, REG_OP_WRITE, buf, sizeof(buf));
++		if (ret)
++			return ret;
++
++		ret = regmap_write(tc->regmap, REG_OP_END, 0);
++		if (ret)
++			return ret;
++
++		if (!wait_for_completion_timeout(&tc->op_done,
++						 msecs_to_jiffies(OP_TIMEOUT_MS)))
++			return -ETIMEDOUT;
++
++		ret = regmap_bulk_read(tc->regmap, REG_OP_READ, buf, sizeof(buf));
++		if (ret)
++			return ret;
++
++		if (buf[0] == op)
++			return 0;
++
++		dev_warn(tc->dev, "opcode 0x%02x answered by 0x%02x\n", op, buf[0]);
++		buf[0] = op;
++		buf[1] = data;
++	}
++
++	return -EIO;
++}
++
++static void max77705_typec_vbus(struct max77705_typec *tc, bool on)
++{
++	int ret;
++
++	if (!tc->vbus || tc->vbus_on == on)
++		return;
++
++	ret = on ? regulator_enable(tc->vbus) : regulator_disable(tc->vbus);
++	if (ret) {
++		dev_warn(tc->dev, "VBUS %s failed: %d\n", on ? "on" : "off", ret);
++		return;
++	}
++
++	tc->vbus_on = on;
++}
++
++static void max77705_typec_detach(struct max77705_typec *tc)
++{
++	max77705_typec_vbus(tc, false);
++
++	if (tc->partner) {
++		typec_unregister_partner(tc->partner);
++		tc->partner = NULL;
++	}
++
++	usb_role_switch_set_role(tc->role_sw, USB_ROLE_NONE);
++	typec_set_data_role(tc->port, TYPEC_DEVICE);
++	typec_set_pwr_role(tc->port, TYPEC_SINK);
++	typec_set_vconn_role(tc->port, TYPEC_SINK);
++	typec_set_orientation(tc->port, TYPEC_ORIENTATION_NONE);
++	tc->ccstat = CC_STAT_NONE;
++}
++
++/* The firmware leaves the D+/D- switch open across an attach. */
++static void max77705_typec_set_data_role(struct max77705_typec *tc,
++					 enum typec_data_role role)
++{
++	int ret;
++
++	tc->role = role;
++
++	ret = max77705_typec_op(tc, OP_CTRL1_W, OP_CTRL1_COM_USB);
++	if (ret)
++		dev_warn(tc->dev, "cannot route D+/D- to USB: %d\n", ret);
++
++	usb_role_switch_set_role(tc->role_sw, role == TYPEC_HOST ?
++				 USB_ROLE_HOST : USB_ROLE_DEVICE);
++	typec_set_data_role(tc->port, role);
++}
++
++/* All from levels, so coalesced interrupts cannot leave us out of step. */
++static void max77705_typec_sync(struct max77705_typec *tc)
++{
++	struct typec_partner_desc desc = { .accessory = TYPEC_ACCESSORY_NONE };
++	struct typec_partner *partner;
++	bool attaching = tc->ccstat == CC_STAT_NONE;
++	bool dr_changed = READ_ONCE(tc->dr_changed);
++	enum typec_data_role role = tc->role;
++	unsigned int cc, pd;
++	u8 ccstat;
++
++	WRITE_ONCE(tc->dr_changed, false);
++
++	if (regmap_read(tc->regmap, REG_CC_STATUS0, &cc))
++		return;
++
++	ccstat = FIELD_GET(CC_STAT, cc);
++	dev_dbg(tc->dev, "CC_STATUS0 0x%02x\n", cc);
++
++	/* Audio and debug accessories, error and disabled: treated as absent. */
++	if (ccstat != CC_STAT_SINK && ccstat != CC_STAT_SOURCE) {
++		if (tc->ccstat != CC_STAT_NONE)
++			max77705_typec_detach(tc);
++		return;
++	}
++
++	switch (FIELD_GET(CC_PINSTAT, cc)) {
++	case 1:
++		typec_set_orientation(tc->port, TYPEC_ORIENTATION_NORMAL);
++		break;
++	case 2:
++		typec_set_orientation(tc->port, TYPEC_ORIENTATION_REVERSE);
++		break;
++	default:
++		typec_set_orientation(tc->port, TYPEC_ORIENTATION_NONE);
++		break;
++	}
++
++	typec_set_vconn_role(tc->port, (cc & CC_VCNSTAT) ? TYPEC_SOURCE : TYPEC_SINK);
++
++	/*
++	 * Default data role from the power role at attach. After that only on
++	 * a DataRole interrupt: a dock can swap either way, but PD_STATUS1
++	 * means nothing before PD has run, and a CC interrupt can come first.
++	 */
++	if (attaching)
++		role = ccstat == CC_STAT_SOURCE ? TYPEC_HOST : TYPEC_DEVICE;
++
++	if (dr_changed && !regmap_read(tc->regmap, REG_PD_STATUS1, &pd))
++		role = (pd & PD_STATUS1_DFP) ? TYPEC_HOST : TYPEC_DEVICE;
++
++	if (attaching || role != tc->role)
++		max77705_typec_set_data_role(tc, role);
++
++	if (ccstat == tc->ccstat)
++		return;
++
++	/* VBUS only ever follows CCStat, and only a sink partner gets it. */
++	max77705_typec_vbus(tc, ccstat == CC_STAT_SOURCE);
++	typec_set_pwr_role(tc->port, ccstat == CC_STAT_SOURCE ? TYPEC_SOURCE : TYPEC_SINK);
++
++	if (!tc->partner) {
++		partner = typec_register_partner(tc->port, &desc);
++		if (IS_ERR(partner))
++			dev_err(tc->dev, "no partner: %pe\n", partner);
++		else
++			tc->partner = partner;
++	}
++
++	tc->ccstat = ccstat;
++}
++
++static int max77705_typec_hw_init(struct max77705_typec *tc)
++{
++	static const struct reg_sequence masks[] = {
++		{ REG_UIC_INT_M, UIC_INT_M_VAL },
++		{ REG_CC_INT_M, CC_INT_M_VAL },
++		{ REG_PD_INT_M, PD_INT_M_VAL },
++		{ REG_VDM_INT_M, VDM_INT_M_VAL },
++	};
++	int ret;
++
++	ret = regmap_multi_reg_write(tc->regmap, masks, ARRAY_SIZE(masks));
++	if (ret)
++		return ret;
++
++	/* Not fatal: reporting still works, a source attach may not. */
++	ret = max77705_typec_op(tc, OP_FACTORY_TEST, OP_AUTO_VBUS_OFF);
++	if (ret)
++		dev_warn(tc->dev, "firmware VBUS off failed: %d\n", ret);
++
++	ret = max77705_typec_op(tc, OP_SET_ALTMODE, OP_ALTMODE_SRC_VDM);
++	if (ret)
++		dev_warn(tc->dev, "source attach enable failed: %d\n", ret);
++
++	return 0;
++}
++
++static void max77705_typec_work(struct work_struct *work)
++{
++	struct max77705_typec *tc = container_of(work, struct max77705_typec, work);
++
++	/* A CCIC reset puts the masks and the opcodes back to their defaults. */
++	if (READ_ONCE(tc->need_init)) {
++		WRITE_ONCE(tc->need_init, false);
++		if (max77705_typec_hw_init(tc))
++			dev_err(tc->dev, "reinit after CCIC reset failed\n");
++	}
++
++	max77705_typec_sync(tc);
++}
++
++static irqreturn_t max77705_typec_irq(int irq, void *data)
++{
++	struct max77705_typec *tc = data;
++	unsigned int sysmsg;
++	u8 ints[4];
++
++	if (regmap_bulk_read(tc->regmap, REG_UIC_INT, ints, sizeof(ints)))
++		return IRQ_NONE;
++
++	if (ints[0] & UIC_APCMDRES)
++		complete(&tc->op_done);
++
++	if (ints[2] & PD_DATAROLE)
++		WRITE_ONCE(tc->dr_changed, true);
++
++	if ((ints[0] & UIC_SYSMSG) &&
++	    !regmap_read(tc->regmap, REG_USBC_STATUS2, &sysmsg)) {
++		dev_info(tc->dev, "SYSMsg 0x%02x\n", sysmsg);
++		if (sysmsg == SYSMSG_BOOT_WDT || sysmsg == SYSMSG_BOOT_POR)
++			WRITE_ONCE(tc->need_init, true);
++	}
++
++	if ((ints[0] & ~UIC_APCMDRES) || ints[1] || ints[2])
++		schedule_work(&tc->work);
++
++	return IRQ_HANDLED;
++}
++
++static void max77705_typec_teardown(void *data)
++{
++	struct max77705_typec *tc = data;
++
++	cancel_work_sync(&tc->work);
++	max77705_typec_detach(tc);
++	typec_unregister_port(tc->port);
++	usb_role_switch_put(tc->role_sw);
++}
++
++static int max77705_typec_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct typec_capability cap = { };
++	struct fwnode_handle *connector;
++	struct max77705_typec *tc;
++	unsigned int hw, fw, minor;
++	int ret;
++
++	if (!client->irq)
++		return dev_err_probe(dev, -EINVAL, "no interrupt\n");
++
++	tc = devm_kzalloc(dev, sizeof(*tc), GFP_KERNEL);
++	if (!tc)
++		return -ENOMEM;
++
++	tc->dev = dev;
++	mutex_init(&tc->op_lock);
++	init_completion(&tc->op_done);
++	INIT_WORK(&tc->work, max77705_typec_work);
++	i2c_set_clientdata(client, tc);
++
++	tc->regmap = devm_regmap_init_i2c(client, &max77705_typec_regmap);
++	if (IS_ERR(tc->regmap))
++		return dev_err_probe(dev, PTR_ERR(tc->regmap), "regmap\n");
++
++	ret = regmap_read(tc->regmap, REG_HW_REV, &hw);
++	ret = ret ?: regmap_read(tc->regmap, REG_FW_REV, &fw);
++	ret = ret ?: regmap_read(tc->regmap, REG_FW_MINOR, &minor);
++	if (ret)
++		return dev_err_probe(dev, ret, "CCIC not answering\n");
++
++	/* Report this: it tells whether the S8+ findings carry over. */
++	dev_info(dev, "CCIC hw 0x%02x fw %02X.%02X, UNTESTED driver\n",
++		 hw, fw, minor & 0x7);
++
++	tc->vbus = devm_regulator_get_optional(dev, "vbus");
++	if (IS_ERR(tc->vbus)) {
++		if (PTR_ERR(tc->vbus) != -ENODEV)
++			return dev_err_probe(dev, PTR_ERR(tc->vbus), "vbus-supply\n");
++		tc->vbus = NULL;
++	}
++
++	connector = device_get_named_child_node(dev, "connector");
++	if (!connector)
++		return dev_err_probe(dev, -ENODEV, "no connector node\n");
++
++	tc->role_sw = fwnode_usb_role_switch_get(connector);
++	if (IS_ERR(tc->role_sw)) {
++		fwnode_handle_put(connector);
++		return dev_err_probe(dev, PTR_ERR(tc->role_sw), "role switch\n");
++	}
++
++	cap.type = TYPEC_PORT_DRP;
++	cap.data = TYPEC_PORT_DRD;
++	cap.prefer_role = TYPEC_NO_PREFERRED_ROLE;
++	cap.revision = USB_TYPEC_REV_1_2;
++	cap.pd_revision = 0x300;
++	cap.fwnode = connector;
++
++	/* Also takes the orientation switch from the connector's graph. */
++	tc->port = typec_register_port(dev, &cap);
++	fwnode_handle_put(connector);
++	if (IS_ERR(tc->port)) {
++		usb_role_switch_put(tc->role_sw);
++		return dev_err_probe(dev, PTR_ERR(tc->port), "typec port\n");
++	}
++
++	ret = devm_add_action_or_reset(dev, max77705_typec_teardown, tc);
++	if (ret)
++		return ret;
++
++	/* The mailbox needs the interrupt, so request it before hw_init. */
++	ret = devm_request_threaded_irq(dev, client->irq, NULL, max77705_typec_irq,
++					IRQF_ONESHOT, dev_name(dev), tc);
++	if (ret)
++		return dev_err_probe(dev, ret, "interrupt\n");
++
++	ret = max77705_typec_hw_init(tc);
++	if (ret)
++		return dev_err_probe(dev, ret, "masks\n");
++
++	/* Whatever is already plugged in has raised nothing we saw. */
++	schedule_work(&tc->work);
++
++	return 0;
++}
++
++/* A reset with the boost running can leave the tablet dark. */
++static void max77705_typec_shutdown(struct i2c_client *client)
++{
++	struct max77705_typec *tc = i2c_get_clientdata(client);
++
++	cancel_work_sync(&tc->work);
++	max77705_typec_vbus(tc, false);
++}
++
++static const struct of_device_id max77705_typec_of_match[] = {
++	{ .compatible = "maxim,max77705-typec" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, max77705_typec_of_match);
++
++static struct i2c_driver max77705_typec_driver = {
++	.driver = {
++		.name = "max77705-typec",
++		.of_match_table = max77705_typec_of_match,
++	},
++	.probe = max77705_typec_probe,
++	.shutdown = max77705_typec_shutdown,
++};
++module_i2c_driver(max77705_typec_driver);
++
++MODULE_DESCRIPTION("Maxim MAX77705 CCIC minimal Type-C port driver");
++MODULE_LICENSE("GPL");
+-- 
+2.43.0
+
