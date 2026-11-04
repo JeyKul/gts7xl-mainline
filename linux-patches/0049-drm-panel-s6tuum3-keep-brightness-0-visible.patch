@@ -1,7 +1,7 @@
-From 135648359ce631ff2b52c69e9109a40493663b48 Mon Sep 17 00:00:00 2001
+From 90c5551aee9039f4c9e23d7684fcd23d5da4c6af Mon Sep 17 00:00:00 2001
 From: JeyKul <jey@kulovac.de>
 Date: Wed, 4 Nov 2026 20:30:52 +0100
-Subject: [PATCH] drm/panel: s6tuum3: keep brightness 0 visible
+Subject: [PATCH 49/50] drm/panel: s6tuum3: keep brightness 0 visible
 
 Level 0 nearly blanks the panel. Map 0..max onto min_brightness..max,
 min_brightness being a module parameter (default 64).
