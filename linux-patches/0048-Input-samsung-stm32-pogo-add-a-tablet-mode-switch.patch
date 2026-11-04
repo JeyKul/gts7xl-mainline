@@ -1,7 +1,7 @@
-From 2e0bb1bda102cd4bc9e797f3f3cad431e6b2dccb Mon Sep 17 00:00:00 2001
+From 8c23597318e2a4d0218c4864791e6ae5052e1336 Mon Sep 17 00:00:00 2001
 From: JeyKul <jey@kulovac.de>
 Date: Wed, 4 Nov 2026 20:23:53 +0100
-Subject: [PATCH 48/48] Input: samsung-stm32-pogo: add a tablet mode switch
+Subject: [PATCH 48/50] Input: samsung-stm32-pogo: add a tablet mode switch
 
 SW_TABLET_MODE follows the connect line, debounced by 2 s so the dips
 during trackpad use don't toggle it.

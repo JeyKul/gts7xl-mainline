@@ -54,3 +54,15 @@ Short dated findings, newest first. Status lives in README.md.
 - KWin learned autoBrightnessCurve [[0,1]] (0 lux -> 100%) and stuck at 100%. Fixed by editing it with sddm stopped (KWin rewrites on exit).
 - Installer now builds and installs sensord (gcc only during the build), adds iio-sensor-proxy, enables gts7xl-sensord-setup (extract once + start the SLPI). Extractor defaults set to the tested strange/2/65536/r06.
 - Docs: docs/sensors.md, docs/keyboard-cover.md, display.md brightness; README status rows updated.
+
+## 2026-11-04: S Pen Pro reconnect loop
+- Not Bluetooth instability. The pen's bond went stale: the pen answers its button characteristic (9ee7ba08-...) with ATT Insufficient Authorization, and the daemon retried Connect every 5 s ("Operation Not Authorized").
+- SMP re-pairing alone isn't enough: the pen only authorizes the button service for a bond made in pairing mode (Pro: hold the button; built-in pen: charge toggle).
+- gts7xl-spen now drops the bond after 3 auth failures, toggles the charger before pairing, and re-claims the default agent. User held the button: connected, battery 20%.
+
+## 2026-11-04: pen calibration
+- gts7xl-pen-calibrate (GTK4, 4 targets) fitted x -16..26732, y -5..16703 (was 0..26750 x 0..16700). Applied as /etc/udev/hwdb.d/61-gts7xl-pen.hwdb; needs python-cairo.
+- 3x3 recalibration: x 4..26754, y 10..16705. Edge residuals up to ~9-13 px with mixed signs (bottom corners opposite in y, right edge mid -13 x): non-linear, an affine matrix does not help. Hover fixed (0050): 0x80 in range, 0x10 tip, 0x01 leave.
+
+## 2026-11-04: bad DT in 0046 (fixed)
+- My `git commit -a` for 0046 swept in the uncommitted readback rail nodes (rb_*), which leave the panel dark/green and stop regulators-0 probing (ldo14/ldo9 suppliers missing). Every DTB built from the tree since had them; my test images used a saved DTB, so it showed only when the usbc-dp test rebuilt the DTB. 0046 regenerated without the DT part.
