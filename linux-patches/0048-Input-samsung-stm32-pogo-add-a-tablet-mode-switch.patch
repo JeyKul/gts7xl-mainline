@@ -1,0 +1,95 @@
+From 2e0bb1bda102cd4bc9e797f3f3cad431e6b2dccb Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Wed, 4 Nov 2026 20:23:53 +0100
+Subject: [PATCH 48/48] Input: samsung-stm32-pogo: add a tablet mode switch
+
+SW_TABLET_MODE follows the connect line, debounced by 2 s so the dips
+during trackpad use don't toggle it.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/input/keyboard/samsung-stm32-pogo.c | 29 +++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/drivers/input/keyboard/samsung-stm32-pogo.c b/drivers/input/keyboard/samsung-stm32-pogo.c
+index 335e533c5..3b9b03f14 100644
+--- a/drivers/input/keyboard/samsung-stm32-pogo.c
++++ b/drivers/input/keyboard/samsung-stm32-pogo.c
+@@ -55,10 +55,12 @@ struct pogo_kbd {
+ 	struct i2c_client *client;
+ 	struct input_dev *input;
+ 	struct input_dev *touchpad;
++	struct input_dev *tablet_sw;
+ 	struct regulator *vdd;
+ 	struct gpio_desc *conn;
+ 	struct delayed_work conn_work;
+ 	struct delayed_work check_ic_work;
++	struct delayed_work tablet_work;
+ 	struct mutex i2c_lock;
+ 	struct mutex power_lock;
+ 	bool powered;
+@@ -356,6 +358,16 @@ static void pogo_conn_work(struct work_struct *work)
+ 	pogo_set_connected(kbd, gpiod_get_value_cansleep(kbd->conn));
+ }
+ 
++/* Tablet mode follows the connect line once it has been stable for 2 s */
++static void pogo_tablet_work(struct work_struct *work)
++{
++	struct pogo_kbd *kbd = container_of(work, struct pogo_kbd, tablet_work.work);
++
++	input_report_switch(kbd->tablet_sw, SW_TABLET_MODE,
++			    !gpiod_get_value_cansleep(kbd->conn));
++	input_sync(kbd->tablet_sw);
++}
++
+ static irqreturn_t pogo_conn_irq(int irq, void *dev_id)
+ {
+ 	struct pogo_kbd *kbd = dev_id;
+@@ -371,6 +383,7 @@ static irqreturn_t pogo_conn_irq(int irq, void *dev_id)
+ 		mutex_unlock(&kbd->power_lock);
+ 	}
+ 	mod_delayed_work(system_wq, &kbd->conn_work, msecs_to_jiffies(250));
++	mod_delayed_work(system_wq, &kbd->tablet_work, msecs_to_jiffies(2000));
+ 	return IRQ_HANDLED;
+ }
+ 
+@@ -379,6 +392,7 @@ static void pogo_shutdown_action(void *data)
+ 	struct pogo_kbd *kbd = data;
+ 
+ 	cancel_delayed_work_sync(&kbd->conn_work);
++	cancel_delayed_work_sync(&kbd->tablet_work);
+ 	cancel_delayed_work_sync(&kbd->check_ic_work);
+ 	pogo_set_connected(kbd, false);
+ }
+@@ -398,6 +412,7 @@ static int pogo_probe(struct i2c_client *client)
+ 	kbd->client = client;
+ 	INIT_DELAYED_WORK(&kbd->conn_work, pogo_conn_work);
+ 	INIT_DELAYED_WORK(&kbd->check_ic_work, pogo_check_ic_work);
++	INIT_DELAYED_WORK(&kbd->tablet_work, pogo_tablet_work);
+ 	mutex_init(&kbd->i2c_lock);
+ 	mutex_init(&kbd->power_lock);
+ 
+@@ -463,6 +478,20 @@ static int pogo_probe(struct i2c_client *client)
+ 	if (ret)
+ 		return ret;
+ 
++	kbd->tablet_sw = devm_input_allocate_device(dev);
++	if (!kbd->tablet_sw)
++		return -ENOMEM;
++
++	kbd->tablet_sw->name = "Samsung Book Cover Tablet Mode Switch";
++	kbd->tablet_sw->id.bustype = BUS_I2C;
++	input_set_capability(kbd->tablet_sw, EV_SW, SW_TABLET_MODE);
++	input_report_switch(kbd->tablet_sw, SW_TABLET_MODE,
++			    !gpiod_get_value_cansleep(kbd->conn));
++
++	ret = input_register_device(kbd->tablet_sw);
++	if (ret)
++		return ret;
++
+ 	ret = devm_request_threaded_irq(dev, client->irq, NULL, pogo_irq,
+ 					IRQF_ONESHOT | IRQF_NO_AUTOEN,
+ 					"pogo-keyboard", kbd);
+-- 
+2.56.0
+
