@@ -1,2 +1,2 @@
 # Start with the DSP's device node: a unit's path condition is checked too early.
-SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp", TAG+="systemd", ENV{SYSTEMD_WANTS}+="gts7xl-sensord-fs.service gts7xl-sensord-accel.service"
+SUBSYSTEM=="misc", KERNEL=="fastrpc-sdsp", TAG+="systemd", ENV{SYSTEMD_WANTS}+="gts7xl-sensord-fs.service gts7xl-sensord-accel.service gts7xl-sensord-light.service"

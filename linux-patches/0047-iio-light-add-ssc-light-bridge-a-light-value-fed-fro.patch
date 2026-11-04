@@ -1,0 +1,167 @@
+From 3c9b1406a18db6be19b34996909dab19b754d428 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Wed, 4 Nov 2026 20:23:52 +0100
+Subject: [PATCH 47/48] iio: light: add ssc-light-bridge, a light value fed
+ from userspace
+
+Light sensors behind the Qualcomm sensor DSP have no kernel driver.
+A userspace SSC client writes lux to in_illuminance_input, so
+iio-sensor-proxy and desktops see an ordinary IIO light sensor.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/iio/light/Kconfig            |  10 +++
+ drivers/iio/light/Makefile           |   1 +
+ drivers/iio/light/ssc-light-bridge.c | 107 +++++++++++++++++++++++++++
+ 3 files changed, 118 insertions(+)
+ create mode 100644 drivers/iio/light/ssc-light-bridge.c
+
+diff --git a/drivers/iio/light/Kconfig b/drivers/iio/light/Kconfig
+index f23bbce12..57c161034 100644
+--- a/drivers/iio/light/Kconfig
++++ b/drivers/iio/light/Kconfig
+@@ -727,6 +727,16 @@ config VEML3328
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called veml3328
+ 
++config SSC_LIGHT_BRIDGE
++	tristate "Ambient light value fed in from userspace"
++	help
++	  An IIO light sensor whose lux value a userspace daemon writes.
++	  For light sensors behind the Qualcomm sensor DSP (SSC), so that
++	  iio-sensor-proxy and desktops can read them.
++
++	  To compile this driver as a module, choose M here: the module
++	  will be called ssc-light-bridge.
++
+ config VEML6030
+ 	tristate "VEML6030 and VEML6035 ambient light sensors"
+ 	select REGMAP_I2C
+diff --git a/drivers/iio/light/Makefile b/drivers/iio/light/Makefile
+index 64e354c49..690989dfa 100644
+--- a/drivers/iio/light/Makefile
++++ b/drivers/iio/light/Makefile
+@@ -67,6 +67,7 @@ obj-$(CONFIG_VCNL4000)		+= vcnl4000.o
+ obj-$(CONFIG_VCNL4035)		+= vcnl4035.o
+ obj-$(CONFIG_VEML3235)		+= veml3235.o
+ obj-$(CONFIG_VEML3328)		+= veml3328.o
++obj-$(CONFIG_SSC_LIGHT_BRIDGE)	+= ssc-light-bridge.o
+ obj-$(CONFIG_VEML6030)		+= veml6030.o
+ obj-$(CONFIG_VEML6040)		+= veml6040.o
+ obj-$(CONFIG_VEML6046X00)	+= veml6046x00.o
+diff --git a/drivers/iio/light/ssc-light-bridge.c b/drivers/iio/light/ssc-light-bridge.c
+new file mode 100644
+index 000000000..465ba9035
+--- /dev/null
++++ b/drivers/iio/light/ssc-light-bridge.c
+@@ -0,0 +1,107 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Ambient light value fed in from userspace.
++ *
++ * On Qualcomm boards the light sensor can sit behind the sensor DSP (SSC),
++ * which the kernel has no driver for. A userspace daemon reads the sensor
++ * and writes the lux value to in_illuminance_input; readers such as
++ * iio-sensor-proxy then see an ordinary IIO light sensor.
++ */
++
++#include <linux/device/faux.h>
++#include <linux/iio/iio.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++
++struct ssc_light {
++	struct mutex lock;
++	int lux;
++	int micro;
++};
++
++static const struct iio_chan_spec ssc_light_channels[] = {
++	{
++		.type = IIO_LIGHT,
++		.info_mask_separate = BIT(IIO_CHAN_INFO_PROCESSED),
++	},
++};
++
++static int ssc_light_read_raw(struct iio_dev *indio_dev,
++			      struct iio_chan_spec const *chan,
++			      int *val, int *val2, long mask)
++{
++	struct ssc_light *data = iio_priv(indio_dev);
++
++	if (mask != IIO_CHAN_INFO_PROCESSED)
++		return -EINVAL;
++
++	guard(mutex)(&data->lock);
++	*val = data->lux;
++	*val2 = data->micro;
++	return IIO_VAL_INT_PLUS_MICRO;
++}
++
++static int ssc_light_write_raw(struct iio_dev *indio_dev,
++			       struct iio_chan_spec const *chan,
++			       int val, int val2, long mask)
++{
++	struct ssc_light *data = iio_priv(indio_dev);
++
++	if (mask != IIO_CHAN_INFO_PROCESSED || val < 0 || val2 < 0)
++		return -EINVAL;
++
++	guard(mutex)(&data->lock);
++	data->lux = val;
++	data->micro = val2;
++	return 0;
++}
++
++static const struct iio_info ssc_light_info = {
++	.read_raw = ssc_light_read_raw,
++	.write_raw = ssc_light_write_raw,
++};
++
++static int ssc_light_probe(struct faux_device *fdev)
++{
++	struct device *dev = &fdev->dev;
++	struct iio_dev *indio_dev;
++	struct ssc_light *data;
++
++	indio_dev = devm_iio_device_alloc(dev, sizeof(*data));
++	if (!indio_dev)
++		return -ENOMEM;
++
++	data = iio_priv(indio_dev);
++	mutex_init(&data->lock);
++
++	indio_dev->name = "ssc-light";
++	indio_dev->info = &ssc_light_info;
++	indio_dev->channels = ssc_light_channels;
++	indio_dev->num_channels = ARRAY_SIZE(ssc_light_channels);
++	indio_dev->modes = INDIO_DIRECT_MODE;
++
++	return devm_iio_device_register(dev, indio_dev);
++}
++
++static const struct faux_device_ops ssc_light_ops = {
++	.probe = ssc_light_probe,
++};
++
++static struct faux_device *ssc_light_fdev;
++
++static int __init ssc_light_init(void)
++{
++	ssc_light_fdev = faux_device_create("ssc-light-bridge", NULL,
++					    &ssc_light_ops);
++	return ssc_light_fdev ? 0 : -ENODEV;
++}
++module_init(ssc_light_init);
++
++static void __exit ssc_light_exit(void)
++{
++	faux_device_destroy(ssc_light_fdev);
++}
++module_exit(ssc_light_exit);
++
++MODULE_DESCRIPTION("Ambient light value fed in from a userspace SSC client");
++MODULE_LICENSE("GPL");
+-- 
+2.56.0
+

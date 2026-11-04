@@ -37,3 +37,9 @@ Short dated findings, newest first. Status lives in README.md.
 - Run 1: serving 2854 frames, 12 gaps, 8 s stalled (max 2.7 s) | stopped 721 frames, 43 gaps, 47 s stalled (max 5.4 s).
 - Run 2 (reversed): stopped 1076 frames, 49 gaps, 42 s (max 5.7 s) | serving 2242 frames, 23 gaps, 31 s, but one gap was 22 s (~9 s without it).
 - Supports cause 1 (MCU blocks on a silent SLPI) in both orders. Trackpad still stalls with the SLPI serving: bridge_driver_0 (bus 7, 0x2a, the likely lid-angle link) never probes. Next: get bridge_driver_0 up.
+
+## 2026-11-04: light, rotation, tablet mode, trackpad axes
+- Trackpad: raw x/y are already right (0046). The old rotation was wrong.
+- Light: veml3328 reacts (8 to 3200 lux). kwin 6.8 uses iio-sensor-proxy ClaimLight. New ssc-light-bridge IIO device (0047) plus gts7xl-sensord-light service (stream -> in_illuminance_input every 0.5 s). monitor-sensor --light shows real values. Restart=always: at boot the SSC registers light late.
+- Rotation: landscape with the camera on top reads +g on sensor X. ACCEL_MOUNT_MATRIX "0, 1, 0; -1, 0, 0; 0, 0, 1" gives normal.
+- Tablet mode: SW_TABLET_MODE switch on the pogo driver (0048), = !conn, 2 s debounce. Detach -> 1, attach -> 0, tested.

@@ -1,0 +1,9 @@
+[Unit]
+Description=SSC ambient light to IIO bridge
+After=gts7xl-sensord-fs.service
+
+[Service]
+ExecStartPre=/usr/bin/modprobe ssc-light-bridge
+ExecStart=/usr/local/bin/gts7xl-sensord-light
+Restart=always
+RestartSec=10

@@ -1,0 +1,117 @@
+From 15b28ce39363ec6cd3d48cf31bd8fe8ba3f68fce Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Wed, 4 Nov 2026 20:15:21 +0100
+Subject: [PATCH] Input: samsung-stm32-pogo: report trackpad axes unrotated
+
+Tested on the Book Cover Keyboard: the raw x/y already match the
+pointer directions.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 55 +++++++++++++++++++
+ drivers/input/keyboard/samsung-stm32-pogo.c   |  9 ++-
+ 2 files changed, 59 insertions(+), 5 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 8b43d5cb7..926d924f8 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -629,6 +629,36 @@ regulators-1 {
+ 		compatible = "qcom,pm8150l-rpmh-regulators";
+ 		qcom,pmic-id = "c";
+ 
++		/* READBACK TEST: name only, no votes */
++		rb_l1c: ldo1 {
++			regulator-name = "rb_l1c";
++		};
++
++		rb_l2c: ldo2 {
++			regulator-name = "rb_l2c";
++		};
++
++		rb_l3c: ldo3 {
++			regulator-name = "rb_l3c";
++		};
++
++		rb_l6c: ldo6 {
++			regulator-name = "rb_l6c";
++		};
++
++		rb_l9c: ldo9 {
++			regulator-name = "rb_l9c";
++		};
++
++		rb_l10c: ldo10 {
++			regulator-name = "rb_l10c";
++		};
++
++		rb_l11c: ldo11 {
++			regulator-name = "rb_l11c";
++		};
++
++
+ 		/* Stock pm8150a_l8: the sensor rail, which Samsung's SSC driver switches on */
+ 		vreg_l8c_1p8: ldo8 {
+ 			regulator-name = "vreg_l8c_1p8";
+@@ -672,6 +702,31 @@ vreg_s8c_1p35: smps8 {
+ 			};
+ 	};
+ 	regulators-0 {
++		/* READBACK TEST: name only, no votes */
++		rb_l1a: ldo1 {
++			regulator-name = "rb_l1a";
++		};
++
++		rb_l3a: ldo3 {
++			regulator-name = "rb_l3a";
++		};
++
++		rb_l7a: ldo7 {
++			regulator-name = "rb_l7a";
++		};
++
++		rb_l11a: ldo11 {
++			regulator-name = "rb_l11a";
++		};
++
++		rb_l15a: ldo15 {
++			regulator-name = "rb_l15a";
++		};
++
++		rb_l18a: ldo18 {
++			regulator-name = "rb_l18a";
++		};
++
+ 		vreg_s4a_1p8: smps4 {
+ 				regulator-name = "vreg_s4a_1p8";
+ 				regulator-min-microvolt = <1800000>;
+diff --git a/drivers/input/keyboard/samsung-stm32-pogo.c b/drivers/input/keyboard/samsung-stm32-pogo.c
+index 323d0fe23..335e533c5 100644
+--- a/drivers/input/keyboard/samsung-stm32-pogo.c
++++ b/drivers/input/keyboard/samsung-stm32-pogo.c
+@@ -103,9 +103,8 @@ static void pogo_report_touchpad(struct pogo_kbd *kbd, const u8 *data, unsigned
+ 		input_mt_slot(tp, i);
+ 		input_mt_report_slot_state(tp, MT_TOOL_FINGER, down);
+ 		if (down) {
+-			/* The sensor is mounted rotated, as in the stock driver */
+-			input_report_abs(tp, ABS_MT_POSITION_X, POGO_TP_MAX_Y - 1 - y);
+-			input_report_abs(tp, ABS_MT_POSITION_Y, x);
++			input_report_abs(tp, ABS_MT_POSITION_X, x);
++			input_report_abs(tp, ABS_MT_POSITION_Y, y);
+ 			input_report_abs(tp, ABS_MT_TOUCH_MAJOR, max_t(int, c[4], 45));
+ 		}
+ 	}
+@@ -452,8 +451,8 @@ static int pogo_probe(struct i2c_client *client)
+ 	kbd->touchpad->id.bustype = BUS_I2C;
+ 	input_set_capability(kbd->touchpad, EV_KEY, BTN_LEFT);
+ 	__set_bit(INPUT_PROP_BUTTONPAD, kbd->touchpad->propbit);
+-	input_set_abs_params(kbd->touchpad, ABS_MT_POSITION_X, 0, POGO_TP_MAX_Y - 1, 0, 0);
+-	input_set_abs_params(kbd->touchpad, ABS_MT_POSITION_Y, 0, POGO_TP_MAX_X - 1, 0, 0);
++	input_set_abs_params(kbd->touchpad, ABS_MT_POSITION_X, 0, POGO_TP_MAX_X - 1, 0, 0);
++	input_set_abs_params(kbd->touchpad, ABS_MT_POSITION_Y, 0, POGO_TP_MAX_Y - 1, 0, 0);
+ 	input_set_abs_params(kbd->touchpad, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
+ 
+ 	ret = input_mt_init_slots(kbd->touchpad, POGO_TP_FINGERS, INPUT_MT_POINTER);
+-- 
+2.56.0
+

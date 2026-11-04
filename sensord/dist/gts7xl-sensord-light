@@ -1,0 +1,9 @@
+#!/bin/sh
+# Feeds the SSC ambient light sensor into the ssc-light-bridge IIO device,
+# where iio-sensor-proxy (and so KDE/GNOME auto-brightness) reads it.
+N=$(grep -lx ssc-light /sys/bus/iio/devices/*/name 2>/dev/null | head -1)
+[ -n "$N" ] || { echo "no ssc-light IIO device" >&2; exit 1; }
+F=$(dirname "$N")/in_illuminance_input
+# The sensor's minimum rate is 20 Hz; pass on every 10th sample.
+stdbuf -oL gts7xl-sensord --stream ambient_light --wait 300 |
+	awk -v f="$F" '/^ambient_light / { if (++n % 10 == 0) { print $3 > f; close(f) } }'

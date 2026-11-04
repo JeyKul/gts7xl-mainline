@@ -29,6 +29,9 @@ check: tests/test tests/e2e
 install: gts7xl-sensord
 	install -Dm755 gts7xl-sensord $(DESTDIR)$(PREFIX)/bin/gts7xl-sensord
 	install -Dm755 tools/gts7xl-sensord-extract $(DESTDIR)$(PREFIX)/sbin/gts7xl-sensord-extract
+	install -Dm755 dist/gts7xl-sensord-light $(DESTDIR)$(PREFIX)/bin/gts7xl-sensord-light
+	install -Dm644 dist/gts7xl-sensord-light.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-light.service
+	install -Dm644 dist/gts7xl-sensord-light.conf $(DESTDIR)/etc/modules-load.d/gts7xl-sensord-light.conf
 	install -Dm644 dist/gts7xl-sensord-fs.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-fs.service
 	install -Dm644 dist/gts7xl-sensord-accel.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-accel.service
 	install -Dm644 dist/70-gts7xl-sensord.rules $(DESTDIR)/etc/udev/rules.d/70-gts7xl-sensord.rules
