@@ -173,7 +173,12 @@ class Camera(Gtk.Application):
                 self.status.set_text(f"Focus {self.position}")
                 return False
         self.current = self.sweep.pop(0)
-        self.focus.set(self.current)
+        try:
+            self.focus.set(self.current)
+        except OSError as e:
+            self.sweep = None
+            self.status.set_text(f"Focus failed: {e}")
+            return False
         GLib.timeout_add(SETTLE_MS, self.step_sweep)
         return False
 
@@ -194,10 +199,14 @@ class Camera(Gtk.Application):
             "appsink name=out max-buffers=1 drop=true sync=false")
         self.out = self.shot.get_by_name("out")
         self.frames = 0
+        self.waits = 0
         self.shot.set_state(Gst.State.PLAYING)
         GLib.timeout_add(100, self.wait_photo)
 
     def wait_photo(self):
+        self.waits += 1
+        if self.waits > 200:  # about 20 s: the pipeline has failed
+            return self.finish_photo("Photo failed")
         # Let exposure settle before keeping a frame
         sample = self.out.emit("try-pull-sample", 10 * Gst.MSECOND)
         if not sample:
@@ -207,14 +216,23 @@ class Camera(Gtk.Application):
             return True
         buf = sample.get_buffer()
         ok, info = buf.map(Gst.MapFlags.READ)
-        with open(self.path, "wb") as f:
-            f.write(bytes(info.data))
-        buf.unmap(info)
+        if not ok:
+            return self.finish_photo("Photo failed")
+        try:
+            with open(self.path, "wb") as f:
+                f.write(bytes(info.data))
+        except OSError as e:
+            return self.finish_photo(f"Photo failed: {e}")
+        finally:
+            buf.unmap(info)
+        print("saved", self.path, flush=True)
+        return self.finish_photo("Saved " + self.path)
+
+    def finish_photo(self, status):
         self.shot.set_state(Gst.State.NULL)
         self.shot = None
         self.busy = False
-        self.status.set_text("Saved " + self.path)
-        print("saved", self.path, flush=True)
+        self.status.set_text(status)
         self.start_preview()
         return False
 
