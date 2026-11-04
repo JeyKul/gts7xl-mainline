@@ -77,7 +77,7 @@ def add(n):
     o=subprocess.run(['modinfo','-F','depends',idx[n]],capture_output=True,text=True,check=True).stdout.strip()
     for d in filter(None,o.split(',')): add(d)
     seen.append(n)
-for n in ('msm','panel_samsung_s6tuum3','pwrseq_qcom_wcn','pci_pwrctrl_pwrseq','qrtr_mhi','ath11k_pci'): add(n)
+for n in ('panel_samsung_s6tuum3','msm','pwrseq_qcom_wcn','pci_pwrctrl_pwrseq','qrtr_mhi','ath11k_pci'): add(n)
 for n in seen: print(idx[n])
 P
 : > "$ROOT/mods/load.sh"
