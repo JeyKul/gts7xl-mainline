@@ -1,7 +1,8 @@
-From afd34b77daff7f6b61ba743225e4841e9e90b337 Mon Sep 17 00:00:00 2001
+From be8dacad7fdc7ec848ced521c8cc663d729ee5df Mon Sep 17 00:00:00 2001
 From: Claudius <claudiusthebot@gmail.com>
 Date: Wed, 4 Nov 2026 19:56:20 +0000
-Subject: [PATCH] power: supply: max77705_charger: add an OTG VBUS regulator
+Subject: [PATCH 52/53] power: supply: max77705_charger: add an OTG VBUS
+ regulator
 
 Sets the boost and OTG bits on top of the current mode nibble, keeps the
 system buck on, refuses while CHGIN is present, and stops the boost at
@@ -17,7 +18,7 @@ on the same chip. No consumer in the default DTB. Untested on this tablet.
  3 files changed, 115 insertions(+), 1 deletion(-)
 
 diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-usbhost.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-usbhost.dts
-index 19907153..ea222818 100644
+index 19907153e..ea2228184 100644
 --- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-usbhost.dts
 +++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi-usbhost.dts
 @@ -14,3 +14,23 @@
@@ -45,7 +46,7 @@ index 19907153..ea222818 100644
 +	};
 +};
 diff --git a/drivers/power/supply/Kconfig b/drivers/power/supply/Kconfig
-index b89ef40d..38b77f03 100644
+index b89ef40df..38b77f037 100644
 --- a/drivers/power/supply/Kconfig
 +++ b/drivers/power/supply/Kconfig
 @@ -638,7 +638,7 @@ config CHARGER_MAX77693
@@ -58,7 +59,7 @@ index b89ef40d..38b77f03 100644
  	  Say Y to enable support for the Maxim MAX77705 battery charger.
  
 diff --git a/drivers/power/supply/max77705_charger.c b/drivers/power/supply/max77705_charger.c
-index 63b0b4f0..bd74f3cc 100644
+index 63b0b4f0c..bd74f3cca 100644
 --- a/drivers/power/supply/max77705_charger.c
 +++ b/drivers/power/supply/max77705_charger.c
 @@ -17,6 +17,7 @@
@@ -197,5 +198,5 @@ index 63b0b4f0..bd74f3cc 100644
  module_i2c_driver(max77705_charger_driver);
  
 -- 
-2.43.0
+2.56.0
 
