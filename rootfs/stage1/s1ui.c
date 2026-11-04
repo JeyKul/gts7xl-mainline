@@ -645,6 +645,7 @@ static int stage2(void)
 			 "Erase and install", "Reboot", WARN)) {
 			sync();
 			run((char *const *)REBOOT);
+			return 4;	/* a failed reboot must not reach the installer */
 		}
 	}
 	FILE *f = fopen("/tmp/choices", "w");
