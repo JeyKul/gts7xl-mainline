@@ -2,15 +2,15 @@
 
 Sensor stack for the Galaxy Tab S7+ Wi-Fi on mainline Linux. Motion, compass and light sensors sit behind the sensor DSP (SLPI). This serves the DSP the files it asks for, talks to its sensor service, and publishes the accelerometer for `iio-sensor-proxy`. Written in C with no dependencies beyond libc and kernel headers.
 
-**Untested on hardware.** See [TEST-PLAN.md](TEST-PLAN.md).
+Tested on an SM-T970: 12 sensors, auto-rotate and auto-brightness. Overview, power rails and troubleshooting: [docs/sensors.md](../docs/sensors.md). Bring-up steps: [TEST-PLAN.md](TEST-PLAN.md).
 
     gts7xl-sensord --trace-fastrpc DIR   serve DIR read-only, log every call
     gts7xl-sensord --serve DIR           serve DIR; only mnt/vendor/persist/sensors is writable
     gts7xl-sensord --list                print the sensors the DSP knows
-    gts7xl-sensord --stream accel|gyro   print samples
+    gts7xl-sensord --stream TYPE         print samples: accel, gyro, mag, ambient_light
     gts7xl-sensord --uinput              accelerometer as an input device
 
-Build: `make`. Tests, no hardware needed: `make check`. Install: `make install`, later `make install-autostart`.
+Build: `make`. Tests, no hardware needed: `make check`. Install: `make install install-autostart` (the installer does this). First boot: `gts7xl-sensord-setup.service` runs the extractor once and starts the DSP.
 
 ## Layout
 
@@ -21,8 +21,8 @@ Build: `make`. Tests, no hardware needed: `make check`. Install: `make install`,
 - `src/client.c`: SSC client over a QRTR socket
 - `src/main.c`: command line, streaming, uinput
 - `tools/gts7xl-sensord-extract`: copies this tablet's firmware and sensor files, read-only
-- `dist/`: systemd units and udev rule
-- `linux-patches/0040` in the repo enables the DSP in the device tree; the tarball carries it in `patches/`
+- `dist/`: systemd units, udev rules, `gts7xl-sensord-light` (light value into the kernel's `ssc-light-bridge` IIO device)
+- `linux-patches/0043`-`0045` and `0047` in the repo: DSP, power rails, light bridge
 - `docs/RESEARCH.md`: facts with sources, licence decisions
 
 ## Why uinput

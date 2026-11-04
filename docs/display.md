@@ -100,6 +100,12 @@ Stock values, from `techpack/display/msm` in the T970XXS7DXH1 source: off sequen
 
 The PPS is byte identical to the stock dtsi, and all values mainline calculates match it except one: the last rate control range has min QP 13 in the encoder and 12 in the PPS. Stock's encoder table uses 12 (`dsi_dsc_rc_range_min_qp_1_1`). The bootloader also uses 13, and this applies only when the rate buffer is nearly full, so it doesn't explain the takeover glitch.
 
+## Brightness
+
+- The panel takes a level from 0 to 2047 (DCS `51h`, low byte first, as stock).
+- Level 0 nearly blanks the panel. The driver maps the backlight range 0..2047 onto `min_brightness`..2047, so 0% stays readable (`linux-patches/0049`). `min_brightness` defaults to 64. It can be changed at runtime in `/sys/module/panel_samsung_s6tuum3/parameters/min_brightness` and takes effect on the next brightness change.
+- Automatic brightness comes from the ambient light sensor, see [sensors.md](sensors.md).
+
 ## Still unexplained
 
 - `INTF_CONFIG` bit 23 and `INTF_CONFIG2` bit 8 are set by the bootloader. Neither mainline nor the stock driver code read so far names them.

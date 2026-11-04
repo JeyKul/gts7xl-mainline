@@ -44,6 +44,7 @@ install -m755 "$UI" "$R/s1ui"
 install -m755 "$HERE/install.sh" "$R/install.sh"
 cp -a "$HERE/../overlay" "$R/gts7xl/overlay"
 install -m755 "$HERE/../arch-setup.sh" "$R/gts7xl/arch-setup.sh"
+cp -a "$HERE/../../sensord" "$R/gts7xl/sensord"
 cp "$MODS" "$R/gts7xl/modules.tar.gz"
 # Whoever builds this, everything in it belongs to root
 tar -C "$R" --owner=0 --group=0 --numeric-owner -czf "$OUT" .

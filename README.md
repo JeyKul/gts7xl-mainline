@@ -27,13 +27,13 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Hardware | State | Notes |
 |---|---|---|
 | Display: 2800x1752 AMOLED, S6TUUM3 | ✅ | Native DSC command mode driver at 60Hz; 120Hz mode offered, not confirmed |
-| Backlight, brightness | ✅ | Panel backlight control |
+| Backlight, brightness | ✅ | 0% kept readable (`min_brightness`), automatic brightness from the light sensor |
 | Touchscreen | ✅ | Multitouch |
 | S Pen digitizer | 🟡 | Position and pressure work, range hand-calibrated; side button, hover, tilt unconfirmed |
 | S Pen Bluetooth remote | 🟡 | S Pen Pro button and air gestures work through `gts7xl-spen`, `Pen Actions` app to change them; built-in S Pen untested |
 | Fingerprint reader (under display) | ⬜ | |
-| Pogo keyboard | ✅ | Recovers by itself after trackpad use |
-| Pogo trackpad | 🟡 | Moves for under a second, then drops and recovers; also on the stock kernel in TWRP, fine on One UI |
+| Pogo keyboard | ✅ | Recovers by itself after trackpad use; tablet mode switch on detach, see [docs/keyboard-cover.md](docs/keyboard-cover.md) |
+| Pogo trackpad | 🟡 | Usable, short stalls; much better with the sensor DSP running. Lid-angle link still missing |
 
 ### Graphics and DSPs
 
@@ -43,7 +43,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Video decode and encode (Venus) | ⬜ | |
 | Audio DSP (ADSP) | ✅ | |
 | Compute DSP (CDSP) | ⬜ | |
-| Sensor DSP (SLPI) | ⬜ | |
+| Sensor DSP (SLPI) | ✅ | Booted with the tablet's own firmware, served by `gts7xl-sensord`, see [docs/sensors.md](docs/sensors.md) |
 
 ### Audio
 
@@ -76,10 +76,10 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| Accel, gyro, compass (SLPI) | 🟡 | gts7xl-sensord: 12 sensors incl. ambient light. Auto-rotate not wired yet; 2nd light sensor, rgb missing |
-| Gyroscope | ❌ | On the sensor DSP bus |
-| Magnetometer | ❌ | On the sensor DSP bus |
-| Ambient light | ❌ | On the sensor DSP bus |
+| Accelerometer, auto-rotate | ✅ | LSM6DSO on the sensor DSP, through iio-sensor-proxy |
+| Gyroscope | 🟡 | Streams from the DSP; not passed to desktops |
+| Magnetometer | 🟡 | AK0991x streams from the DSP; not passed to desktops |
+| Ambient light, auto-brightness | ✅ | VEML3328 through `ssc-light-bridge` and iio-sensor-proxy; second light sensor and RGB missing |
 | Hall sensor (cover) | 🟡 | `gpio157` as a lid switch, polarity from stock, does not react to the keyboard cover; lid suspend is off |
 
 ### Cameras
@@ -129,10 +129,12 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 - `config/gts7xl_defconfig`: full kernel configuration
 - `.github/workflows/build.yml`: manual build of everything, published as a prerelease
 - `rootfs/`: Arch setup, tablet support files, the installer (`stage1`, `stage2`) and packaging
-- `docs/display.md`: what the native display needs
+- `docs/display.md`: what the native display needs, brightness
+- `docs/sensors.md`: sensor DSP stack, power rails, rotation and light, troubleshooting
+- `docs/keyboard-cover.md`: keyboard, trackpad stalls, tablet mode
 - `initramfs/init`: first code to run, picks the system or the installer
 - `kmod/`: panel register tool used for display research
-- `sensord/`: sensor DSP file service, sensor client and accelerometer input, untested
+- `sensord/`: sensor DSP file service and client; accelerometer and light into iio-sensor-proxy
 - `modules-repo/`: list of optional module packages
 - `tools/`: serial shell helper, USB deploy, test programs
 - `uefi/`: earlier Mu-Silicium attempt, not used; copy over a Mu-Silicium checkout. It needs blobs and a dump of your own device tree, which aren't published because they contain device identifiers

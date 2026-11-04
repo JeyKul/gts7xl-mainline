@@ -98,6 +98,7 @@ sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/lib/firmware/cirrus/cs35l41-dsp1-sp
 rm -f $A/etc/resolv.conf; cp /etc/resolv.conf $A/etc/resolv.conf
 for d in proc sys dev; do mount --bind /$d $A/$d; done
 cp /gts7xl/arch-setup.sh $A/tmp/arch-setup.sh
+[ -d /gts7xl/sensord ] && cp -a /gts7xl/sensord $A/tmp/gts7xl-sensord-src
 umask 077
 grep -E '^(DESKTOP|NEW_USER|NEW_PASS)=' /tmp/choices > $A/tmp/gts7xl-user
 umask 022

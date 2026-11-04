@@ -31,6 +31,7 @@ chmod 755 "$A"/usr/local/sbin/* "$A"/usr/local/bin/* "$A/usr/lib/systemd/system-
 mkdir -p "$A/usr/lib/modules"
 tar -xzf "$MODULES" -C "$A/usr" --strip-components=0 lib/modules 2>/dev/null || tar -xzf "$MODULES" -C "$A"
 install -m755 "$HERE/arch-setup.sh" "$A/tmp/arch-setup.sh"
+rm -rf "$A/tmp/gts7xl-sensord-src"; cp -a "$HERE/../sensord" "$A/tmp/gts7xl-sensord-src"
 printf "NEW_USER=user\nNEW_PASS=user\n" > "$A/tmp/gts7xl-user"
 chroot "$A" /bin/bash /tmp/arch-setup.sh
 chroot "$A" /usr/bin/gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null || true

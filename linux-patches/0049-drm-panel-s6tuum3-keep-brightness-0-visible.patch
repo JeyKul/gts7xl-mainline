@@ -1,0 +1,42 @@
+From 135648359ce631ff2b52c69e9109a40493663b48 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Wed, 4 Nov 2026 20:30:52 +0100
+Subject: [PATCH] drm/panel: s6tuum3: keep brightness 0 visible
+
+Level 0 nearly blanks the panel. Map 0..max onto min_brightness..max,
+min_brightness being a module parameter (default 64).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 12 +++++++++++-
+ 1 file changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+index 055a1b618..70a464e49 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+@@ -193,10 +193,20 @@ static int s6tuum3_prepare(struct drm_panel *panel)
+ 	return 0;
+ }
+ 
++/* Level 0 nearly blanks the panel: map 0..max onto min_brightness..max */
++static unsigned int min_brightness = 64;
++module_param(min_brightness, uint, 0644);
++MODULE_PARM_DESC(min_brightness, "Panel level that brightness 0 maps to");
++
+ static int s6tuum3_set_brightness(struct mipi_dsi_device *dsi, u16 level)
+ {
+ 	struct mipi_dsi_multi_context dsi_ctx = { .dsi = dsi };
+-	u8 bl[] = { 0x51, level & 0xff, level >> 8 };
++	unsigned int floor = min(READ_ONCE(min_brightness), S6TUUM3_MAX_BRIGHTNESS);
++	u8 bl[3] = { 0x51 };
++
++	level = floor + level * (S6TUUM3_MAX_BRIGHTNESS - floor) / S6TUUM3_MAX_BRIGHTNESS;
++	bl[1] = level & 0xff;
++	bl[2] = level >> 8;
+ 
+ 	/* Stock gamma_mode2_normal: 51h takes the low byte first */
+ 	mipi_dsi_dcs_write_seq_multi(&dsi_ctx, 0x68, 0x19, 0x20, 0x00, 0x14);
+-- 
+2.56.0
+

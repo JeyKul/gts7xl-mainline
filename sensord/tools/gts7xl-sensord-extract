@@ -96,7 +96,7 @@ def board_revision(given):
         m = re.search(r'androidboot\.revision=(\d+)', f.read())
     if m:
         return m.group(1), 'from the bootloader command line'
-    return '6', 'GUESS: newest gts7xlwifi board tree (r06); pass --revision if you know yours'
+    return '6', 'board tree r06, tested on an SM-T970; pass --revision if yours differs'
 
 
 def soc(dest, revision):
@@ -111,9 +111,10 @@ def soc(dest, revision):
     put(d + 'soc_id', real.get('soc_id', '356'))
     put(d + 'revision', real.get('revision', '2.1'))
     put(d + 'hw_platform', 'MTP')          # stock DT: qcom,kona-mtp, board-id 8
-    put(d + 'platform_subtype', 'Unknown')  # GUESS
-    put(d + 'platform_subtype_id', '0')     # GUESS
-    put(d + 'platform_version', '65536')    # GUESS
+    # Tested on an SM-T970: the DSP picks the right sensor configs with these
+    put(d + 'platform_subtype', 'strange')
+    put(d + 'platform_subtype_id', '2')
+    put(d + 'platform_version', '65536')
     put(dest + '/sys/class/sensors/ssc_core/ssc_hw_rev', revision)
     put(dest + '/props', 'ro.revision=' + revision)
 

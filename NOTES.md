@@ -43,3 +43,9 @@ Short dated findings, newest first. Status lives in README.md.
 - Light: veml3328 reacts (8 to 3200 lux). kwin 6.8 uses iio-sensor-proxy ClaimLight. New ssc-light-bridge IIO device (0047) plus gts7xl-sensord-light service (stream -> in_illuminance_input every 0.5 s). monitor-sensor --light shows real values. Restart=always: at boot the SSC registers light late.
 - Rotation: landscape with the camera on top reads +g on sensor X. ACCEL_MOUNT_MATRIX "0, 1, 0; -1, 0, 0; 0, 0, 1" gives normal.
 - Tablet mode: SW_TABLET_MODE switch on the pogo driver (0048), = !conn, 2 s debounce. Detach -> 1, attach -> 0, tested.
+
+## 2026-11-04: brightness floor, installer, docs
+- 0% brightness nearly blanked the panel: 0049 maps 0..2047 onto min_brightness (64)..2047. User: 0% now fine.
+- KWin learned autoBrightnessCurve [[0,1]] (0 lux -> 100%) and stuck at 100%. Fixed by editing it with sddm stopped (KWin rewrites on exit).
+- Installer now builds and installs sensord (gcc only during the build), adds iio-sensor-proxy, enables gts7xl-sensord-setup (extract once + start the SLPI). Extractor defaults set to the tested strange/2/65536/r06.
+- Docs: docs/sensors.md, docs/keyboard-cover.md, display.md brightness; README status rows updated.

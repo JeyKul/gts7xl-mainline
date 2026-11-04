@@ -1,0 +1,13 @@
+[Unit]
+Description=Copy this tablet's sensor DSP firmware and files, then boot the DSP
+After=gts7xl-firstboot.service local-fs.target
+ConditionPathExists=!/var/lib/gts7xl-sensord/props
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gts7xl-sensord-extract
+# The DSP failed to boot without firmware; start it now that it exists
+ExecStartPost=/bin/sh -c 'for r in /sys/class/remoteproc/remoteproc*; do [ "$(cat $r/name)" = slpi ] && [ "$(cat $r/state)" != running ] && echo start > $r/state; done; true'
+
+[Install]
+WantedBy=multi-user.target
