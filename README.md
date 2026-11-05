@@ -2,6 +2,8 @@
 
 Linux v7.3 and Arch Linux ARM on the Snapdragon 865 Tab S7+, booted directly from the Samsung bootloader (v1 boot image, gzip kernel, appended DTB).
 
+**Progress page: https://jeykul.github.io/gts7xl-mainline/**
+
 Experimental. It's Linux or Android, not both: installing replaces `boot` and `dtbo` and erases `userdata`, so back up every partition first.
 
 <!-- overview:start -->
