@@ -3,19 +3,28 @@ name: status-overview
 on:
   push:
     branches: [main]
-    paths: [README.md, docs/drawbacks.txt, tools/status-overview.py]
+    paths: [README.md, docs/drawbacks.txt, tools/status-overview.py, tools/status-site.py, .github/workflows/status-overview.yml]
   workflow_dispatch:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: status-overview
+  cancel-in-progress: true
 
 jobs:
   overview:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - run: python3 tools/status-overview.py
-      - name: Commit if changed
+      - name: Commit README if changed
         run: |
           if ! git diff --quiet README.md; then
             git config user.name "github-actions[bot]"
@@ -23,3 +32,10 @@ jobs:
             git commit -am "README: refresh the status overview"
             git push
           fi
+      - run: python3 tools/status-site.py
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
