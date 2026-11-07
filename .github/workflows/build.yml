@@ -41,7 +41,7 @@ jobs:
           dpkg --add-architecture arm64
           apt-get update
           (cd /tmp && apt-get download busybox-static:arm64 && dpkg-deb -x busybox-static_*_arm64.deb bb)
-          install -m755 /tmp/bb/bin/busybox /usr/local/lib/busybox-arm64
+          install -m755 "$(ls /tmp/bb/usr/bin/busybox /tmp/bb/bin/busybox 2>/dev/null | head -1)" /usr/local/lib/busybox-arm64
           # Ubuntu's mkbootimg package is missing its gki module
           git clone --depth 1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg-src
 
