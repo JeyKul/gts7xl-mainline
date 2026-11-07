@@ -2,6 +2,7 @@
 # Build the Arch Linux ARM root filesystem for the Tab S7+ Wi-Fi.
 # Run as root on aarch64, or on x86_64 with qemu-user-static binfmt.
 # Usage: arch-install.sh <ArchLinuxARM-aarch64-latest.tar.gz> <modules.tar.gz> <output.tar.gz>
+# PKG_CACHE=<dir>: reuse downloaded packages across builds (copied in and out, never mounted)
 set -euo pipefail
 
 TARBALL=$(realpath "$1"); MODULES=$(realpath "$2"); OUT=$(realpath -m "$3")
@@ -33,7 +34,13 @@ tar -xzf "$MODULES" -C "$A/usr" --strip-components=0 lib/modules 2>/dev/null || 
 install -m755 "$HERE/arch-setup.sh" "$A/tmp/arch-setup.sh"
 rm -rf "$A/tmp/gts7xl-sensord-src"; cp -a "$HERE/../sensord" "$A/tmp/gts7xl-sensord-src"
 printf "NEW_USER=user\nNEW_PASS=user\n" > "$A/tmp/gts7xl-user"
+[ -n "${PKG_CACHE:-}" ] && mkdir -p "$PKG_CACHE" && cp -a "$PKG_CACHE/." "$A/var/cache/pacman/pkg/"
 chroot "$A" /bin/bash /tmp/arch-setup.sh
+if [ -n "${PKG_CACHE:-}" ]; then
+	cp -an "$A/var/cache/pacman/pkg/." "$PKG_CACHE/"
+	# Superseded versions: drop what no build has used for a month
+	find "$PKG_CACHE" -type f -atime +30 -delete
+fi
 chroot "$A" /usr/bin/gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null || true
 rm -f "$A/tmp/arch-setup.sh" "$A/etc/resolv.conf"
 ln -s ../run/systemd/resolve/stub-resolv.conf "$A/etc/resolv.conf"
