@@ -68,3 +68,9 @@ Short dated findings, newest first. Status lives in README.md.
 - Type-C driver: first attach works (host + sink, charges through the hub); replug fails because IRQ 156 storms and gets disabled (pre-existing, every boot). Edge trigger loses mailbox replies (-110).
 - Next: find the re-asserting CCIC source, base on the S8+ driver, add a mailbox lock with charge-control.
 - Green panel once with the HDMI hub attached at boot; plug hubs in after boot until known.
+
+## 2026-11-07: installer black screen, speakers, slow KDE start
+- Installer black screen since the DP patches: msm waits for the DP controller, whose chain (QMP combo PHY, PS5169, gpio-sbu-mux, max77705_usbc, aux bridges) was missing from the installer's /mods. assemble.sh now ships it.
+- Speakers missing on a fresh install: audio-up raced PulseAudio's start. It now retries each load.
+- KDE splash 32 s: PulseAudio's bluez5 module starts GStreamer, and libgstvulkan's init hangs ~30 s early in boot (it's fast later). A pulseaudio drop-in whitelists core/base/good plugins with its own registry. Splash is now 5 s.
+- gts7xl-spen retries Pair/Connect every 5 s and keeps LE discovery running while the pen isn't connected; a stale bond after a reinstall makes this loop forever. To do: pair only on dock or on request.
