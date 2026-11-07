@@ -33,7 +33,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Touchscreen | ✅ | Multitouch |
 | S Pen digitizer | 🟡 | Position and pressure work, range fitted with `gts7xl-pen-calibrate` (3x3 targets, writes a udev hwdb entry), hover works; a few px of non-linear error at the bottom edge; side button, hover, tilt unconfirmed |
 | S Pen Bluetooth remote | 🟡 | S Pen Pro button and air gestures work through `gts7xl-spen`, `Pen Actions` app to change them; built-in S Pen untested |
-| Fingerprint reader (under display) | ⬜ | |
+| Fingerprint reader (under display) | ❌ | Goodix GW9558 on SPI owned by TrustZone (gpio20-23; touching them resets the SoC). Only Samsung's trusted app can reach it |
 | Pogo keyboard | ✅ | Recovers by itself after trackpad use; tablet mode switch on detach, see [docs/keyboard-cover.md](docs/keyboard-cover.md) |
 | Pogo trackpad | 🟡 | Usable, short stalls; much better with the sensor DSP running. Lid-angle link still missing |
 
