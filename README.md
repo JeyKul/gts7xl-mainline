@@ -64,7 +64,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | GPS | ⬜ | |
 | USB gadget (serial, network) | ✅ | |
 | USB host | ✅ | USB 2.0, automatic roles through the MAX77705 Type-C driver (`max77705_usbc`): OTG VBUS for sticks, hubs and headsets, a charger on a hub charges and keeps host. Tray applet "USB-C" picks the gadget mode. See `docs/usbc-dp-research.md` |
-| DisplayPort over USB-C | ⬜ | Planned: needs DP alt mode, PS5169 redriver, `mdss_dp`; see `docs/usbc-dp-research.md` |
+| DisplayPort over USB-C | 🟡 | HDMI through a USB-C hub works (4K60, 2 lanes, pin D): DP alt mode through the MAX77705 CCIC, PS5169 redriver, `mdss_dp`. Moving from manual bring-up into the kernel; flipped plug untested. See `docs/usbc-dp-research.md` |
 
 ### Power
 
