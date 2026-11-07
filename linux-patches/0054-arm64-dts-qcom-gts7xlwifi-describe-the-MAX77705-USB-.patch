@@ -1,0 +1,102 @@
+From 9a3e639c3ae863af832384a40ec0f159b21ad52e Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sat, 7 Nov 2026 14:03:42 +0100
+Subject: [PATCH 54/54] arm64: dts: qcom: gts7xlwifi: describe the MAX77705
+ USB-C port
+
+Add the max77705-usbc CCIC with its usb-c-connector (dual role, sink
+PDOs 5 V 3 A and 9 V 1.65 A), the charger's OTG VBUS regulator, and put
+dwc3 in OTG mode with a role switch linked to the connector. dwc3 stays a
+peripheral until the driver loads, so the USB gadget works without it.
+USB 2.0 only: the QMP PHY, redriver and DP alt mode come later.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 60 +++++++++++++++++++
+ 1 file changed, 60 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 015b894db..c03f7f306 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -10,6 +10,7 @@
+ #include <dt-bindings/input/input.h>
+ #include <dt-bindings/leds/common.h>
+ #include <dt-bindings/interrupt-controller/irq.h>
++#include <dt-bindings/usb/pd.h>
+ #include "sm8250-samsung-common.dtsi"
+ #include "pm8150l.dtsi"
+ 
+@@ -858,6 +859,55 @@ max77705_charger: charger@69 {
+ 		monitored-battery = <&battery>;
+ 		interrupt-parent = <&max77705>;
+ 		interrupts = <0>;
++
++		max77705_otg_vbus: usb-otg-vbus {
++			regulator-name = "usb-otg-vbus";
++			regulator-min-microvolt = <5000000>;
++			regulator-max-microvolt = <5000000>;
++		};
++	};
++
++	/*
++	 * MAX77705 CCIC: CC, PD and the D+/D- switch run in its firmware,
++	 * driven through a mailbox by max77705_usbc. It sets dwc3's role and
++	 * VBUS. Until it loads, dwc3 stays a peripheral, so the USB gadget
++	 * still works without it. USB 2.0 only; no QMP PHY yet.
++	 */
++	typec@25 {
++		compatible = "maxim,max77705-usbc";
++		reg = <0x25>;
++		interrupt-parent = <&max77705>;
++		interrupts = <3>;
++		vbus-supply = <&max77705_otg_vbus>;
++		maxim,charger = <&max77705_charger>;
++
++		connector {
++			compatible = "usb-c-connector";
++			label = "USB-C";
++			power-role = "dual";
++			data-role = "dual";
++			try-power-role = "sink";
++			sink-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_DUAL_ROLE |
++						PDO_FIXED_HIGHER_CAP |
++						PDO_FIXED_USB_COMM |
++						PDO_FIXED_DATA_SWAP)
++				     PDO_FIXED(9000, 1650, 0)>;
++			op-sink-microwatt = <14850000>;
++
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				port@0 {
++					reg = <0>;
++
++					max77705_typec_hs: endpoint {
++						remote-endpoint = <&usb_1_dwc3_hs_out>;
++					};
++				};
++
++			};
++		};
+ 	};
+ 
+ 	fuel-gauge@36 {
+@@ -1271,3 +1321,13 @@ reset-pins {
+ 		};
+ 	};
+ };
++
++&usb_1_dwc3 {
++	dr_mode = "otg";
++	usb-role-switch;
++	role-switch-default-mode = "peripheral";
++};
++
++&usb_1_dwc3_hs_out {
++	remote-endpoint = <&max77705_typec_hs>;
++};
+-- 
+2.56.0
+

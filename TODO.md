@@ -50,7 +50,7 @@ See the status tables in `README.md`.
 - [ ] Trackpad drops after under a second, keyboard recovers. Same on the stock kernel in TWRP, fine on One UI. Not caused by BOB, bus speed or MCU pins. Open lead: sensor DSP stack needs `sns_registry` in `hexagonrpcd`; the MCU watches a second I2C bus towards it
 - [ ] Pen: side button and hover unconfirmed; range is hand-calibrated
 - [ ] `su -c` fails on the tablet
-- [ ] Charging: 500mA limit, barely gains on PC USB
+- [ ] Charging: input limit from CCIStat / BC1.2 without PD (PC port reads 1.4 A while CC says 500 mA)
 - [ ] `reboot-recovery` failed once; emergency combo is the reliable path
 - [ ] Clock has no saved time, needs Wi-Fi after boot
 - [x] Real brightness through `kmod/gts7xl-panel-ctl`
@@ -60,14 +60,15 @@ See the status tables in `README.md`.
 
 - [x] Bluetooth: pairing and speaker audio work
 - [ ] Bluetooth: build RFCOMM, BNEP, HID modules
-- [x] Fast charging: 9V through the MAX77705 mailbox (`rootfs/gts7xl-charge-control`), stock limits
+- [x] Fast charging: 9V through the MAX77705 mailbox (`rootfs/gts7xl-charge-control`), stock limits; since 2026-11-07 the kernel driver (0053) negotiates it and charge-control only does thermal and charge current
 - [x] Fast charging: service renegotiates 9V after a replug
 - [ ] Fast charging: USB-C controller sometimes reads blank (`fe 00 00`), survived a reboot, cleared by a replug; cause unknown, charges at 5V while blank
-- [ ] Fast charging: other chargers, `current_now` scale, a real USB-C driver to handle its interrupts
+- [x] A real USB-C driver to handle its interrupts: `max77705_usbc` (0053), autoloads
+- [ ] Fast charging: other chargers, `current_now` scale
 - [ ] Fast charging: at least 25W, user's goal
 - [ ] Battery reads 27.1C from the fuel gauge, which is fake; `batt_thm` is the real value
 - [ ] Sleep: s2idle works, about 2%/h measured by the user over 15h46 (79% to 48%), roughly 0.8W; find what keeps it above stock levels
-- [ ] IRQ 156 (MAX77705, spmi-gpio 10) fires nonstop and gets disabled about a minute after boot: `nobody cared`
+- [x] IRQ 156 (MAX77705) storm: wrong gpio11 pin config, fixed with stock bias-pull-up + power-source 1 (2026-11-07)
 - [ ] Use the RTC offset to keep time across reboots
 
 ## Later
@@ -98,7 +99,11 @@ See the status tables in `README.md`.
 
 - [ ] Sensors: motion, compass and light chips sit on the SLPI bus (`sm8250.dtsi` has no `qcom-ssc-block-bus` node; no route proven or ruled out). Goal is native, minimal Android parts; no direct route known
 - [ ] Detect the keyboard cover closing: `gpio157`, `gpio110` and the MCU hall message do not change
-- [ ] USB host mode
+- [x] USB host mode: automatic roles, OTG VBUS, hubs, sticks, USB-C headset (0051-0054)
+- [ ] USB-C: CCIC sends no detach interrupt while sourcing; covered by the VBUS guard, cause unknown
+- [ ] USB-C: charger input limit reads a sawtooth while the boost runs
+- [ ] USB-C: tray app (`org.gts7xl.usbmode`) check in Plasma; manual role swap (op 0x37) not done
+- [ ] DP alt mode / HDMI
 - [ ] Suspend: wakes, but the screen stays black until reboot on the firmware framebuffer; targets masked on Arch
 - [ ] Retest GPU zap without the dynamic buffer hack, now that the memory map is right
 
