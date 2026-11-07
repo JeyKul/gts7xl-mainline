@@ -87,6 +87,11 @@ jobs:
           gh release create "$TAG" stage2.tar.gz --prerelease \
             --title "Installer $TAG" \
             --notes "Downloaded by the boot image built in this run. Contains no Samsung or Qualcomm device firmware beyond the open linux-firmware files."
+          # Stage 1 finds its installer through this list, keyed by the hash it carries
+          gh release download Installer -p installer.json -O old.json 2>/dev/null || true
+          python3 tools/installer-manifest.py old.json "$(sha256sum stage2.tar.gz | cut -d' ' -f1)" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG/stage2.tar.gz" "$GITHUB_RUN_ID" > installer.json
+          gh release upload Installer installer.json --clobber
 
       - name: Publish the module repo
         env:

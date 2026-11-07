@@ -34,8 +34,28 @@ if [ -e /mnt/r/.installer ]; then
 fi
 # Holding volume up at power on opens the installer
 [ -x /s1/s1ui ] && /s1/s1ui --volup && S1=1
+# Saved Wi-Fi for the installer, read only: its own list and an installed system's
+# NetworkManager profiles. One network per line: SSID and passphrase, both hex.
+hex() { printf %s "$1" | od -An -v -tx1 | tr -d ' \n'; }
+saved_wifi() {
+	mkdir -p /s1/tmp
+	{
+		cat /mnt/r/.gts7xl-wifi 2>/dev/null
+		for f in /mnt/r/etc/NetworkManager/system-connections/*.nmconnection \
+			 /mnt/r/arch/etc/NetworkManager/system-connections/*.nmconnection; do
+			[ -f "$f" ] || continue
+			s=$(sed -n 's/^ssid=//p' "$f" | head -n1); [ -n "$s" ] || continue
+			p=$(sed -n 's/^psk=//p' "$f" | head -n1)
+			# Secured without a stored passphrase (enterprise, agent-owned): skip
+			[ -z "$p" ] && grep -q '^key-mgmt=' "$f" && continue
+			echo "$(hex "$s") $(hex "$p")"
+		done
+	} | awk 'NF && !seen[$1]++' > /s1/tmp/saved-wifi
+	chmod 600 /s1/tmp/saved-wifi
+}
 # Bring-up: a marker file keeps us in the initramfs for one test
 if [ "$S1" = 1 ]; then
+	saved_wifi
 	umount /mnt/r
 elif [ -e /mnt/r/.noswitch ]; then
 	umount /mnt/r
@@ -56,6 +76,7 @@ elif [ -x /mnt/r/sbin/init ]; then
 	exec switch_root /mnt/r /sbin/init
 else
 	# Nothing bootable on userdata, or it could not be read
+	saved_wifi
 	umount /mnt/r 2>/dev/null
 	[ -e /mods/load.sh ] && S1=1
 fi

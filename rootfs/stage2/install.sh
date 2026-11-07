@@ -133,6 +133,33 @@ rm -f $A/tmp/arch-setup.sh $A/var/cache/pacman/pkg/* 2>/dev/null || true
 rm -f $A/etc/resolv.conf
 ln -s ../run/systemd/resolve/stub-resolv.conf $A/etc/resolv.conf
 
+# Saved Wi-Fi: back on userdata for the next installer run, and as NetworkManager
+# profiles, so the new system joins on its own. SSID and passphrase are hex in the list.
+if [ -s /tmp/saved-wifi ]; then
+	install -m600 /tmp/saved-wifi $A/.gts7xl-wifi
+	bash -s "$A" 3< /tmp/saved-wifi <<'W' || true
+d=$1/etc/NetworkManager/system-connections
+mkdir -p "$d"; chmod 700 "$d"
+unhex() { local h=$1 o=; while [ -n "$h" ]; do o+="\\x${h:0:2}"; h=${h:2}; done; printf '%b' "$o"; }
+while read -r sh ph <&3; do
+	[ -n "$sh" ] || continue
+	ssid=$(unhex "$sh"); psk=$(unhex "$ph")
+	bytes=; h=$sh; while [ -n "$h" ]; do bytes+="$((16#${h:0:2}));"; h=${h:2}; done
+	name=$(printf %s "$ssid" | tr -c 'A-Za-z0-9._-' '_')
+	f=$d/$name.nmconnection
+	[ -e "$f" ] && continue
+	esc=${psk//\\/\\\\}; [ "${esc:0:1}" = " " ] && esc="\\s${esc:1}"
+	{
+		printf '[connection]\nid=%s\nuuid=%s\ntype=wifi\n\n' "$name" "$(cat /proc/sys/kernel/random/uuid)"
+		printf '[wifi]\nmode=infrastructure\nssid=%s\n\n' "$bytes"
+		[ -n "$psk" ] && printf '[wifi-security]\nkey-mgmt=wpa-psk\npsk=%s\n\n' "$esc"
+		printf '[ipv4]\nmethod=auto\n\n[ipv6]\nmethod=auto\n'
+	} > "$f"
+	chmod 600 "$f"
+done
+W
+fi
+
 # Arch key setup leaves gpg-agent running, which keeps /dev busy
 chroot $A /usr/bin/gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null || true
 fuser -k $A/dev 2>/dev/null || true
