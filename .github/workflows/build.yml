@@ -150,7 +150,18 @@ jobs:
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y libarchive-tools lz4 zip curl gh \
-            python3 ca-certificates xz-utils
+            python3 ca-certificates xz-utils qemu-user-static
+
+      - name: Register arm64 binfmt (qemu-user-static, F flag)
+        run: |
+          B=/proc/sys/fs/binfmt_misc
+          [ -e "$B/register" ] || mount -t binfmt_misc binfmt_misc "$B"
+          # An entry without F points at a path that doesn't exist in this container
+          if [ -e "$B/qemu-aarch64" ] && ! grep -q '^flags:.*F' "$B/qemu-aarch64"; then
+            echo -1 > "$B/qemu-aarch64"
+          fi
+          [ -e "$B/qemu-aarch64" ] || cat /usr/lib/binfmt.d/qemu-aarch64.conf > "$B/register"
+          cat "$B/qemu-aarch64"
 
       - name: Build the root filesystem
         run: |
