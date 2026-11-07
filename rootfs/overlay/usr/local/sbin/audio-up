@@ -31,14 +31,26 @@ for i in $(seq 1 60); do P=$(pgrep -o -x pulseaudio); [ -n "$P" ] && break; slee
 U=$(ps -o user= -p $P | tr -d ' ')
 sleep 3
 R=$(tr "\0" "\n" < /proc/$P/environ | sed -n "s/^XDG_RUNTIME_DIR=//p")
-su $U -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl load-module module-alsa-sink device=hw:0,0 sink_name=speakers sink_properties=device.description=Speakers rate=48000 format=s16le channels=4 channel_map=front-left,front-right,rear-left,rear-right tsched=0; XDG_RUNTIME_DIR=$R pactl set-default-sink speakers; XDG_RUNTIME_DIR=$R pactl set-sink-volume speakers 30%"
-su $U -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl load-module module-ladspa-sink sink_name=limited sink_master=speakers plugin=fast_lookahead_limiter_1913 label=fastLookaheadLimiter control=0,-6,0.025 channels=4 channel_map=front-left,front-right,rear-left,rear-right sink_properties=device.description=Limited; XDG_RUNTIME_DIR=$R pactl set-default-sink limited"
-su $U -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl load-module module-alsa-source device=hw:0,1 source_name=mic source_properties=device.description=Microphone rate=48000 format=s16le channels=1"
-su $U -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl set-default-source mic"
+pa() { su $U -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl $*"; }
+# PulseAudio's own card probe can hold the PCM right after it starts: retry until it is there
+want() { # kind name module args...
+	k=$1 n=$2; shift 2
+	for i in 1 2 3 4 5 6 7 8 9 10; do
+		pa list short $k | cut -f2 | grep -qx "$n" && return 0
+		pa load-module "$@" >/dev/null 2>&1
+		sleep 2
+	done
+	echo "audio-up: no $n" > /dev/kmsg
+}
+want sinks speakers module-alsa-sink device=hw:0,0 sink_name=speakers sink_properties=device.description=Speakers rate=48000 format=s16le channels=4 channel_map=front-left,front-right,rear-left,rear-right tsched=0
+pa set-sink-volume speakers 30%
+want sinks limited module-ladspa-sink sink_name=limited sink_master=speakers plugin=fast_lookahead_limiter_1913 label=fastLookaheadLimiter control=0,-6,0.025 channels=4 channel_map=front-left,front-right,rear-left,rear-right sink_properties=device.description=Limited
+pa set-default-sink limited
+want sources mic module-alsa-source device=hw:0,1 source_name=mic source_properties=device.description=Microphone rate=48000 format=s16le channels=1
+pa set-default-source mic
 
 # HDMI sink only while a display is connected: opening the DP port with
 # nothing attached leaves the ADSP's DP port stuck until reboot
-pa() { su $U -s /bin/sh -c "XDG_RUNTIME_DIR=$R pactl $*"; }
 M=
 while kill -0 $P 2>/dev/null; do
 	S=$(cat /sys/class/drm/card*-DP-1/status 2>/dev/null | head -n1)
