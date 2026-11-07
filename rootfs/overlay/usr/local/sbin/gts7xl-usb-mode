@@ -1,0 +1,78 @@
+#!/bin/sh
+# USB-C port status and USB gadget function switch for the gts7xl.
+#   gts7xl-usb-mode status          one key=value per line, no root needed
+#   gts7xl-usb-mode gadget <mode>   root (pkexec): debug, network, serial,
+#                                   none (charge only)
+# The data and power roles follow the max77705-usbc driver (CC and PD);
+# this only picks what the tablet offers when it is the USB device.
+
+G=/sys/kernel/config/usb_gadget/g1
+PORT=/sys/class/typec/port0
+STATE=/var/lib/gts7xl-usb/gadget
+
+rd() { cat "$1" 2>/dev/null | head -n1; }
+sel() { sed -n 's/.*\[\(.*\)\].*/\1/p' "$1" 2>/dev/null; }
+
+status() {
+	echo "driver=$( [ -d "$PORT" ] && echo yes || echo no)"
+	echo "data_role=$(sel $PORT/data_role)"
+	echo "power_role=$(sel $PORT/power_role)"
+	echo "orientation=$(rd $PORT/orientation)"
+	echo "partner=$( [ -d $PORT/port0-partner ] && echo yes || echo no)"
+	echo "opmode=$(rd $PORT/power_operation_mode)"
+	p=/sys/class/power_supply/max77705-usbc
+	echo "online=$(rd $p/online)"
+	echo "voltage_mv=$(( $(rd $p/voltage_now || echo 0) / 1000 ))"
+	# What the charger draws: the PD contract capped by the sink policy.
+	echo "current_ma=$(( $(rd /sys/class/power_supply/max77705-charger/input_current_limit || echo 0) / 1000 ))"
+	echo "battery=$(rd /sys/class/power_supply/max170xx_battery/capacity)"
+	echo "charging=$(rd /sys/class/power_supply/max170xx_battery/status)"
+	echo "udc_state=$(cat /sys/class/udc/*/state 2>/dev/null | head -n1)"
+	g=$(rd $STATE)
+	echo "gadget=${g:-debug}"
+	# Devices on the tablet's own root hubs, hubs left out.
+	for d in /sys/bus/usb/devices/[0-9]*-[0-9]*; do
+		[ -f "$d/idVendor" ] || continue
+		[ "$(rd $d/bDeviceClass)" = 09 ] && continue
+		n="$(rd $d/product)"
+		[ -n "$n" ] || n="$(rd $d/idVendor):$(rd $d/idProduct)"
+		echo "device=$n"
+	done
+}
+
+# Functions for each mode; created on demand, never removed.
+funcs() {
+	case "$1" in
+	debug) echo "ncm.0 acm.0" ;;
+	network) echo ncm.0 ;;
+	serial) echo acm.0 ;;
+	none) echo "" ;;
+	*) return 1 ;;
+	esac
+}
+
+gadget() {
+	want=$(funcs "$1") || { echo "unknown mode: $1" >&2; exit 2; }
+	[ "$(id -u)" = 0 ] || { echo "needs root" >&2; exit 1; }
+	[ -d $G ] || { echo "no gadget g1" >&2; exit 1; }
+	udc=$(ls /sys/class/udc | head -n1)
+
+	echo > $G/UDC 2>/dev/null
+	for l in $G/configs/c.1/*.[0-9]; do
+		[ -L "$l" ] && rm "$l"
+	done
+	for f in $want; do
+		mkdir -p $G/functions/$f
+		ln -s $G/functions/$f $G/configs/c.1/
+	done
+	mkdir -p "${STATE%/*}" && echo "$1" > $STATE
+	# Charge only: leave the controller unbound, so a PC sees no device.
+	[ -n "$want" ] && [ -n "$udc" ] && echo "$udc" > $G/UDC
+	return 0
+}
+
+case "$1" in
+status) status ;;
+gadget) gadget "$2" ;;
+*) echo "usage: $0 status | gadget debug|network|serial|none" >&2; exit 2 ;;
+esac

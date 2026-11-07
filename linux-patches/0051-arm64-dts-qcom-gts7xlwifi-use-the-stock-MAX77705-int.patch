@@ -1,0 +1,37 @@
+From a716b55ac64978bb7113fa4d88b2208ea3fdbcc6 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sat, 7 Nov 2026 13:25:04 +0100
+Subject: [PATCH 51/54] arm64: dts: qcom: gts7xlwifi: use the stock MAX77705
+ interrupt pin config
+
+The MAX77705 interrupt pin, PM8150L gpio11, was set to bias-disable with
+power-source 0. Samsung's DT uses bias-pull-up and power-source 1, as
+does the Galaxy Tab S8+ port for its MAX77705.
+
+With the old setting IRQ 156 stormed (about 1000/s, all unhandled, INTSRC
+reading 0) as soon as the USB-C source was unmasked, and genirq disabled
+it after 100000 hits. With the stock setting it fires once per event.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 8b43d5cb7..015b894db 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -938,8 +938,8 @@ max77705_int_default: max77705-int-default-state {
+ 		pins = "gpio11";
+ 		function = "normal";
+ 		input-enable;
+-		bias-disable;
+-		power-source = <0>;
++		bias-pull-up;
++		power-source = <1>;
+ 	};
+ };
+ 
+-- 
+2.56.0
+

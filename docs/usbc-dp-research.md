@@ -224,3 +224,11 @@ Other things seen:
 3. **Autoload.** Only after 1 and 2: load `max77705_typec` at boot and make `-typec.dtb` the default. Until then the default DTB stays peripheral mode, because the gadget is the debug path.
 4. **c2: orientation.** QMP PHY + L18A. Read L18A's bootloader voltage back first (voltage rule in docs/sensors.md).
 5. **DP (d, e).** First the gpio40/41 reservation test for i2c14 and the PS5169 at 0x28 (reset risk, its own boot). Then `mdss_dp`, then the altmode VDM flow.
+
+## Results on the tablet (2026-11-07)
+
+- IRQ storm: wrong pin config on PM8150L gpio11 (bias-disable, power-source 0). Stock's bias-pull-up and power-source 1 fix it (0051): one interrupt per event, 0 unhandled.
+- 0053 is now the S8+ port's `max77705-usbc` driver, capped at 9 V / 1.65 A, plus a VBUS guard: the CCIC sends no detach interrupt while the tablet is the source, so CC is polled while sourcing. Autoloads; the board DTB has the port (0054). The `-usbhost` and `-typec` test DTBs are gone.
+- Passed: boot attach and hot attach with hub + charger (host + sink, 9 V), hub without charger (tablet sources, ~600 mA from the battery, stable), digital USB-C headset, PC (gadget, SSH over USB), detach in each case.
+- `gts7xl-charge-control` no longer touches the mailbox when the driver is present; the initramfs USB retry loop stops once the port exists.
+- Next: DP alt mode, starting with the gpio40/41 / i2c14 / PS5169 test.

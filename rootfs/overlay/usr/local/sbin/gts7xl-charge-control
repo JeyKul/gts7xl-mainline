@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-# Tablet charging control: PD voltage request through the MAX77705 mailbox, thermal limits
+# Tablet charging control: thermal limits, and the PD voltage request through the
+# MAX77705 mailbox when no max77705-usbc kernel driver owns it (it negotiates 9 V itself)
 import fcntl,glob,os,sys,time
 CH='/sys/class/power_supply/max77705-charger/'; BA='/sys/class/power_supply/max170xx_battery/'
+UC='/sys/class/power_supply/max77705-usbc/'
 def thm(name):
     for l in glob.glob('/sys/bus/iio/devices/iio:device*/*_label'):
         try:
@@ -39,6 +41,8 @@ def main():
     retry=0
     setlim(SAFE)
     while True:
+        if os.path.isdir(UC):
+            os.close(f); return kernel_pd()
         online=rs(CH+'online')=='1'
         b=thm('batt_thm'); c=thm('chg_thm')
         if b is None or c is None:
@@ -73,5 +77,32 @@ def main():
         was=online
         time.sleep(3)
 
+def kernel_pd():
+    """The driver owns the mailbox and the PD contract: only thermal and charge current here.
+    Plugged in comes from its supply, since the charger also reads online on our own boost."""
+    hot=False; was=None; fast=False
+    while True:
+        try:
+            online=rs(UC+'online')=='1'; mv=int(rs(UC+'voltage_now'))//1000
+        except OSError:
+            time.sleep(3); continue
+        b=thm('batt_thm'); c=thm('chg_thm')
+        if b is None or c is None or b>=HOT_BATT or c>=HOT_CHG:
+            hot=True
+        elif b<=COOL_BATT and c<=COOL_CHG:
+            hot=False
+        if online and hot:
+            if fast or not was: setlim(500000); log('too hot or no sensor, 500 mA')
+            fast=False
+        elif online and mv>=9000:
+            if not fast:
+                # The driver set the input limit from the contract; raise the battery side.
+                open(CH+'constant_charge_current','w').write('2650000'); fast=True; log('9V (kernel PD)')
+        elif fast or (was and not online):
+            open(CH+'constant_charge_current','w').write(str(SAFE)); fast=False; log('5V or unplugged')
+        was=online
+        time.sleep(3)
+
 if __name__=='__main__':
-    main()
+    if os.path.isdir(UC): kernel_pd()
+    else: main()

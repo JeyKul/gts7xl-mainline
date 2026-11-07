@@ -53,7 +53,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 |---|---|---|
 | 4 speakers, CS35L41 amps | ✅ | 4.0, protection firmware and factory calibration loaded; stock gain, software limiter in front |
 | Microphones | 🟡 | Sub mic works, main mic reads zero |
-| USB-C headphones | ⬜ | |
+| USB-C headphones | 🟡 | Digital USB-C headsets enumerate as a sound card (playback untested); analog adapters not done |
 
 ### Connectivity
 
@@ -63,7 +63,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Bluetooth: QCA6390 | ✅ | Audio to a speaker works; RFCOMM profiles not built yet |
 | GPS | ⬜ | |
 | USB gadget (serial, network) | ✅ | |
-| USB host | 🟡 | USB 2.0 hubs, sticks, mouse work with the host test DTB (`-usbhost`) and VBUS switched on by hand; automatic roles and charging through a hub pending (Type-C driver IRQ storm). See `docs/usbc-dp-research.md` (patches on branch `usbc-dp`) |
+| USB host | ✅ | USB 2.0, automatic roles through the MAX77705 Type-C driver (`max77705_usbc`): OTG VBUS for sticks, hubs and headsets, a charger on a hub charges and keeps host. Tray applet "USB-C" picks the gadget mode. See `docs/usbc-dp-research.md` |
 | DisplayPort over USB-C | ⬜ | Planned: needs DP alt mode, PS5169 redriver, `mdss_dp`; see `docs/usbc-dp-research.md` |
 
 ### Power
@@ -72,7 +72,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 |---|---|---|
 | Battery, fuel gauge: MAX77705 | ✅ | |
 | Charging: MAX77705 | ✅ | 900mA without USB-PD |
-| Fast charging | 🟡 | 9V USB-PD, about 15W, through `gts7xl-charge-control`, renegotiated after a replug. Higher power not done |
+| Fast charging | 🟡 | 9V USB-PD at 1.65 A, negotiated by the kernel driver; `gts7xl-charge-control` keeps the thermal limits. Higher power not done |
 
 ### Sensors
 

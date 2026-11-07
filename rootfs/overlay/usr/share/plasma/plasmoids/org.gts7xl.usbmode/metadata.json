@@ -1,0 +1,16 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [ { "Name": "gts7xl-mainline" } ],
+        "Category": "System Information",
+        "Description": "USB-C port status and USB mode",
+        "Icon": "drive-removable-media-usb",
+        "Id": "org.gts7xl.usbmode",
+        "License": "MIT",
+        "Name": "USB-C",
+        "Version": "1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-NotificationArea": "true",
+    "X-Plasma-NotificationAreaCategory": "Hardware"
+}
