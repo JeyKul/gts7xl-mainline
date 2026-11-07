@@ -21,15 +21,16 @@ kde-mobile) PKGS="plasma-mobile plasma-keyboard plasma-nm plasma-pa konsole dolp
 phosh) PKGS="phosh phoc squeekboard gdm gnome-control-center gnome-console nautilus gnome-keyring adwaita-fonts"; DM=gdm ;;
 *) echo "unknown desktop $DESKTOP"; exit 1 ;;
 esac
-pacman -Syu --noconfirm --needed --overwrite '/etc/dconf/*' $BASE $PKGS
-
-# Optional kernel modules, see modules-repo/ in the project
+# Optional kernel modules, see modules-repo/ in the project. Before the
+# sync, so later installs find its database
 grep -q '^\[gts7xl\]' /etc/pacman.conf || cat >> /etc/pacman.conf <<'CONF'
 
 [gts7xl]
 SigLevel = Optional TrustAll
 Server = https://github.com/JeyKul/gts7xl-mainline/releases/download/modules
 CONF
+pacman -Syu --noconfirm --needed --overwrite '/etc/dconf/*' $BASE $PKGS
+
 # Sensor DSP client, see sensord/ in the project. gcc only for the build.
 if [ -d /tmp/gts7xl-sensord-src ]; then
 	pacman -Q gcc >/dev/null 2>&1 && HAD_GCC=1 || HAD_GCC=
