@@ -1,6 +1,7 @@
 #!/bin/bash
 # Configure Arch inside its own chroot. Run by arch-install.sh and the installer.
-# Reads NEW_USER and NEW_PASS from /tmp/gts7xl-user, which is deleted straight away.
+# Reads NEW_USER and NEW_PASS (and optionally DESKTOP, LOCALE, XKB, KEYMAP) from
+# /tmp/gts7xl-user, which is deleted straight away.
 set -euo pipefail
 . /tmp/gts7xl-user
 rm -f /tmp/gts7xl-user
@@ -8,6 +9,10 @@ case "$NEW_USER" in
 	[a-z_]*) ;;
 	*) echo "bad user name"; exit 1 ;;
 esac
+LOCALE=${LOCALE:-en_US.UTF-8}; XKB=${XKB:-us}; KEYMAP=${KEYMAP:-us}
+for v in "$LOCALE" "$XKB" "$KEYMAP"; do
+	case "$v" in *[!A-Za-z0-9_.,-]*) echo "bad language setting $v"; exit 1 ;; esac
+done
 pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -Rdd --noconfirm linux-aarch64 || true
@@ -59,7 +64,18 @@ phosh)
 	;;
 esac
 echo gts7xl > /etc/hostname
-echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen; locale-gen; echo LANG=en_US.UTF-8 > /etc/locale.conf
+printf 'en_US.UTF-8 UTF-8\n%s UTF-8\n' "$LOCALE" | sort -u > /etc/locale.gen; locale-gen
+echo "LANG=$LOCALE" > /etc/locale.conf
+echo "KEYMAP=$KEYMAP" > /etc/vconsole.conf
+# Keyboard layout for X11 and the login screens, KDE and GNOME; a second layout toggles with Alt+Shift
+XKB_OPTIONS=; case "$XKB" in *,*) XKB_OPTIONS=grp:alt_shift_toggle ;; esac
+mkdir -p /etc/X11/xorg.conf.d
+printf 'Section "InputClass"\n\tIdentifier "system-keyboard"\n\tMatchIsKeyboard "on"\n\tOption "XkbLayout" "%s"\n\tOption "XkbOptions" "%s"\nEndSection\n' \
+	"$XKB" "$XKB_OPTIONS" > /etc/X11/xorg.conf.d/00-keyboard.conf
+mkdir -p /etc/xdg
+printf '[Layout]\nLayoutList=%s\nOptions=%s\nResetOldOptions=true\nUse=true\n' "$XKB" "$XKB_OPTIONS" > /etc/xdg/kxkbrc
+SOURCES=$(echo "$XKB" | tr ',' '\n' | sed "s/.*/('xkb', '&')/" | paste -sd, -)
+printf "[org/gnome/desktop/input-sources]\nsources=[%s]\n" "$SOURCES" > /etc/dconf/db/local.d/00-gts7xl-keyboard
 systemctl disable systemd-networkd sshd 2>/dev/null || true
 systemctl mask alsa-restore alsa-state
 # /etc/resolv.conf points at systemd-resolved, and NetworkManager feeds it

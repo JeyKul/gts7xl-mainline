@@ -100,7 +100,7 @@ for d in proc sys dev; do mount --bind /$d $A/$d; done
 cp /gts7xl/arch-setup.sh $A/tmp/arch-setup.sh
 [ -d /gts7xl/sensord ] && cp -a /gts7xl/sensord $A/tmp/gts7xl-sensord-src
 umask 077
-grep -E '^(DESKTOP|NEW_USER|NEW_PASS)=' /tmp/choices > $A/tmp/gts7xl-user
+grep -E '^(DESKTOP|LOCALE|XKB|KEYMAP|NEW_USER|NEW_PASS)=' /tmp/choices > $A/tmp/gts7xl-user
 umask 022
 sed -i '/^NEW_PASS/d' /tmp/choices
 

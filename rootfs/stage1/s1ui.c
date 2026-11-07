@@ -300,7 +300,7 @@ static int wait_tap(int *sx, int *sy, int timeout_ms)
 
 /* Hardware keyboards (pogo cover, USB), rescanned while typing so a late plug works */
 #define MAXKBD 4
-static int kbd_fd[MAXKBD], nkbd, kbd_shift;
+static int kbd_fd[MAXKBD], nkbd, kbd_shift, kbd_layout;
 
 static void open_keyboards(void)
 {
@@ -322,10 +322,28 @@ static void open_keyboards(void)
 	}
 }
 
-/* US layout, indexed by key code; second string is with shift */
-static const char *const keymap[2] = {
-	"\0\0331234567890-=\b\tqwertyuiop[]\n\0asdfghjkl;'`\0\\zxcvbnm,./\0*\0 ",
-	"\0\033!@#$%^&*()_+\b\tQWERTYUIOP{}\n\0ASDFGHJKL:\"~\0|ZXCVBNM<>?\0*\0 ",
+/* Hardware keyboard layouts for the installer, by key code; only ASCII is typeable here */
+static const struct { const char *id; const char *map[2]; } kbd_layouts[] = {
+	{ "us", { "\0\033" "1234567890-=\b\tqwertyuiop[]\n\0asdfghjkl;'`\0\\zxcvbnm,./\0*\0 ",
+		"\0\033!@#$%^&*()_+\b\tQWERTYUIOP{}\n\0ASDFGHJKL:\"~\0|ZXCVBNM<>?\0*\0 " } },
+	{ "gb", { "\0\033" "1234567890-=\b\tqwertyuiop[]\n\0asdfghjkl;'`\0#zxcvbnm,./\0*\0 ",
+		"\0\033!\"\0$%^&*()_+\b\tQWERTYUIOP{}\n\0ASDFGHJKL:@\0\0~ZXCVBNM<>?\0*\0 " } },
+	{ "de", { "\0\033" "1234567890\0\0\b\tqwertzuiop\0+\n\0asdfghjkl\0\0^\0#yxcvbnm,.-\0*\0 ",
+		"\0\033!\"\0$%&/()=?`\b\tQWERTZUIOP\0*\n\0ASDFGHJKL\0\0\0\0'YXCVBNM;:_\0*\0 " } },
+	{ "ch", { "\0\033" "1234567890'^\b\tqwertzuiop\0\0\n\0asdfghjkl\0\0\0\0$yxcvbnm,.-\0*\0 ",
+		"\0\033+\"*\0%&/()=?`\b\tQWERTZUIOP\0!\n\0ASDFGHJKL\0\0\0\0\0YXCVBNM;:_\0*\0 " } },
+	{ "fr", { "\0\033&\0\"'(-\0_\0\0)=\b\tazertyuiop^$\n\0qsdfghjklm\0\0\0*wxcvbn,;:!\0*\0 ",
+		"\0\033" "1234567890\0+\b\tAZERTYUIOP\0\0\n\0QSDFGHJKLM%\0\0\0WXCVBN?./\0\0*\0 " } },
+	{ "es", { "\0\033" "1234567890'\0\b\tqwertyuiop`+\n\0asdfghjkl\0\0\0\0\0zxcvbnm,.-\0*\0 ",
+		"\0\033!\"\0$%&/()=?\0\b\tQWERTYUIOP^*\n\0ASDFGHJKL\0\0\0\0\0ZXCVBNM;:_\0*\0 " } },
+	{ "it", { "\0\033" "1234567890'\0\b\tqwertyuiop\0+\n\0asdfghjkl\0\0\\\0\0zxcvbnm,.-\0*\0 ",
+		"\0\033!\"\0$%&/()=?^\b\tQWERTYUIOP\0*\n\0ASDFGHJKL\0\0|\0\0ZXCVBNM;:_\0*\0 " } },
+	{ "br", { "\0\033" "1234567890-=\b\tqwertyuiop\0[\n\0asdfghjkl\0~'\0]zxcvbnm,.;\0*\0 ",
+		"\0\033!@#$%\0&*()_+\b\tQWERTYUIOP`{\n\0ASDFGHJKL\0^\"\0}ZXCVBNM<>:\0*\0 " } },
+	{ "se", { "\0\033" "1234567890+\0\b\tqwertyuiop\0\0\n\0asdfghjkl\0\0\0\0'zxcvbnm,.-\0*\0 ",
+		"\0\033!\"#\0%&/()=?`\b\tQWERTYUIOP\0^\n\0ASDFGHJKL\0\0\0\0*ZXCVBNM;:_\0*\0 " } },
+	{ "tr", { "\0\033" "1234567890*-\b\tqwertyu\0op\0\0\n\0asdfghjkl\0i\"\0,zxcvbnm\0\0.\0*\0 ",
+		"\0\033!'^+%&/()=?_\b\tQWERTYUIOP\0\0\n\0ASDFGHJKL\0\0\0\0;ZXCVBNM\0\0:\0*\0 " } },
 };
 
 /* A character typed on a hardware keyboard, or 0 */
@@ -343,7 +361,7 @@ static int read_key(void)
 			}
 			if (!e.value || e.code > KEY_SPACE)
 				continue;
-			int c = (unsigned char)keymap[kbd_shift][e.code];
+			int c = (unsigned char)kbd_layouts[kbd_layout].map[kbd_shift][e.code];
 			if (c)
 				return c;
 		}
@@ -802,6 +820,76 @@ static const char *choose_desktop(void)
 	}
 }
 
+/* Locale, and the keyboard that goes with it by default */
+static const struct { const char *name, *locale, *kbd; } languages[] = {
+	{ "English (US)", "en_US.UTF-8", "us" }, { "English (UK)", "en_GB.UTF-8", "gb" },
+	{ "Deutsch", "de_DE.UTF-8", "de" }, { "Francais", "fr_FR.UTF-8", "fr" },
+	{ "Espanol", "es_ES.UTF-8", "es" }, { "Italiano", "it_IT.UTF-8", "it" },
+	{ "Nederlands", "nl_NL.UTF-8", "us" }, { "Polski", "pl_PL.UTF-8", "pl" },
+	{ "Portugues (Brasil)", "pt_BR.UTF-8", "br" }, { "Svenska", "sv_SE.UTF-8", "se" },
+	{ "Turkce", "tr_TR.UTF-8", "tr" }, { "Russkiy", "ru_RU.UTF-8", "ru" },
+};
+
+/* XKB layout, console keymap, and the installer's own map for a hardware keyboard */
+static const struct { const char *id, *name, *xkb, *console, *installer; } keyboards[] = {
+	{ "us", "English (US)", "us", "us", "us" }, { "gb", "English (UK)", "gb", "uk", "gb" },
+	{ "de", "German", "de", "de-latin1", "de" }, { "ch", "Swiss German", "ch", "sg", "ch" },
+	{ "fr", "French", "fr", "fr-latin9", "fr" }, { "es", "Spanish", "es", "es", "es" },
+	{ "it", "Italian", "it", "it", "it" }, { "br", "Portuguese (Brazil)", "br", "br-abnt2", "br" },
+	{ "se", "Swedish", "se", "sv-latin1", "se" }, { "pl", "Polish", "pl", "pl", "us" },
+	{ "tr", "Turkish", "tr", "trq", "tr" }, { "ru", "Russian (and US)", "us,ru", "us", "us" },
+};
+
+/* Two columns of choices; the suggested one is highlighted. Returns its index. */
+static int choose_grid(const char *title, const char *const *names, int n, int suggested)
+{
+	const int rows = (n + 1) / 2, gap = 24, top = 170;
+	const int w = (fbw - 200 - gap) / 2, h = (fbh - top - 60) / rows - gap;
+	struct btn b[16];
+
+	header(title);
+	for (int i = 0; i < n; i++) {
+		b[i] = (struct btn){ 100 + (i % 2) * (w + gap), top + (i / 2) * (h + gap), w, h };
+		button(&b[i], names[i], i == suggested ? ACC : BTN);
+	}
+	for (;;) {
+		int x, y;
+		wait_tap(&x, &y, 0);
+		for (int i = 0; i < n; i++)
+			if (hit(&b[i], x, y))
+				return i;
+	}
+}
+
+static int choose_language(void)
+{
+	const char *names[16];
+	const int n = sizeof(languages) / sizeof(languages[0]);
+
+	for (int i = 0; i < n; i++)
+		names[i] = languages[i].name;
+	return choose_grid("Choose a language", names, n, 0);
+}
+
+static int choose_keyboard(int language)
+{
+	const char *names[16];
+	const int n = sizeof(keyboards) / sizeof(keyboards[0]);
+	int suggested = 0;
+
+	for (int i = 0; i < n; i++) {
+		names[i] = keyboards[i].name;
+		if (!strcmp(keyboards[i].id, languages[language].kbd))
+			suggested = i;
+	}
+	int k = choose_grid("Choose a keyboard layout", names, n, suggested);
+	/* From here on a hardware keyboard types what its keys say */
+	for (int i = 0; i < (int)(sizeof(kbd_layouts) / sizeof(kbd_layouts[0])); i++)
+		if (!strcmp(kbd_layouts[i].id, keyboards[k].installer))
+			kbd_layout = i;
+	return k;
+}
+
 static int stage2(void)
 {
 	static char user[33], p1[64], p2[64], line[160];
@@ -818,6 +906,8 @@ static int stage2(void)
 		run((char *const *)REBOOT);
 	}
 	const char *desktop = choose_desktop();
+	const int language = choose_language();
+	const int kbd = choose_keyboard(language);
 
 	for (;;) {
 		if (!keyboard("Choose a user name: lowercase and digits", "Next", 1, user, sizeof(user)))
@@ -850,7 +940,8 @@ static int stage2(void)
 	if (!f)
 		return 3;
 	chmod("/tmp/choices", 0600);
-	fprintf(f, "DESKTOP=%s\nNEW_USER=%s\nNEW_PASS='", desktop, user);
+	fprintf(f, "DESKTOP=%s\nLOCALE=%s\nXKB=%s\nKEYMAP=%s\nNEW_USER=%s\nNEW_PASS='", desktop,
+		languages[language].locale, keyboards[kbd].xkb, keyboards[kbd].console, user);
 	for (const char *c = p1; *c; c++) {
 		if (*c == '\'')
 			fputs("'\\''", f);
