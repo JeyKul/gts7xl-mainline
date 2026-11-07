@@ -255,12 +255,21 @@ Findings, in order:
 
 Manual bring-up, kept for debugging: `research/dp-up.sh` and `research/dp-test-dt.patch` in the work tree (not in this repo).
 
-### Kernel work (in progress)
+### In the kernel (0055-0059)
 
-- `max77705_usbc`: VDM state machine on the interrupts above (sink + DFP sends Discover Identity once PSRDY is set; Modes -> Enter; DP Status -> pick pin D when multi-function is preferred, else C; Configure ACK -> `typec_mux_set`; Attention -> HPD). Detach drops HPD, then sets the muxes safe. Only fixed payloads are allowlisted. Debugfs `0-0025/vdm` dumps the firmware's VDM replies.
-- New `ps5169` driver (`drivers/usb/typec/mux/ps5169.c`): typec switch + mux + DRM aux bridge, forwards to the QMP. Modelled on `nb7vpq904m`.
-- Board DT: PS5169 between QMP and the connector SS port, `gpio-sbu-mux` on the connector SBU port, QMP `mode-switch`.
-- Open: plug flipped (CC2) untested, so it is unknown whether the QMP must also flip or only the PS5169. USB3 on pin D needs dwc3 back on the QMP. Pin C (4 lanes) untested. The source case (hub without charger) relies on firmware discovery.
+- 0055 `ps5169` (`drivers/usb/typec/mux/ps5169.c`): typec switch + mux + DRM aux bridge between the QMP and the connector, modelled on `nb7vpq904m`. It forwards only DP states to the QMP: dropping the QMP to USB3-only on detach and back to USB3+DP on attach left link training failing (clock recovery) until reboot.
+- 0056 `max77705_usbc`: VDM state machine on the interrupts above. Sink + DFP sends Discover Identity once PSRDY is set; Modes -> Enter; DP Status -> pin D when multi-function is preferred, else C; Configure ACK -> `typec_mux_set`; Attention -> HPD. Details that mattered on hardware:
+  - HPD is reported once stable for 1.5 s. The hub raises HPD, drops it ~150 ms later and raises it again; msm torn down mid-plug often showed nothing.
+  - Every request times out after 3 s and the flow starts over (5 tries). A Discover Identity sent right after the contract can go unanswered, and PSRDY can lag the last interrupt of an attach.
+  - A power role swap (the hub's charger taking over after the tablet powered it) resets DP; the Enter reply was lost in the swap.
+  - Detach drops HPD at once, then sets the muxes safe.
+  - Do not reload the module with DP in use: msm keeps the old HPD bridge, notifications go nowhere (and it risks a use-after-free).
+- 0057 board DT: i2c14 + PS5169, `gpio-sbu-mux` (gpio10 enable active low, gpio47 side), L18A 912000 µV, QMP `mode-switch`, `mdss_dp` on 2 lanes.
+- 0058 board DT: MultiMedia3 (third q6asm DAI) to `DISPLAY_PORT_RX`, codec `mdss_dp`.
+- 0059 `drm_hdmi_audio_helper`: also prepare at hw_params. ASoC prepares CPU DAIs before codecs; the AFE DP port started before msm enabled its audio engine never started (AFE enable -110, then `ADSP_EALREADY` until reboot).
+- Userspace: `audio-up` routes MultiMedia3 and offers a PulseAudio sink "HDMI" (hw:0,2, 100%) only while DP-1 is connected. Opening the DP device with nothing connected wedges the ADSP's DP port until reboot.
+
+Open: tablet as source (firmware never discovers; sending Discover Identity there makes the mailbox stop answering), hub needing a power cycle after some replugs (a phone recovers on the same hub, so something on attach differs), USB 3 (dwc3 is built in and the QMP a module: deferred-probe timeout, dwc3 init fails, the display comes up late), pin C (AUX fails after the QMP switch to DP-only).
 
 ### For other MAX77705 devices
 
