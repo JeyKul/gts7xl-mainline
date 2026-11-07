@@ -1,0 +1,7 @@
+{
+  "installers": [
+    {"sha256": "f74d366b0a6d8e54cabd27c75cdecccde767824d15ddaa52932fa01dfd21756d", "url": "https://github.com/JeyKul/gts7xl-mainline/releases/download/installer-41532854378/stage2.tar.gz", "run": "41532854378"},
+    {"sha256": "178f53b666dd21688699fdcf48e5f581bca2585701e7bf0fb8d2bef32213d2a4", "url": "https://github.com/JeyKul/gts7xl-mainline/releases/download/installer-41364729844/stage2.tar.gz", "run": "41364729844"},
+    {"sha256": "cb888b168bf95c8af5b4f0ad9caacc174478e60ec7f53acb82309776920f3593", "url": "https://github.com/JeyKul/gts7xl-mainline/releases/download/installer-41359230393/stage2.tar.gz", "run": "41359230393"}
+  ]
+}

@@ -50,6 +50,8 @@ done < "$T/pkgs"
 rm -rf "$ROOT/s1/usr/share/apk" "$ROOT/s1/usr/lib/engines-3"
 
 install -m755 "$HERE/fetch.sh" "$ROOT/s1/fetch.sh"
+# The clock never starts earlier than this, so HTTPS works before NTP answers
+date +%s > "$ROOT/s1/build.time"
 install -m755 "$HERE/s2start.sh" "$ROOT/s1/s2start.sh"
 
 # Touch program

@@ -359,6 +359,105 @@ static void wifi_scan(void)
 	}
 }
 
+/*
+ * Saved networks, "<SSID hex> <passphrase hex>" per line in /tmp/saved-wifi.
+ * The initramfs fills it from userdata (read only); a successful join updates
+ * it, and stage 2 writes it back after formatting. Passphrases are never logged.
+ */
+#define MAXSAVED 16
+struct saved { char ssid[64]; char pw[64]; int bad; };
+static struct saved saved[MAXSAVED];
+static int nsaved;
+
+static int unhex(const char *h, char *out, int max)
+{
+	int n = 0;
+	unsigned v;
+
+	while (h[0] && h[1] && n < max - 1) {
+		if (sscanf(h, "%2x", &v) != 1)
+			return -1;
+		out[n++] = (char)v;
+		h += 2;
+	}
+	out[n] = 0;
+	return *h ? -1 : n;
+}
+
+static void put_hex(FILE *f, const char *s)
+{
+	for (; *s; s++)
+		fprintf(f, "%02x", (unsigned char)*s);
+}
+
+static void saved_load(void)
+{
+	FILE *f = fopen("/tmp/saved-wifi", "r");
+	char l[400];
+
+	nsaved = 0;
+	if (!f)
+		return;
+	while (nsaved < MAXSAVED && fgets(l, sizeof(l), f)) {
+		char *sp, *a = strtok_r(l, " \n", &sp), *b = strtok_r(NULL, " \n", &sp);
+		struct saved *w = &saved[nsaved];
+
+		if (!a || unhex(a, w->ssid, sizeof(w->ssid)) <= 0)
+			continue;
+		w->pw[0] = 0;
+		if (b && unhex(b, w->pw, sizeof(w->pw)) < 0)
+			continue;
+		w->bad = 0;
+		nsaved++;
+	}
+	fclose(f);
+}
+
+static void saved_store(void)
+{
+	mode_t old = umask(077);
+	FILE *f = fopen("/tmp/saved-wifi", "w");
+
+	umask(old);
+	if (!f)
+		return;
+	for (int i = 0; i < nsaved; i++) {
+		put_hex(f, saved[i].ssid);
+		fputc(' ', f);
+		put_hex(f, saved[i].pw);
+		fputc('\n', f);
+	}
+	fclose(f);
+}
+
+static struct saved *saved_find(const char *ssid)
+{
+	for (int i = 0; i < nsaved; i++)
+		if (!strcmp(saved[i].ssid, ssid))
+			return &saved[i];
+	return NULL;
+}
+
+/* The network that just worked goes first, so it is tried first next time */
+static void saved_put(const char *ssid, const char *pw)
+{
+	struct saved w = { 0 };
+	int i;
+
+	snprintf(w.ssid, sizeof(w.ssid), "%s", ssid);
+	snprintf(w.pw, sizeof(w.pw), "%s", pw);
+	for (i = 0; i < nsaved && strcmp(saved[i].ssid, ssid); i++)
+		;
+	if (i == nsaved && nsaved < MAXSAVED)
+		nsaved++;
+	if (i == MAXSAVED)
+		i = MAXSAVED - 1;
+	memmove(&saved[1], &saved[0], i * sizeof(saved[0]));
+	saved[0] = w;
+	saved_store();
+	memset(&w, 0, sizeof(w));
+}
+
 static const char *const rows[2][4] = {
 	{ "1234567890-=", "qwertyuiop[]", "asdfghjkl;'", "zxcvbnm,./\\" },
 	{ "!@#$%^&*()_+", "QWERTYUIOP{}", "ASDFGHJKL:\"", "ZXCVBNM<>?|" },
@@ -514,6 +613,12 @@ static int fetch_installer(void)
 	}
 	pid_t pid = fork();
 	if (!pid) {
+		int n = open("/tmp/fetch.log", O_WRONLY | O_CREAT | O_TRUNC, 0600);
+		if (n >= 0) {
+			dup2(n, 1);
+			dup2(n, 2);
+			close(n);
+		}
 		execvp(fetch[0], fetch);
 		_exit(127);
 	}
@@ -532,7 +637,16 @@ static int fetch_installer(void)
 		}
 	}
 	if (r) {
-		snprintf(status, sizeof(status), r == 2 ? "Installer download is damaged" : "Could not download the installer");
+		char why[120] = "";
+		FILE *e = fopen("/tmp/fetch.err", "r");
+		if (e) {
+			if (!fgets(why, sizeof(why), e))
+				why[0] = 0;
+			fclose(e);
+			why[strcspn(why, "\n")] = 0;
+		}
+		snprintf(status, sizeof(status), "%s%s%.110s", r == 2 ? "Installer download is damaged" : "Could not download the installer",
+			 why[0] ? ": " : "", why);
 		return r;
 	}
 	close_screen();
@@ -716,8 +830,43 @@ static int stage2(void)
 	return 0;
 }
 
+/* Join a network from the list, remember it, then fetch the installer */
+static void join(int i, const char *pw)
+{
+	struct saved *w = saved_find(nets[i].ssid);
+
+	rect(0, 0, fbw, fbh, BG);
+	text(100, 160, "Connecting...", FG);
+	present();
+	int r = wifi_connect(&nets[i], pw);
+	if (r == -2 && w && !strcmp(w->pw, pw)) {
+		w->bad = 1;
+		snprintf(status, sizeof(status), "Saved password for %.40s failed. Tap it to enter it again", nets[i].ssid);
+	} else if (r == -2) {
+		snprintf(status, sizeof(status), "Could not join. Wrong password?");
+	} else if (r == -3) {
+		snprintf(status, sizeof(status), "Joined, but got no address");
+	} else if (r) {
+		snprintf(status, sizeof(status), "Connection failed (%d)", r);
+	} else {
+		saved_put(nets[i].ssid, pw);
+		fetch_installer();
+	}
+}
+
 int main(int argc, char **argv)
 {
+	/*
+	 * Started in the background without stdio. The display and touch fds are
+	 * close-on-exec, so children would then run with 0-2 closed, and busybox
+	 * wget's TLS helper mixes up its socket and reads ciphertext as headers
+	 * ("bad header line"). Keep 0-2 on /dev/null.
+	 */
+	for (int n; (n = open("/dev/null", O_RDWR)) >= 0;)
+		if (n > 2) {
+			close(n);
+			break;
+		}
 	setenv("PATH", "/usr/sbin:/usr/bin:/sbin:/bin", 1);
 	if (argc > 1 && !strcmp(argv[1], "--stage2"))
 		return stage2();
@@ -740,8 +889,9 @@ int main(int argc, char **argv)
 	text(100, 160, "Starting Wi-Fi...", FG);
 	present();
 	wifi_start();
+	saved_load();
 	snprintf(status, sizeof(status), "Choose a network");
-	for (int need_scan = 1;;) {
+	for (int need_scan = 1, first = 1;;) {
 		if (need_scan) {
 			rect(100, 150, fbw - 200, 70, BG);
 			text(100, 160, "Scanning...", FG);
@@ -749,6 +899,30 @@ int main(int argc, char **argv)
 			wifi_scan();
 			need_scan = 0;
 		}
+		/* Once per start: join the first saved network in range unless tapped */
+		for (int i = 0; first && i < nnets; i++) {
+			struct saved *w = saved_find(nets[i].ssid);
+			if (!w || w->bad)
+				continue;
+			first = 0;
+			int x, y, tapped = 0;
+			for (int left = 5; left > 0 && !tapped; left--) {
+				char l[120];
+				rect(0, 0, fbw, fbh, BG);
+				text(100, 60, "Galaxy Tab S7+ Linux installer", FG);
+				snprintf(l, sizeof(l), "Connecting to %.60s in %d", w->ssid, left);
+				text(100, 220, l, FG);
+				text(100, 300, "Tap anywhere to choose another network", FG);
+				tapped = wait_tap(&x, &y, 1000);
+			}
+			if (!tapped) {
+				snprintf(pw, sizeof(pw), "%s", w->pw);
+				join(i, pw);
+				memset(pw, 0, sizeof(pw));
+			}
+			break;
+		}
+		first = 0;
 		rect(0, 0, fbw, fbh, BG);
 		text(100, 60, "Galaxy Tab S7+ Linux installer", FG);
 		text(100, 160, status, FG);
@@ -756,7 +930,9 @@ int main(int argc, char **argv)
 		for (int i = 0; i < nnets; i++) {
 			char l[100];
 			rows_b[i] = (struct btn){ 100, 260 + i * 140, fbw - 200, 125 };
-			snprintf(l, sizeof(l), "%-40.40s %4d dBm%s", nets[i].ssid, nets[i].level, nets[i].open ? "  open" : "");
+			struct saved *w = saved_find(nets[i].ssid);
+			snprintf(l, sizeof(l), "%-40.40s %4d dBm%s%s", nets[i].ssid, nets[i].level,
+				 nets[i].open ? "  open" : "", w && !w->bad ? "  saved" : "");
 			button(&rows_b[i], l, BTN);
 		}
 		if (!nnets)
@@ -778,20 +954,15 @@ int main(int argc, char **argv)
 			if (!hit(&rows_b[i], x, y))
 				continue;
 			char title[100];
+			struct saved *w = saved_find(nets[i].ssid);
 			pw[0] = 0;
 			snprintf(title, sizeof(title), "Password: %.60s", nets[i].ssid);
-			if (!nets[i].open && !keyboard(title, "Connect", 0, pw, sizeof(pw)))
+			if (w && !w->bad)
+				snprintf(pw, sizeof(pw), "%s", w->pw);
+			else if (!nets[i].open && !keyboard(title, "Connect", 0, pw, sizeof(pw)))
 				break;
-			rect(0, 0, fbw, fbh, BG);
-			text(100, 160, "Connecting...", FG);
-			present();
-			int r = wifi_connect(&nets[i], pw);
+			join(i, pw);
 			memset(pw, 0, sizeof(pw));
-			if (r == -2) snprintf(status, sizeof(status), "Could not join. Wrong password?");
-			else if (r == -3) snprintf(status, sizeof(status), "Joined, but got no address");
-			else if (r) snprintf(status, sizeof(status), "Connection failed (%d)", r);
-			else if (!r)
-				fetch_installer();
 			break;
 		}
 	}
