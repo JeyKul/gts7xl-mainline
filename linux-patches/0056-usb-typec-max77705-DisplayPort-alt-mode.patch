@@ -1,0 +1,725 @@
+From 0bd130fa9e3498e8bbeeec834c510cd3721e025a Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sat, 7 Nov 2026 19:54:11 +0100
+Subject: [PATCH 56/57] usb: typec: max77705: DisplayPort alt mode
+
+As sink and DFP the CCIC firmware waits for the AP's Discover Identity,
+then discovers SVIDs and modes itself and sends DP Status; the AP sends
+Enter Mode and DP Configure (fixed, allowlisted payloads). Drive that
+from the VDM and DP interrupts, set the typec switches and muxes on the
+connector graph, and report HPD through an aux-hpd bridge on the
+connector. HPD is reported once stable for 1.5 s (docks raise, drop and
+raise it again on attach), every step times out and starts over, and a
+power role swap restarts the flow. Debugfs vdm dumps the firmware's VDM
+replies.
+
+Not as source: a hub powered by the tablet never answers and the mailbox
+stops responding.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/usb/typec/Kconfig         |   2 +
+ drivers/usb/typec/max77705_usbc.c | 504 +++++++++++++++++++++++++++++-
+ 2 files changed, 500 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/usb/typec/Kconfig b/drivers/usb/typec/Kconfig
+index 814d4a97a..5ff38825f 100644
+--- a/drivers/usb/typec/Kconfig
++++ b/drivers/usb/typec/Kconfig
+@@ -84,6 +84,8 @@ config TYPEC_MAX77705
+ 	depends on REGULATOR
+ 	depends on POWER_SUPPLY
+ 	depends on USB_ROLE_SWITCH || !USB_ROLE_SWITCH
++	depends on DRM || !DRM
++	select DRM_AUX_HPD_BRIDGE if DRM_BRIDGE && OF
+ 	select REGMAP_I2C
+ 	help
+ 	  Say Y or M here if your system has the Maxim MAX77705 companion
+diff --git a/drivers/usb/typec/max77705_usbc.c b/drivers/usb/typec/max77705_usbc.c
+index b1fc74232..4d0eecf77 100644
+--- a/drivers/usb/typec/max77705_usbc.c
++++ b/drivers/usb/typec/max77705_usbc.c
+@@ -18,8 +18,11 @@
+  * pd.c, cc.c, max77705.h next to it).
+  */
+ 
++#include <drm/bridge/aux-bridge.h>
++#include <linux/auxiliary_bus.h>
+ #include <linux/bitfield.h>
+ #include <linux/completion.h>
++#include <linux/debugfs.h>
+ #include <linux/delay.h>
+ #include <linux/i2c.h>
+ #include <linux/interrupt.h>
+@@ -35,8 +38,11 @@
+ #include <linux/spinlock.h>
+ #include <linux/unaligned.h>
+ #include <linux/usb/pd.h>
++#include <linux/usb/pd_vdo.h>
+ #include <linux/usb/role.h>
+ #include <linux/usb/typec.h>
++#include <linux/usb/typec_dp.h>
++#include <linux/usb/typec_mux.h>
+ #include <linux/workqueue.h>
+ 
+ /* Registers, max77705.h:60-92 */
+@@ -71,6 +77,15 @@
+ #define MAX77705_PD_PDMSG		BIT(7)
+ #define MAX77705_PD_PSRDY		BIT(6)
+ #define MAX77705_PD_DATAROLE		BIT(5)
++#define MAX77705_PD_DP_ATTENTION	BIT(4)
++#define MAX77705_PD_DP_CONFIGURE	BIT(3)
++#define MAX77705_PD_DP_STATUS		BIT(2)
++#define MAX77705_PD_DP_ALL		GENMASK(4, 2)
++
++/* VDM_INT, max77705-irq.c:111-114 */
++#define MAX77705_VDM_DISCOVER_MODES	BIT(2)
++#define MAX77705_VDM_ENTER_MODE		BIT(3)
++#define MAX77705_VDM_ALL		GENMASK(3, 0)
+ 
+ /* CC_STATUS0, max77705.h:154-157 */
+ #define MAX77705_CCPINSTAT		GENMASK(7, 6)
+@@ -93,6 +108,9 @@
+ #define MAX77705_CC_INT_M_INIT		0x20
+ #define MAX77705_PD_INT_M_INIT		0x1c
+ #define MAX77705_VDM_INT_M_INIT		0xff
++/* DP alt mode, when the board wires DP: alternate.c:1243-1244 */
++#define MAX77705_PD_INT_M_DP		0x00
++#define MAX77705_VDM_INT_M_DP		0xf0
+ 
+ /* CCStat, max77705.h:365-374 */
+ enum max77705_ccstat {
+@@ -135,11 +153,36 @@ enum max77705_ccistat {
+ #define MAX77705_OP_FW_AUTOIBUS		0x57
+ #define MAX77705_OP_CTRL1_W		0x06
+ #define MAX77705_OP_SET_ALTMODE		0x55
++#define MAX77705_OP_SET_VDM_REQ		0x48
++#define MAX77705_OP_GET_VDM_RESP	0x4b
+ 
+ /* MUIC CTRL1: COMN1SW and COMP2SW both 1, D+/D- routed to the USB PHY */
+ #define MAX77705_MUIC_COM_USB		0x09
+ /* SET_ALTERNATEMODE: send Source_Capabilities (bit 0) and VDMs (bit 1) */
+ #define MAX77705_ALTMODE_SRC_VDM	0x03
++/* GET_VDM_RESP sub-ids, alternate.c:802-816: Discover ID, SVIDs, Modes, Enter */
++#define MAX77705_VDM_RESP_LEN		31
++/*
++ * SET_VDM_REQ payloads, alternate.c:42-97: [VDO count | ACK expected]
++ * [VDM header] [VDO]. As sink and DFP the firmware waits for Discover
++ * Identity, then finds SVIDs and modes itself (alternate.c:1198-1203);
++ * the AP sends Enter Mode and DP Configure.
++ */
++struct max77705_vdm_req {
++	const char *name;
++	u8 len;
++	u8 data[9];
++};
++
++static const struct max77705_vdm_req max77705_vdm_reqs[] = {
++	/* SVID 0xff00, structured, REQ, Discover Identity */
++	{ "id",       5, { 0x09, 0x01, 0x80, 0x00, 0xff } },
++	/* SVID 0xff01, object position 1, Enter Mode */
++	{ "enter",    5, { 0x09, 0x04, 0x81, 0x01, 0xff } },
++	/* DP Configure: UFP_U as UFP_D, DP v1.3 signaling, pin C or D */
++	{ "config-c", 9, { 0x0a, 0x11, 0x81, 0x01, 0xff, 0x06, 0x04, 0x00, 0x00 } },
++	{ "config-d", 9, { 0x0a, 0x11, 0x81, 0x01, 0xff, 0x06, 0x08, 0x00, 0x00 } },
++};
+ 
+ /* FACTORY_TEST data: firmware-driven VBUS off, usbc.c:251-262 */
+ #define MAX77705_AUTO_VBUS_OFF		0x00
+@@ -215,6 +258,7 @@ struct max77705_usbc_ev {
+ 	u8 pd;
+ 	u8 pdmsg;
+ 	u8 sysmsg;
++	u8 vdm;
+ };
+ 
+ struct max77705_usbc {
+@@ -274,6 +318,32 @@ struct max77705_usbc {
+ 	int ilim_base_ua;
+ 	int voltage_uv;
+ 	int current_ua;
++
++	struct dentry *debugfs;
++
++	/* DP alt mode, driven by the AP once the firmware has discovered */
++	struct auxiliary_device *hpd;	/* DP HPD bridge on the connector */
++	struct typec_switch *sw;
++	struct typec_mux *mux;
++	struct typec_altmode dp_alt;
++	enum typec_orientation orientation;
++	enum typec_data_role data_role;
++	enum {
++		MAX77705_DP_IDLE,
++		MAX77705_DP_DISCOVER,	/* Discover Identity sent */
++		MAX77705_DP_ENTER,	/* Enter Mode sent */
++		MAX77705_DP_ENTERED,	/* waiting for a connected DP Status */
++		MAX77705_DP_CONFIGURE,	/* DP Configure sent */
++		MAX77705_DP_ACTIVE,
++		MAX77705_DP_FAILED,
++	} dp_state;
++	u8 dp_pins;		/* pin assignments the partner offers */
++	unsigned long dp_mode;	/* TYPEC_DP_STATE_C or _D */
++	bool dp_hpd;		/* as reported to DRM */
++	bool dp_hpd_want;	/* as the partner last said */
++	struct delayed_work dp_hpd_work;
++	struct delayed_work dp_kick_work;
++	unsigned int dp_kicks;
+ };
+ 
+ static bool max77705_usbc_writeable_reg(struct device *dev, unsigned int reg)
+@@ -319,6 +389,16 @@ static bool max77705_usbc_cmd_allowed(struct max77705_usbc *u, u8 op,
+ 		return len == 1 && data[0] == MAX77705_MUIC_COM_USB;
+ 	case MAX77705_OP_SET_ALTMODE:
+ 		return len == 1 && data[0] == MAX77705_ALTMODE_SRC_VDM;
++	case MAX77705_OP_SET_VDM_REQ:
++		for (i = 0; i < ARRAY_SIZE(max77705_vdm_reqs); i++)
++			if (len == max77705_vdm_reqs[i].len &&
++			    !memcmp(data, max77705_vdm_reqs[i].data, len))
++				return true;
++		return false;
++	case MAX77705_OP_GET_VDM_RESP:
++		/* Read only: the last reply of each kind */
++		return len == 1 && ((data[0] >= 0x01 && data[0] <= 0x06) ||
++				    data[0] == 0x10 || data[0] == 0x11);
+ 	case MAX77705_OP_SET_SNKCAP:
+ 		if (len < 1)
+ 			return false;
+@@ -685,6 +765,7 @@ static void max77705_usbc_set_data_role(struct max77705_usbc *u,
+ 	usb_role_switch_set_role(u->role_sw, role == TYPEC_HOST ?
+ 				 USB_ROLE_HOST : USB_ROLE_DEVICE);
+ 	typec_set_data_role(u->port, role);
++	u->data_role = role;
+ }
+ 
+ static void max77705_usbc_register_partner(struct max77705_usbc *u,
+@@ -722,6 +803,24 @@ static enum typec_pwr_opmode max77705_usbc_opmode(u8 cc_status0)
+ 	}
+ }
+ 
++static void max77705_usbc_orient(struct max77705_usbc *u,
++				 enum typec_orientation orientation)
++{
++	int ret;
++
++	typec_set_orientation(u->port, orientation);
++	if (orientation == u->orientation)
++		return;
++	u->orientation = orientation;
++
++	ret = typec_switch_set(u->sw, orientation);
++	if (ret)
++		dev_warn(u->dev, "orientation switch: %d\n", ret);
++}
++
++static void max77705_usbc_dp_reset(struct max77705_usbc *u);
++static void max77705_usbc_dp_wait(struct max77705_usbc *u);
++
+ static void max77705_usbc_set_orientation(struct max77705_usbc *u,
+ 					  u8 cc_status0)
+ {
+@@ -739,7 +838,7 @@ static void max77705_usbc_set_orientation(struct max77705_usbc *u,
+ 		break;
+ 	}
+ 
+-	typec_set_orientation(u->port, orientation);
++	max77705_usbc_orient(u, orientation);
+ }
+ 
+ static void max77705_usbc_pd_reset(struct max77705_usbc *u)
+@@ -768,10 +867,12 @@ static void max77705_usbc_detach(struct max77705_usbc *u)
+ 
+ 	usb_role_switch_set_role(u->role_sw, USB_ROLE_NONE);
+ 	typec_set_data_role(u->port, TYPEC_DEVICE);
++	u->data_role = TYPEC_DEVICE;
+ 	typec_set_pwr_role(u->port, TYPEC_SINK);
+ 	typec_set_vconn_role(u->port, TYPEC_SINK);
+ 	typec_set_pwr_opmode(u->port, TYPEC_PWR_MODE_USB);
+-	typec_set_orientation(u->port, TYPEC_ORIENTATION_NONE);
++	max77705_usbc_dp_reset(u);
++	max77705_usbc_orient(u, TYPEC_ORIENTATION_NONE);
+ 
+ 	if (u->ccstat == MAX77705_CC_SINK)
+ 		max77705_usbc_restore_ilim(u);
+@@ -824,6 +925,10 @@ static void max77705_usbc_update_cc(struct max77705_usbc *u, u8 cc_status0)
+ 	dev_dbg(u->dev, "ccstat %d -> %d\n", old, ccstat);
+ 	u->ccstat = ccstat;
+ 
++	/* A power role swap renegotiates; any alt mode in flight is lost */
++	if (old != MAX77705_CC_NONE)
++		max77705_usbc_dp_reset(u);
++
+ 	switch (ccstat) {
+ 	case MAX77705_CC_SINK:
+ 		typec_set_pwr_role(u->port, TYPEC_SINK);
+@@ -1174,11 +1279,13 @@ static int max77705_usbc_set_snkcap(struct max77705_usbc *u)
+  */
+ static int max77705_usbc_hw_init(struct max77705_usbc *u)
+ {
+-	static const struct reg_sequence masks[] = {
++	const struct reg_sequence masks[] = {
+ 		{ MAX77705_UIC_INT_M, MAX77705_UIC_INT_M_INIT },
+ 		{ MAX77705_CC_INT_M, MAX77705_CC_INT_M_INIT },
+-		{ MAX77705_PD_INT_M, MAX77705_PD_INT_M_INIT },
+-		{ MAX77705_VDM_INT_M, MAX77705_VDM_INT_M_INIT },
++		{ MAX77705_PD_INT_M, u->hpd ? MAX77705_PD_INT_M_DP :
++					      MAX77705_PD_INT_M_INIT },
++		{ MAX77705_VDM_INT_M, u->hpd ? MAX77705_VDM_INT_M_DP :
++					       MAX77705_VDM_INT_M_INIT },
+ 	};
+ 	int ret;
+ 
+@@ -1308,6 +1415,316 @@ static bool max77705_usbc_masks_lost(struct max77705_usbc *u)
+ 	return true;
+ }
+ 
++/* DP alt mode (alternate.c:400-730) */
++
++static bool dp_prefer_pin_c;
++module_param(dp_prefer_pin_c, bool, 0644);
++MODULE_PARM_DESC(dp_prefer_pin_c, "DP alt mode: prefer pin C (4 lanes, no USB3) over D");
++
++static int max77705_usbc_vdm_send(struct max77705_usbc *u, const char *name)
++{
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < ARRAY_SIZE(max77705_vdm_reqs); i++) {
++		const struct max77705_vdm_req *r = &max77705_vdm_reqs[i];
++
++		if (strcmp(name, r->name))
++			continue;
++		ret = max77705_usbc_cmd(u, MAX77705_OP_SET_VDM_REQ, r->data,
++					r->len, NULL, 0);
++		if (ret)
++			dev_warn(u->dev, "DP: %s request failed (%d)\n", name, ret);
++		return ret;
++	}
++	return -EINVAL;
++}
++
++/*
++ * The firmware's copy of the last VDM of one kind: [sub-id] [status]
++ * [message id] [VDM header] [VDOs], all little endian.
++ */
++#define MAX77705_VDM_HDR		3
++#define MAX77705_VDM_VDO(n)		(7 + 4 * (n))
++#define MAX77705_VDM_NR_VDO		6
++
++static int max77705_usbc_vdm_read(struct max77705_usbc *u, u8 sub,
++				  u8 buf[MAX77705_VDM_RESP_LEN])
++{
++	int ret;
++
++	ret = max77705_usbc_cmd(u, MAX77705_OP_GET_VDM_RESP, &sub, 1, buf,
++				MAX77705_VDM_RESP_LEN);
++	if (!ret && buf[0] != sub)
++		ret = -EIO;
++	if (ret)
++		dev_warn(u->dev, "DP: reading VDM 0x%02x failed (%d)\n", sub, ret);
++	return ret;
++}
++
++static bool max77705_vdm_acked(const u8 *buf)
++{
++	u32 hdr = get_unaligned_le32(&buf[MAX77705_VDM_HDR]);
++
++	return PD_VDO_CMDT(hdr) == CMDT_RSP_ACK;
++}
++
++/*
++ * Some docks raise HPD, drop it ~150 ms later and raise it again 1.5 s
++ * after; msm DP torn down mid-plug then often never shows a picture until
++ * the dock loses power. Report HPD only once it has been stable.
++ */
++#define MAX77705_DP_HPD_SETTLE_MS	1500
++
++static void max77705_usbc_dp_hpd_report(struct max77705_usbc *u, bool hpd)
++{
++	if (hpd == u->dp_hpd)
++		return;
++	u->dp_hpd = hpd;
++	dev_info(u->dev, "DP: HPD %s\n", hpd ? "high" : "low");
++	drm_aux_hpd_bridge_notify(&u->hpd->dev, hpd ? connector_status_connected :
++						     connector_status_disconnected);
++}
++
++static void max77705_usbc_dp_hpd(struct max77705_usbc *u, bool hpd)
++{
++	if (hpd != u->dp_hpd_want)
++		dev_dbg(u->dev, "DP: partner HPD %s\n", hpd ? "high" : "low");
++	u->dp_hpd_want = hpd;
++	if (hpd == u->dp_hpd)
++		cancel_delayed_work(&u->dp_hpd_work);
++	else
++		mod_delayed_work(u->wq, &u->dp_hpd_work,
++				 msecs_to_jiffies(MAX77705_DP_HPD_SETTLE_MS));
++}
++
++static void max77705_usbc_dp_hpd_work(struct work_struct *work)
++{
++	struct max77705_usbc *u = container_of(to_delayed_work(work),
++					       struct max77705_usbc, dp_hpd_work);
++
++	mutex_lock(&u->lock);
++	if (u->dp_state == MAX77705_DP_ACTIVE)
++		max77705_usbc_dp_hpd_report(u, u->dp_hpd_want);
++	mutex_unlock(&u->lock);
++}
++
++static void max77705_usbc_dp_mux(struct max77705_usbc *u, unsigned long mode,
++				 bool dp)
++{
++	struct typec_mux_state state = {
++		.alt = dp ? &u->dp_alt : NULL,
++		.mode = mode,
++	};
++	int ret;
++
++	ret = typec_mux_set(u->mux, &state);
++	if (ret)
++		dev_warn(u->dev, "DP: mux: %d\n", ret);
++}
++
++static void max77705_usbc_dp_reset(struct max77705_usbc *u)
++{
++	if (!u->hpd)
++		return;
++
++	/* A detach is real: low at once */
++	cancel_delayed_work(&u->dp_hpd_work);
++	u->dp_hpd_want = false;
++	max77705_usbc_dp_hpd_report(u, false);
++	if (u->dp_state >= MAX77705_DP_CONFIGURE &&
++	    u->dp_state != MAX77705_DP_FAILED)
++		max77705_usbc_dp_mux(u, TYPEC_STATE_SAFE, false);
++	u->dp_state = MAX77705_DP_IDLE;
++	u->dp_pins = 0;
++	u->dp_kicks = 0;
++	cancel_delayed_work(&u->dp_kick_work);
++}
++
++static void max77705_usbc_dp_fail(struct max77705_usbc *u, const char *why)
++{
++	dev_info(u->dev, "DP: %s\n", why);
++	u->dp_state = MAX77705_DP_FAILED;
++}
++
++/* Discover SVIDs and Modes are in: look for DisplayPort, then enter it. */
++static void max77705_usbc_dp_modes(struct max77705_usbc *u)
++{
++	u8 buf[MAX77705_VDM_RESP_LEN];
++	bool dp = false;
++	u32 vdo;
++	int i;
++
++	if (max77705_usbc_vdm_read(u, 0x02, buf))
++		return;
++	for (i = 0; i < MAX77705_VDM_NR_VDO; i++) {
++		vdo = get_unaligned_le32(&buf[MAX77705_VDM_VDO(i)]);
++		if (PD_VDO_SVID_SVID0(vdo) == USB_TYPEC_DP_SID ||
++		    PD_VDO_SVID_SVID1(vdo) == USB_TYPEC_DP_SID)
++			dp = true;
++		if (!PD_VDO_SVID_SVID0(vdo) || !PD_VDO_SVID_SVID1(vdo))
++			break;
++	}
++	if (!dp)
++		return max77705_usbc_dp_fail(u, "partner has no DisplayPort");
++
++	if (max77705_usbc_vdm_read(u, 0x03, buf))
++		return;
++	if (PD_VDO_VID(get_unaligned_le32(&buf[MAX77705_VDM_HDR])) != USB_TYPEC_DP_SID)
++		return;	/* modes of another SVID */
++
++	vdo = get_unaligned_le32(&buf[MAX77705_VDM_VDO(0)]);
++	if (!(DP_CAP_CAPABILITY(vdo) & DP_CAP_UFP_D))
++		return max77705_usbc_dp_fail(u, "partner is not a DP sink");
++	u->dp_pins = DP_CAP_PIN_ASSIGN_UFP_D(vdo);
++
++	cancel_delayed_work(&u->dp_kick_work);
++	dev_info(u->dev, "DP: mode VDO 0x%08x, pins 0x%02x\n", vdo, u->dp_pins);
++	if (!max77705_usbc_vdm_send(u, "enter")) {
++		u->dp_state = MAX77705_DP_ENTER;
++		max77705_usbc_dp_wait(u);
++	}
++}
++
++/* A DP Status reply or an Attention: pick a pin once, follow HPD after. */
++static void max77705_usbc_dp_status(struct max77705_usbc *u, u8 sub)
++{
++	u8 buf[MAX77705_VDM_RESP_LEN];
++	bool multi;
++	u32 vdo;
++
++	if (max77705_usbc_vdm_read(u, sub, buf))
++		return;
++	vdo = get_unaligned_le32(&buf[MAX77705_VDM_VDO(0)]);
++	dev_dbg(u->dev, "DP: status 0x%08x\n", vdo);
++
++	if (u->dp_state == MAX77705_DP_ACTIVE) {
++		max77705_usbc_dp_hpd(u, vdo & DP_STATUS_HPD_STATE);
++		return;
++	}
++
++	if (u->dp_state != MAX77705_DP_ENTERED || !DP_STATUS_CONNECTION(vdo))
++		return;
++
++	/* alternate.c:552-596: D first when the partner wants USB too */
++	multi = (vdo & DP_STATUS_PREFER_MULTI_FUNC) && !dp_prefer_pin_c;
++	if (multi && (u->dp_pins & BIT(DP_PIN_ASSIGN_D)))
++		u->dp_mode = TYPEC_DP_STATE_D;
++	else if (u->dp_pins & BIT(DP_PIN_ASSIGN_C))
++		u->dp_mode = TYPEC_DP_STATE_C;
++	else if (u->dp_pins & BIT(DP_PIN_ASSIGN_D))
++		u->dp_mode = TYPEC_DP_STATE_D;
++	else
++		return max77705_usbc_dp_fail(u, "no usable pin assignment");
++
++	if (!max77705_usbc_vdm_send(u, u->dp_mode == TYPEC_DP_STATE_D ?
++				    "config-d" : "config-c")) {
++		u->dp_state = MAX77705_DP_CONFIGURE;
++		max77705_usbc_dp_wait(u);
++	}
++}
++
++#define MAX77705_DP_KICK_MS		1000
++#define MAX77705_DP_DISCOVER_MS		3000
++#define MAX77705_DP_KICKS		5
++
++/*
++ * As sink and DFP the firmware waits for the AP's Discover Identity
++ * (alternate.c:1198-1203). Not as source: a hub powered by the tablet
++ * never answers it there and the mailbox stops responding. PSRDY can lag
++ * the last interrupt of an attach, and a request sent right after the
++ * contract can go unanswered, so retry a few times.
++ */
++static void max77705_usbc_dp_kick(struct max77705_usbc *u)
++{
++	unsigned int st;
++
++	if (u->dp_state != MAX77705_DP_IDLE || u->data_role != TYPEC_HOST ||
++	    u->ccstat != MAX77705_CC_SINK || !u->pd_contract)
++		return;
++
++	if (!regmap_read(u->regmap, MAX77705_PD_STATUS1, &st) &&
++	    (st & MAX77705_PD_PSRDY_STAT) && !max77705_usbc_vdm_send(u, "id")) {
++		u->dp_state = MAX77705_DP_DISCOVER;
++		if (u->dp_kicks++ < MAX77705_DP_KICKS)
++			max77705_usbc_dp_wait(u);
++		return;
++	}
++
++	if (u->dp_kicks++ < MAX77705_DP_KICKS)
++		mod_delayed_work(u->wq, &u->dp_kick_work,
++				 msecs_to_jiffies(MAX77705_DP_KICK_MS));
++}
++
++/* Every request arms a timeout; no answer in time starts over. */
++static void max77705_usbc_dp_wait(struct max77705_usbc *u)
++{
++	mod_delayed_work(u->wq, &u->dp_kick_work,
++			 msecs_to_jiffies(MAX77705_DP_DISCOVER_MS));
++}
++
++static void max77705_usbc_dp_kick_work(struct work_struct *work)
++{
++	struct max77705_usbc *u = container_of(to_delayed_work(work),
++					       struct max77705_usbc, dp_kick_work);
++
++	mutex_lock(&u->lock);
++	if (u->dp_state > MAX77705_DP_IDLE && u->dp_state < MAX77705_DP_ACTIVE) {
++		dev_info(u->dev, "DP: no reply in state %d, starting over\n",
++			 u->dp_state);
++		u->dp_state = MAX77705_DP_IDLE;
++	}
++	if (u->hpd && u->partner && !u->halted)
++		max77705_usbc_dp_kick(u);
++	mutex_unlock(&u->lock);
++}
++
++static void max77705_usbc_dp_event(struct max77705_usbc *u,
++				   const struct max77705_usbc_ev *ev)
++{
++	u8 buf[MAX77705_VDM_RESP_LEN];
++
++	if (!u->hpd || !u->partner)
++		return;
++
++	max77705_usbc_dp_kick(u);
++
++	if ((ev->vdm & MAX77705_VDM_DISCOVER_MODES) &&
++	    u->dp_state <= MAX77705_DP_DISCOVER)
++		max77705_usbc_dp_modes(u);
++
++	if ((ev->vdm & MAX77705_VDM_ENTER_MODE) &&
++	    u->dp_state == MAX77705_DP_ENTER &&
++	    !max77705_usbc_vdm_read(u, 0x04, buf)) {
++		if (max77705_vdm_acked(buf)) {
++			u->dp_state = MAX77705_DP_ENTERED;
++			max77705_usbc_dp_wait(u);
++		} else
++			max77705_usbc_dp_fail(u, "Enter Mode refused");
++	}
++
++	if (ev->pd & MAX77705_PD_DP_STATUS)
++		max77705_usbc_dp_status(u, 0x10);
++
++	if ((ev->pd & MAX77705_PD_DP_CONFIGURE) &&
++	    u->dp_state == MAX77705_DP_CONFIGURE &&
++	    !max77705_usbc_vdm_read(u, 0x11, buf)) {
++		if (!max77705_vdm_acked(buf))
++			return max77705_usbc_dp_fail(u, "DP Configure refused");
++		u->dp_state = MAX77705_DP_ACTIVE;
++		cancel_delayed_work(&u->dp_kick_work);
++		dev_info(u->dev, "DP: pin %c, %s\n",
++			 u->dp_mode == TYPEC_DP_STATE_D ? 'D' : 'C',
++			 u->orientation == TYPEC_ORIENTATION_REVERSE ? "CC2" : "CC1");
++		max77705_usbc_dp_mux(u, u->dp_mode, true);
++		/* HPD follows in an Attention; the status may already carry it */
++		max77705_usbc_dp_status(u, 0x10);
++	}
++
++	if (ev->pd & MAX77705_PD_DP_ATTENTION)
++		max77705_usbc_dp_status(u, 0x06);
++}
++
+ /*
+  * Handle one interrupt event. CC and data-role state are read as levels
+  * here; PDMsg and SYSMsg come from the event, as read by the handler.
+@@ -1358,6 +1775,8 @@ static void max77705_usbc_handle_ev(struct max77705_usbc *u,
+ 	    ((ev->pd & MAX77705_PD_PDMSG) && ev->pdmsg == MAX77705_PDMSG_SNK_PSRDY) ||
+ 	    (u->ccstat == MAX77705_CC_SINK && !u->pd_contract))
+ 		max77705_usbc_pd_ready(u);
++
++	max77705_usbc_dp_event(u, ev);
+ }
+ 
+ static void max77705_usbc_recover_work(struct work_struct *work)
+@@ -1446,7 +1865,8 @@ static irqreturn_t max77705_usbc_irq(int irq, void *data)
+ 
+ 	ev.uic = ints[0] & ~MAX77705_UIC_APCMDRES;
+ 	ev.pd = ints[2];
+-	if (!ev.uic && !ints[1] && !ev.pd)
++	ev.vdm = ints[3];
++	if (!ev.uic && !ints[1] && !ev.pd && !ev.vdm)
+ 		return IRQ_HANDLED;
+ 
+ 	if ((ev.uic & MAX77705_UIC_SYSMSG) &&
+@@ -1569,15 +1989,48 @@ static int max77705_usbc_get_snk_pdos(struct max77705_usbc *u,
+ 	return 0;
+ }
+ 
++/* Raw firmware VDM replies, for alt mode bring-up */
++static int max77705_usbc_vdm_show(struct seq_file *s, void *unused)
++{
++	struct max77705_usbc *u = s->private;
++	static const struct { u8 sub; const char *name; } subs[] = {
++		{ 0x01, "id" }, { 0x02, "svids" }, { 0x03, "modes" },
++		{ 0x04, "enter" }, { 0x05, "exit" }, { 0x06, "attention" },
++		{ 0x10, "dp_status" }, { 0x11, "dp_config" },
++	};
++	u8 buf[MAX77705_VDM_RESP_LEN];
++	unsigned int i;
++	int ret;
++
++	for (i = 0; i < ARRAY_SIZE(subs); i++) {
++		u8 sub = subs[i].sub;
++
++		mutex_lock(&u->lock);
++		ret = u->halted ? -EBUSY :
++		      max77705_usbc_cmd(u, MAX77705_OP_GET_VDM_RESP, &sub, 1,
++					buf, sizeof(buf));
++		mutex_unlock(&u->lock);
++		if (ret)
++			seq_printf(s, "%s: error %d\n", subs[i].name, ret);
++		else
++			seq_printf(s, "%s: %*ph\n", subs[i].name, (int)sizeof(buf), buf);
++	}
++	return 0;
++}
++DEFINE_SHOW_ATTRIBUTE(max77705_usbc_vdm);
++
+ static void max77705_usbc_teardown(void *data)
+ {
+ 	struct max77705_usbc *u = data;
+ 
++	debugfs_remove_recursive(u->debugfs);
+ 	cancel_work_sync(&u->work);
+ 	cancel_delayed_work_sync(&u->pd_retry_work);
+ 	cancel_delayed_work_sync(&u->vbus_work);
+ 	cancel_delayed_work_sync(&u->vbus_guard);
+ 	cancel_delayed_work_sync(&u->recover_work);
++	cancel_delayed_work_sync(&u->dp_hpd_work);
++	cancel_delayed_work_sync(&u->dp_kick_work);
+ 
+ 	mutex_lock(&u->lock);
+ 	if (u->ccstat != MAX77705_CC_NONE)
+@@ -1588,6 +2041,8 @@ static void max77705_usbc_teardown(void *data)
+ 
+ 	typec_unregister_port(u->port);
+ 	usb_role_switch_put(u->role_sw);
++	typec_mux_put(u->mux);
++	typec_switch_put(u->sw);
+ }
+ 
+ static int max77705_usbc_probe(struct i2c_client *client)
+@@ -1617,6 +2072,8 @@ static int max77705_usbc_probe(struct i2c_client *client)
+ 	INIT_DELAYED_WORK(&u->vbus_work, max77705_usbc_vbus_work);
+ 	INIT_DELAYED_WORK(&u->vbus_guard, max77705_usbc_vbus_guard);
+ 	INIT_DELAYED_WORK(&u->recover_work, max77705_usbc_recover_work);
++	INIT_DELAYED_WORK(&u->dp_hpd_work, max77705_usbc_dp_hpd_work);
++	INIT_DELAYED_WORK(&u->dp_kick_work, max77705_usbc_dp_kick_work);
+ 	INIT_KFIFO(u->ev_fifo);
+ 
+ 	u->regmap = devm_regmap_init_i2c(client, &max77705_usbc_regmap_config);
+@@ -1712,6 +2169,38 @@ static int max77705_usbc_probe(struct i2c_client *client)
+ 		ret = dev_err_probe(dev, PTR_ERR(u->port), "typec port\n");
+ 		goto err_put_role;
+ 	}
++
++	/* DP alt mode: HPD reaches msm DP through a bridge on the connector */
++	if (IS_ENABLED(CONFIG_DRM_AUX_HPD_BRIDGE)) {
++		struct fwnode_handle *ep;
++
++		ep = fwnode_graph_get_endpoint_by_id(connector, 1, 0, 0);
++		if (ep) {
++			fwnode_handle_put(ep);
++
++			u->sw = fwnode_typec_switch_get(connector);
++			u->mux = IS_ERR(u->sw) ? NULL : fwnode_typec_mux_get(connector);
++			if (IS_ERR(u->sw) || IS_ERR(u->mux)) {
++				ret = IS_ERR(u->sw) ? PTR_ERR(u->sw) : PTR_ERR(u->mux);
++				if (!IS_ERR(u->sw))
++					typec_switch_put(u->sw);
++				typec_unregister_port(u->port);
++				fwnode_handle_put(connector);
++				usb_role_switch_put(u->role_sw);
++				return dev_err_probe(dev, ret, "DP switches\n");
++			}
++			u->dp_alt.svid = USB_TYPEC_DP_SID;
++			u->dp_alt.mode = 1;
++
++			u->hpd = devm_drm_dp_hpd_bridge_alloc(dev, to_of_node(connector));
++			if (!IS_ERR(u->hpd))
++				ret = devm_drm_dp_hpd_bridge_add(dev, u->hpd);
++			if (IS_ERR(u->hpd) || ret) {
++				dev_warn(dev, "no DP HPD bridge\n");
++				u->hpd = NULL;
++			}
++		}
++	}
+ 	fwnode_handle_put(connector);
+ 
+ 	ret = devm_add_action_or_reset(dev, max77705_usbc_teardown, u);
+@@ -1742,6 +2231,9 @@ static int max77705_usbc_probe(struct i2c_client *client)
+ 	/* Pick up whatever is attached already. */
+ 	queue_work(u->wq, &u->work);
+ 
++	u->debugfs = debugfs_create_dir(dev_name(dev), NULL);
++	debugfs_create_file("vdm", 0400, u->debugfs, u, &max77705_usbc_vdm_fops);
++
+ 	return 0;
+ 
+ err_put_role:
+-- 
+2.56.0
+

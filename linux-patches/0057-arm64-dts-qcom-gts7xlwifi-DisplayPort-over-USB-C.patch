@@ -1,0 +1,156 @@
+From c49de34fd53c138e4020361e584ac9c7822c9d1a Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sat, 7 Nov 2026 19:54:12 +0100
+Subject: [PATCH 57/57] arm64: dts: qcom: gts7xlwifi: DisplayPort over USB-C
+
+i2c14 (gpio40/41, the reservation was not real) with the PS5169
+redriver between the QMP PHY and the connector, gpio-sbu-mux for the
+AUX switch (gpio10 enable, gpio47 side), L18A for the QMP at the 912 mV
+Samsung's DT asks for, and mdss_dp on two lanes.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 116 +++++++++++++++++-
+ 1 file changed, 115 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index c03f7f306..46230d31a 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -906,6 +906,22 @@ max77705_typec_hs: endpoint {
+ 					};
+ 				};
+ 
++				port@1 {
++					reg = <1>;
++
++					max77705_typec_ss: endpoint {
++						remote-endpoint = <&redriver_con_ss>;
++					};
++				};
++
++				port@2 {
++					reg = <2>;
++
++					max77705_typec_sbu: endpoint {
++						remote-endpoint = <&dp_aux_switch_in>;
++					};
++				};
++
+ 			};
+ 		};
+ 	};
+@@ -1125,7 +1141,7 @@ keyboard@2a {
+ 
+ &tlmm {
+ 	/* gpio43 is the pogo connection detect line on this board */
+-	gpio-reserved-ranges = <20 4>, <40 2>;
++	gpio-reserved-ranges = <20 4>;
+ 
+ 	panel_default: panel-default-state {
+ 		te-pins {
+@@ -1331,3 +1347,101 @@ &usb_1_dwc3 {
+ &usb_1_dwc3_hs_out {
+ 	remote-endpoint = <&max77705_typec_hs>;
+ };
++
++/ {
++	/* DP AUX to the plug: gpio10 enables (active low), gpio47 picks CC2 */
++	dp-aux-switch {
++		compatible = "gpio-sbu-mux";
++		enable-gpios = <&tlmm 10 GPIO_ACTIVE_LOW>;
++		select-gpios = <&tlmm 47 GPIO_ACTIVE_HIGH>;
++		pinctrl-0 = <&dp_aux_switch_default>;
++		pinctrl-names = "default";
++		mode-switch;
++		orientation-switch;
++
++		port {
++			dp_aux_switch_in: endpoint {
++				remote-endpoint = <&max77705_typec_sbu>;
++			};
++		};
++	};
++};
++
++&i2c14 {
++	clock-frequency = <100000>;
++	status = "okay";
++
++	redriver@28 {
++		compatible = "parade,ps5169";
++		reg = <0x28>;
++		mode-switch;
++		orientation-switch;
++
++		ports {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			port@0 {
++				reg = <0>;
++
++				redriver_con_ss: endpoint {
++					remote-endpoint = <&max77705_typec_ss>;
++				};
++			};
++
++			port@1 {
++				reg = <1>;
++
++				redriver_phy_ss: endpoint {
++					remote-endpoint = <&usb_1_qmpphy_out>;
++				};
++			};
++		};
++	};
++};
++
++&tlmm {
++	dp_aux_switch_default: dp-aux-switch-default-state {
++		pins = "gpio10", "gpio47";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++		output-high;
++	};
++};
++
++&apps_rsc {
++	regulators-0 {
++		/* Samsung DT: usb_qmp_dp_phy qcom,vdd-voltage-level 912000 */
++		vreg_l18a_0p91: ldo18 {
++			regulator-name = "vreg_l18a_0p91";
++			regulator-min-microvolt = <912000>;
++			regulator-max-microvolt = <912000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++		};
++	};
++};
++
++&usb_1_qmpphy {
++	vdda-phy-supply = <&vreg_l18a_0p91>;
++	vdda-pll-supply = <&vreg_l9a_1p2>;
++	mode-switch;
++	status = "okay";
++};
++
++&usb_1_qmpphy_out {
++	remote-endpoint = <&redriver_phy_ss>;
++};
++
++&usb_1_qmpphy_dp_in {
++	remote-endpoint = <&mdss_dp_out>;
++};
++
++&mdss_dp {
++	status = "okay";
++};
++
++&mdss_dp_out {
++	data-lanes = <0 1>;
++	remote-endpoint = <&usb_1_qmpphy_dp_in>;
++};
+-- 
+2.56.0
+

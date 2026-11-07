@@ -1,0 +1,71 @@
+From 180979a6ee8d89d3e86cdea02e2f66122c827514 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sat, 7 Nov 2026 20:06:25 +0100
+Subject: [PATCH 58/59] arm64: dts: qcom: gts7xlwifi: DisplayPort audio
+
+MultiMedia3 (a third q6asm DAI) plays to DISPLAY_PORT_RX with msm DP as
+the codec.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 30 +++++++++++++++++++
+ 1 file changed, 30 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 46230d31a..eeb87364e 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -307,6 +307,14 @@ cpu {
+ 		};
+ 	};
+ 
++	mm3-dai-link {
++		link-name = "MultiMedia3";
++
++		cpu {
++			sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA3>;
++		};
++	};
++
+ 	mic-dai-link {
+ 		link-name = "Mic";
+ 
+@@ -339,6 +347,22 @@ codec {
+ 				    <&cs35l41_rl 0>, <&cs35l41_rr 0>;
+ 		};
+ 	};
++
++	dp-dai-link {
++		link-name = "DisplayPort Playback";
++
++		cpu {
++			sound-dai = <&q6afedai DISPLAY_PORT_RX>;
++		};
++
++		platform {
++			sound-dai = <&q6routing>;
++		};
++
++		codec {
++			sound-dai = <&mdss_dp>;
++		};
++	};
+ };
+ 
+ /* Sub mic: DMIC3 through DEC0. The main mic, DMIC1, reads zero so far */
+@@ -542,6 +566,12 @@ dai@1 {
+ 		reg = <1>;
+ 		direction = <Q6ASM_DAI_TX>;
+ 	};
++
++	/* MultiMedia3: DisplayPort playback */
++	dai@2 {
++		reg = <2>;
++		direction = <Q6ASM_DAI_RX>;
++	};
+ };
+ 
+ &q6afedai {
+-- 
+2.56.0
+

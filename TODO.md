@@ -103,7 +103,11 @@ See the status tables in `README.md`.
 - [ ] USB-C: CCIC sends no detach interrupt while sourcing; covered by the VBUS guard, cause unknown
 - [ ] USB-C: charger input limit reads a sawtooth while the boost runs
 - [ ] USB-C: tray app (`org.gts7xl.usbmode`) check in Plasma; manual role swap (op 0x37) not done
-- [ ] DP alt mode / HDMI: first frame and 4K60 by hand (2026-11-07); kernel state machine, PS5169 driver, sbu mux, flipped plug, USB3 on pin D, pin C
+- [x] DP alt mode / HDMI: automatic, both orientations, 4K60, audio (0055-0059, 2026-11-07)
+- [ ] DP: tablet as power source (hub without charger): firmware never discovers, Discover Identity jams the mailbox
+- [ ] DP: hub sometimes needs a power cycle after a tablet-side replug (phone recovers on the same hub)
+- [ ] USB 3 on pin D: dwc3 built in, QMP a module, so dwc3 times out on deferred probe
+- [ ] DP pin C (4 lanes): AUX fails after the QMP switches to DP-only
 - [ ] Suspend: wakes, but the screen stays black until reboot on the firmware framebuffer; targets masked on Arch
 - [ ] Retest GPU zap without the dynamic buffer hack, now that the memory map is right
 

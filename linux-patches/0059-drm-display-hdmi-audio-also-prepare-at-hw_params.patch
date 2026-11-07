@@ -1,0 +1,37 @@
+From e6c7eeb4c8b8f1a33b00049577422dd3aa49117f Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sat, 7 Nov 2026 20:06:25 +0100
+Subject: [PATCH 59/59] drm/display: hdmi-audio: also prepare at hw_params
+
+ASoC prepares CPU DAIs before codecs. On sm8250 the qdsp6 AFE
+DisplayPort port is started in its prepare, before msm DP has enabled
+its audio engine in the codec's prepare, and the port never starts
+(AFE enable times out; afterwards the DSP reports EALREADY until
+reboot). Running the connector's prepare at hw_params too enables the
+engine first. The prepare is idempotent for msm DP.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/display/drm_hdmi_audio_helper.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/drivers/gpu/drm/display/drm_hdmi_audio_helper.c b/drivers/gpu/drm/display/drm_hdmi_audio_helper.c
+index 7d78b02c1..9a5bbc220 100644
+--- a/drivers/gpu/drm/display/drm_hdmi_audio_helper.c
++++ b/drivers/gpu/drm/display/drm_hdmi_audio_helper.c
+@@ -130,6 +130,12 @@ EXPORT_SYMBOL(drm_connector_hdmi_audio_plugged_notify);
+ 
+ static const struct hdmi_codec_ops drm_connector_hdmi_audio_ops = {
+ 	.audio_startup = drm_connector_hdmi_audio_startup,
++	/*
++	 * Also at hw_params: ASoC prepares CPU DAIs before codecs, and a
++	 * qdsp6 AFE DisplayPort port started before msm DP enables its audio
++	 * engine never starts (sm8250).
++	 */
++	.hw_params = drm_connector_hdmi_audio_prepare,
+ 	.prepare = drm_connector_hdmi_audio_prepare,
+ 	.audio_shutdown = drm_connector_hdmi_audio_shutdown,
+ 	.mute_stream = drm_connector_hdmi_audio_mute_stream,
+-- 
+2.56.0
+
