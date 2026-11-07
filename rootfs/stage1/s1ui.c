@@ -261,31 +261,110 @@ static void open_touch(void)
 	}
 }
 
-/* Wait for a finger to lift. Returns 1 with screen coordinates, 0 on timeout */
-static int wait_tap(int *sx, int *sy, int timeout_ms)
+/* A finger lifted since the last call: 1 with screen coordinates */
+static int read_tap(int *sx, int *sy)
 {
 	static int rx, ry;
 	struct input_event e;
+
+	while (read(touch_fd, &e, sizeof(e)) == sizeof(e)) {
+		if (e.type == EV_ABS && e.code == ABS_MT_POSITION_X)
+			rx = e.value;
+		else if (e.type == EV_ABS && e.code == ABS_MT_POSITION_Y)
+			ry = e.value;
+		else if (e.type == EV_KEY && e.code == BTN_TOUCH && !e.value) {
+			*sx = (long)(rx - ax_min) * fbw / (ax_max - ax_min + 1);
+			*sy = (long)(ry - ay_min) * fbh / (ay_max - ay_min + 1);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+/* Wait for a finger to lift. Returns 1 with screen coordinates, 0 on timeout */
+static int wait_tap(int *sx, int *sy, int timeout_ms)
+{
 	int waited = 0;
 
 	present();
 	for (;;) {
-		while (read(touch_fd, &e, sizeof(e)) == sizeof(e)) {
-			if (e.type == EV_ABS && e.code == ABS_MT_POSITION_X)
-				rx = e.value;
-			else if (e.type == EV_ABS && e.code == ABS_MT_POSITION_Y)
-				ry = e.value;
-			else if (e.type == EV_KEY && e.code == BTN_TOUCH && !e.value) {
-				*sx = (long)(rx - ax_min) * fbw / (ax_max - ax_min + 1);
-				*sy = (long)(ry - ay_min) * fbh / (ay_max - ay_min + 1);
-				return 1;
-			}
-		}
+		if (read_tap(sx, sy))
+			return 1;
 		flush_frame();
 		usleep(30000);
 		waited += 30;
 		if (timeout_ms && waited >= timeout_ms)
 			return 0;
+	}
+}
+
+/* Hardware keyboards (pogo cover, USB), rescanned while typing so a late plug works */
+#define MAXKBD 4
+static int kbd_fd[MAXKBD], nkbd, kbd_shift;
+
+static void open_keyboards(void)
+{
+	for (int i = 0; i < nkbd; i++)
+		close(kbd_fd[i]);
+	nkbd = 0;
+	for (int i = 0; i < 32 && nkbd < MAXKBD; i++) {
+		char p[40];
+		unsigned char keys[KEY_MAX / 8 + 1] = { 0 };
+		snprintf(p, sizeof(p), "/dev/input/event%d", i);
+		int fd = open(p, O_RDONLY | O_NONBLOCK | O_CLOEXEC);
+		if (fd < 0)
+			continue;
+		if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keys)), keys) >= 0 &&
+		    (keys[KEY_A / 8] & (1 << (KEY_A % 8))) && (keys[KEY_ENTER / 8] & (1 << (KEY_ENTER % 8))))
+			kbd_fd[nkbd++] = fd;
+		else
+			close(fd);
+	}
+}
+
+/* US layout, indexed by key code; second string is with shift */
+static const char *const keymap[2] = {
+	"\0\0331234567890-=\b\tqwertyuiop[]\n\0asdfghjkl;'`\0\\zxcvbnm,./\0*\0 ",
+	"\0\033!@#$%^&*()_+\b\tQWERTYUIOP{}\n\0ASDFGHJKL:\"~\0|ZXCVBNM<>?\0*\0 ",
+};
+
+/* A character typed on a hardware keyboard, or 0 */
+static int read_key(void)
+{
+	struct input_event e;
+
+	for (int i = 0; i < nkbd; i++) {
+		while (read(kbd_fd[i], &e, sizeof(e)) == sizeof(e)) {
+			if (e.type != EV_KEY)
+				continue;
+			if (e.code == KEY_LEFTSHIFT || e.code == KEY_RIGHTSHIFT) {
+				kbd_shift = !!e.value;
+				continue;
+			}
+			if (!e.value || e.code > KEY_SPACE)
+				continue;
+			int c = (unsigned char)keymap[kbd_shift][e.code];
+			if (c)
+				return c;
+		}
+	}
+	return 0;
+}
+
+/* Wait for a tap (returns 1) or a typed character (returns 2, in *key) */
+static int wait_input(int *sx, int *sy, int *key)
+{
+	present();
+	open_keyboards();
+	for (int n = 0;; n++) {
+		if ((*key = read_key()))
+			return 2;
+		if (read_tap(sx, sy))
+			return 1;
+		flush_frame();
+		usleep(30000);
+		if (n % 33 == 32)
+			open_keyboards();
 	}
 }
 
@@ -496,8 +575,14 @@ static int keyboard(const char *title, const char *ok, int show, char *out, int 
 		button(&bback, "Delete", WARN);
 		button(&bshow, show ? "Hide" : "Show", BTN);
 
-		int x, y;
-		wait_tap(&x, &y, 0);
+		int x, y, key;
+		if (wait_input(&x, &y, &key) == 2) {
+			if (key == '\n') return 1;
+			if (key == 033) return 0;
+			if (key == '\b') { if (len) out[--len] = 0; }
+			else if (key >= ' ' && len < max - 1) { out[len++] = key; out[len] = 0; }
+			continue;
+		}
 		if (hit(&bok, x, y)) return 1;
 		if (hit(&bcancel, x, y)) return 0;
 		if (hit(&bshift, x, y)) { shift = !shift; continue; }
