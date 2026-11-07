@@ -16,8 +16,8 @@ BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez
 GNOME="gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome adwaita-fonts"
 case "$DESKTOP" in
 gnome) PKGS="$GNOME"; DM=gdm ;;
-kde) PKGS="plasma-desktop plasma-nm plasma-pa kscreen konsole dolphin sddm"; DM=sddm ;;
-kde-mobile) PKGS="plasma-mobile plasma-keyboard plasma-nm plasma-pa konsole dolphin sddm"; DM=sddm ;;
+kde) PKGS="plasma-desktop plasma-nm plasma-pa bluedevil kscreen konsole dolphin sddm"; DM=sddm ;;
+kde-mobile) PKGS="plasma-mobile plasma-keyboard plasma-nm plasma-pa bluedevil konsole dolphin sddm"; DM=sddm ;;
 phosh) PKGS="phosh phoc squeekboard gdm gnome-control-center gnome-console nautilus gnome-keyring adwaita-fonts"; DM=gdm ;;
 *) echo "unknown desktop $DESKTOP"; exit 1 ;;
 esac
