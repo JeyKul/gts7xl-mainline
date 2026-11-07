@@ -17,7 +17,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | SoC: Snapdragon 865 (SM8250), CPU cores | ✅ | No CPU frequency work confirmed |
 | RAM | ✅ | Reserved memory follows the stock map |
 | Storage: UFS | ✅ | Booting and running from `userdata` |
-| microSD slot | ⬜ | |
+| microSD slot | ✅ | UHS-I SDR104 (sdhc_2, card detect on gpio77) |
 | Suspend | 🟡 | s2idle with the native display: power key and timer wake work; battery drain not measured |
 | Thermal sensors and throttling | 🟡 | SoC, battery and charger sensors read; third thermistor reads high; throttling not checked |
 | Real-time clock | 🟡 | Driver loaded, runs from 1970; time still set over Wi-Fi |

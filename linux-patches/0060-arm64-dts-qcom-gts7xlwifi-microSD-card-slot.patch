@@ -1,0 +1,96 @@
+From a12dc1a2eb2e52771e77d95e68ff26e16cf9c280 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sat, 7 Nov 2026 20:11:51 +0100
+Subject: [PATCH] arm64: dts: qcom: gts7xlwifi: microSD card slot
+
+sdhc_2 as on the Samsung DT: L9C 2.95-2.96 V for the card, L6C 1.8-2.96 V
+for I/O, card detect on gpio77 (active low, no pull), Samsung's drive
+strengths. A card comes up at UHS-I SDR104.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 57 +++++++++++++++++++
+ 1 file changed, 57 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index eeb87364e..4ecb28b18 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -661,6 +661,22 @@ regulators-1 {
+ 		qcom,pmic-id = "c";
+ 
+ 		/* Stock pm8150a_l8: the sensor rail, which Samsung's SSC driver switches on */
++		/* SD card I/O; Samsung DT: qcom,vdd-io-voltage-level 1800000 2960000 */
++		vreg_l6c_2p96: ldo6 {
++			regulator-name = "vreg_l6c_2p96";
++			regulator-min-microvolt = <1800000>;
++			regulator-max-microvolt = <2960000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++		};
++
++		/* SD card; Samsung DT: qcom,vdd-voltage-level 2950000 2960000 */
++		vreg_l9c_2p96: ldo9 {
++			regulator-name = "vreg_l9c_2p96";
++			regulator-min-microvolt = <2950000>;
++			regulator-max-microvolt = <2960000>;
++			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
++		};
++
+ 		vreg_l8c_1p8: ldo8 {
+ 			regulator-name = "vreg_l8c_1p8";
+ 			regulator-min-microvolt = <1800000>;
+@@ -1169,10 +1185,51 @@ keyboard@2a {
+ 	};
+ };
+ 
++&sdhc_2 {
++	pinctrl-0 = <&sdc2_default_state &sdc2_card_det_n>;
++	pinctrl-1 = <&sdc2_sleep_state &sdc2_card_det_n>;
++	pinctrl-names = "default", "sleep";
++	vmmc-supply = <&vreg_l9c_2p96>;
++	vqmmc-supply = <&vreg_l6c_2p96>;
++	cd-gpios = <&tlmm 77 GPIO_ACTIVE_LOW>;
++	bus-width = <4>;
++	no-sdio;
++	no-mmc;
++	status = "okay";
++};
++
+ &tlmm {
+ 	/* gpio43 is the pogo connection detect line on this board */
+ 	gpio-reserved-ranges = <20 4>;
+ 
++	/* Drive strengths and pulls from the Samsung DT (sdc2_*_on, storage_cd) */
++	sdc2_default_state: sdc2-default-state {
++		clk-pins {
++			pins = "sdc2_clk";
++			drive-strength = <12>;
++			bias-disable;
++		};
++
++		cmd-pins {
++			pins = "sdc2_cmd";
++			drive-strength = <8>;
++			bias-pull-up;
++		};
++
++		data-pins {
++			pins = "sdc2_data";
++			drive-strength = <8>;
++			bias-pull-up;
++		};
++	};
++
++	sdc2_card_det_n: sd-card-det-n-state {
++		pins = "gpio77";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	panel_default: panel-default-state {
+ 		te-pins {
+ 			pins = "gpio66";
+-- 
+2.56.0
+
