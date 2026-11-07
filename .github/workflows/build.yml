@@ -9,19 +9,39 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-arm
+    # Self-hosted x86_64 server (label gts7xl), cross-compiling for arm64
+    runs-on: [self-hosted, gts7xl]
+    container: ubuntu:24.04
     timeout-minutes: 120
     env:
       # Empty on purpose: otherwise the kernel release gets a + suffix
       LOCALVERSION: ""
+      ARCH: arm64
+      CROSS_COMPILE: aarch64-linux-gnu-
+      CC: aarch64-linux-gnu-gcc
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Install tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential bc bison flex libssl-dev libelf-dev \
-            device-tree-compiler busybox-static cpio kmod
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential bc bison flex libssl-dev \
+            libelf-dev device-tree-compiler cpio kmod git curl python3 gh ca-certificates \
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross
+          # The initramfs runs on the tablet: take an arm64 static busybox
+          cat > /etc/apt/sources.list.d/arm64.sources <<'SRC'
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: noble noble-updates
+          Components: main universe
+          Architectures: arm64
+          SRC
+          sed -i 's/^Types: deb$/Types: deb\nArchitectures: amd64/' /etc/apt/sources.list.d/ubuntu.sources
+          dpkg --add-architecture arm64
+          apt-get update
+          (cd /tmp && apt-get download busybox-static:arm64 && dpkg-deb -x busybox-static_*_arm64.deb bb)
+          install -m755 /tmp/bb/bin/busybox /usr/local/lib/busybox-arm64
           # Ubuntu's mkbootimg package is missing its gki module
           git clone --depth 1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg-src
 
@@ -39,9 +59,9 @@ jobs:
           I="$PWD/initramfs-root"
           mkdir -p "$I"/bin "$I"/dev "$I"/proc "$I"/sys "$I"/tmp "$I"/mnt
           install -m755 initramfs/init "$I"/init
-          install -m755 /bin/busybox "$I"/bin/busybox
-          gcc -static -O2 -o "$I"/bin/usbroute tools/usbroute.c
-          gcc -static -O2 -o "$I"/bin/reboot-recovery tools/rr.c
+          install -m755 /usr/local/lib/busybox-arm64 "$I"/bin/busybox
+          "$CC" -static -O2 -o "$I"/bin/usbroute tools/usbroute.c
+          "$CC" -static -O2 -o "$I"/bin/reboot-recovery tools/rr.c
           echo "INITRAMFS=$I" >> "$GITHUB_ENV"
 
       - name: Configure and build
@@ -58,7 +78,7 @@ jobs:
           # Optional modules become pacman packages instead of part of the system
           python3 ../tools/module-repo.py ../modroot ../module-repo "$GITHUB_RUN_ID"
           tar -C ../modroot -czf ../modules.tar.gz lib
-          ../rootfs/stage1/assemble.sh build "$INITRAMFS"
+          ../rootfs/stage1/assemble.sh build "$INITRAMFS" aarch64-linux-gnu-strip
           # The boot image only accepts the installer built with it
           ../rootfs/stage2/build.sh "$INITRAMFS/s1/s1ui" ../modules.tar.gz ../stage2.tar.gz
           TAG="installer-${GITHUB_RUN_ID}"
@@ -110,8 +130,14 @@ jobs:
 
   image:
     needs: build
-    runs-on: ubuntu-24.04-arm
+    # arm64 chroot through the host's qemu-user-static binfmt (F flag)
+    runs-on: [self-hosted, gts7xl]
+    container:
+      image: ubuntu:24.04
+      options: --privileged
     timeout-minutes: 120
+    env:
+      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
 
@@ -122,15 +148,15 @@ jobs:
 
       - name: Install tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libarchive-tools lz4 zip
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y libarchive-tools lz4 zip curl gh \
+            python3 ca-certificates xz-utils
 
       - name: Build the root filesystem
         run: |
           curl -fsSLO http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
-          sudo rootfs/arch-install.sh ArchLinuxARM-aarch64-latest.tar.gz \
+          rootfs/arch-install.sh ArchLinuxARM-aarch64-latest.tar.gz \
             artifact/modules-7.3.0-gts7xl.tar.gz "$PWD/rootfs.tar.gz"
-          sudo chown "$(id -u):$(id -g)" rootfs.tar.gz
 
       - name: Package for TWRP and Odin
         run: rootfs/package.sh artifact/boot.img rootfs.tar.gz out
