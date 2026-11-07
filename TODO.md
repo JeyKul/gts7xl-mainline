@@ -103,7 +103,7 @@ See the status tables in `README.md`.
 - [ ] USB-C: CCIC sends no detach interrupt while sourcing; covered by the VBUS guard, cause unknown
 - [ ] USB-C: charger input limit reads a sawtooth while the boost runs
 - [ ] USB-C: tray app (`org.gts7xl.usbmode`) check in Plasma; manual role swap (op 0x37) not done
-- [ ] DP alt mode / HDMI
+- [ ] DP alt mode / HDMI: first frame and 4K60 by hand (2026-11-07); kernel state machine, PS5169 driver, sbu mux, flipped plug, USB3 on pin D, pin C
 - [ ] Suspend: wakes, but the screen stays black until reboot on the firmware framebuffer; targets masked on Arch
 - [ ] Retest GPU zap without the dynamic buffer hack, now that the memory map is right
 

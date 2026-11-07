@@ -232,3 +232,36 @@ Other things seen:
 - Passed: boot attach and hot attach with hub + charger (host + sink, 9 V), hub without charger (tablet sources, ~600 mA from the battery, stable), digital USB-C headset, PC (gadget, SSH over USB), detach in each case.
 - `gts7xl-charge-control` no longer touches the mailbox when the driver is present; the initramfs USB retry loop stops once the port exists.
 - Next: DP alt mode, starting with the gpio40/41 / i2c14 / PS5169 test.
+
+## Results on the tablet (2026-11-07, evening): first HDMI frame
+
+DP alt mode works through a USB-C hub (Realtek DP bridge, VID 0x0bda, HDMI port 1; its HDMI port 2 shows nothing) to a 4K TV. Link HBR2 x2 (pin D), 3840x2160@60 at 18 bpp, smooth KWin desktop. Done by hand first, then moved into the kernel (in progress, below).
+
+Findings, in order:
+
+1. **gpio40/41 are not secured.** A read of their TLMM config through `/dev/mem` (south tile, 0x0f500000 + 0x1000 * gpio) did not reset the tablet. The `<40 2>` reservation was inherited and can go. Both lines idle high (board pull-ups).
+2. **PS5169 at i2c-14 0x28.** Chip ID 0xAD/0xAC = 0x69 0x87, rev 0xAF/0xAE = 0x01 0x0b. Unconfigured it reads 0x40 = 0x40, 0x52 = 0x10.
+3. **As power sink and data host the CCIC firmware does not discover by itself.** It waits for the AP to send Discover Identity (stock `max77705_alternate.c:1198-1203`). After that it runs Discover SVIDs and Modes itself, and sends DP Status itself after Enter Mode. The AP sends Enter Mode and DP Configure.
+4. **Mailbox payloads** (opcode 0x48 SET_VDM_REQ; first byte is `VDO count | ACK expected << 3`, then the VDM header, then VDOs, little endian):
+   - Discover Identity: `09 01 80 00 ff`
+   - Enter Mode (SVID 0xff01, position 1): `09 04 81 01 ff`
+   - DP Configure, UFP_U as UFP_D, DP v1.3 signalling, pin D: `0a 11 81 01 ff 06 08 00 00` (pin C: `... 06 04 00 00`)
+5. **Replies** come from opcode 0x4B GET_VDM_RESP with one sub-id byte: 0x01 ID, 0x02 SVIDs, 0x03 Modes, 0x04 Enter, 0x05 Exit, 0x06 Attention, 0x10 DP Status, 0x11 DP Configure. Layout: `[sub] [status 0x8f] [msg id] [VDM header, 4] [VDOs, 4 each]`. Command type is header bits 7:6 (1 = ACK). Seen from the hub: ID header VDO 0x6ce00bda, SVID 0xff01, mode VDO 0x00000c05 (UFP_D, plug, pins C and D), DP Status 0x0000001a (UFP_D connected, enabled, multi-function preferred), Attention after Configure 0x0000009a (HPD high).
+6. **Interrupts** for this flow: VDM_INT bit 0 ID, 1 SVIDs, 2 Modes, 3 Enter; PD_INT bit 2 DP Status, 3 DP Configure, 4 Attention. Stock unmasks VDM_INT_M = 0xf0 and PD_INT_M = 0x00 once alt mode starts. The fourth byte of the bulk interrupt read is VDM_INT.
+7. **Orientation** for the PS5169: CCPinStat in CC_STATUS0 [7:6] (1 = CC1) agrees with gpio65 (0 = CC1). Stock: `is_front = !gpio65`.
+8. **PS5169 programming** (stock `drivers/redriver/ps5169.c`): pulse 0x9d = 0x80, 10 ms, 0x9d = 0x00, then the WORK_MODE list (ends with this tablet's 0x52 = 0x30, 0x5e = 0x06). Mode in 0x40: USB3 0xc0, DP 4 lanes 0xa0, DP 2 lanes + USB3 0xe0, clear 0x80; +0x10 for CC2. With DP: 0xa0 = 0x00, 0xa1 = 0x04; otherwise 0xa0 = 0x02, 0xa1 = 0x00.
+9. **AUX path**: the PS5169 does not switch AUX. gpio47 selects the side (0 = CC1, 1 = CC2) and gpio10 enables it (active low). Mainline's `gpio-sbu-mux` matches this exactly.
+10. **QMP and DP**: `usb_1_qmpphy` needs L18A. Samsung's DT asks 912000 µV for this PHY (`qcom,vdd-voltage-level`), so L18A is 912000 fixed. `mdss_dp_out` data-lanes `<0 1>` to `usb_1_qmpphy_dp_in`, and the QMP `port@0` to the connector `port@1`. msm DP leaves idle only on a bridge HPD notify, so the Type-C driver registers an aux-hpd bridge on the connector node. EDID reads over AUX with only that.
+
+Manual bring-up, kept for debugging: `research/dp-up.sh` and `research/dp-test-dt.patch` in the work tree (not in this repo).
+
+### Kernel work (in progress)
+
+- `max77705_usbc`: VDM state machine on the interrupts above (sink + DFP sends Discover Identity once PSRDY is set; Modes -> Enter; DP Status -> pick pin D when multi-function is preferred, else C; Configure ACK -> `typec_mux_set`; Attention -> HPD). Detach drops HPD, then sets the muxes safe. Only fixed payloads are allowlisted. Debugfs `0-0025/vdm` dumps the firmware's VDM replies.
+- New `ps5169` driver (`drivers/usb/typec/mux/ps5169.c`): typec switch + mux + DRM aux bridge, forwards to the QMP. Modelled on `nb7vpq904m`.
+- Board DT: PS5169 between QMP and the connector SS port, `gpio-sbu-mux` on the connector SBU port, QMP `mode-switch`.
+- Open: plug flipped (CC2) untested, so it is unknown whether the QMP must also flip or only the PS5169. USB3 on pin D needs dwc3 back on the QMP. Pin C (4 lanes) untested. The source case (hub without charger) relies on firmware discovery.
+
+### For other MAX77705 devices
+
+The Galaxy Tab S8+ port (aaronsb/sm-x800-linux), whose `max77705-usbc` driver this one started from, uses the same CCIC. Findings 3 to 6 should apply there unchanged: without the AP's Discover Identity as sink + DFP, alt mode never starts.
