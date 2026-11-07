@@ -35,7 +35,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | S Pen Bluetooth remote | 🟡 | S Pen Pro button and air gestures work through `gts7xl-spen`, `Pen Actions` app to change them; built-in S Pen untested |
 | Fingerprint reader (under display) | ❌ | Goodix GW9558 on SPI owned by TrustZone (gpio20-23; touching them resets the SoC). Only Samsung's trusted app can reach it |
 | Pogo keyboard | ✅ | Recovers by itself after trackpad use; tablet mode switch on detach, see [docs/keyboard-cover.md](docs/keyboard-cover.md) |
-| Pogo trackpad | 🟡 | Usable, short stalls; much better with the sensor DSP running. Lid-angle link still missing |
+| Pogo trackpad | ✅ | Works without stalls as of 2026-11-07 (first seen after the PMIC interrupt pin fix, 0051; cause not confirmed) |
 
 ### Graphics and DSPs
 
