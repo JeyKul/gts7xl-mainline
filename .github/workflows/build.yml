@@ -11,7 +11,10 @@ jobs:
   build:
     # Self-hosted x86_64 server (label gts7xl), cross-compiling for arm64
     runs-on: [self-hosted, gts7xl]
-    container: ubuntu:24.04
+    # /cache lives on the server and survives runs: apt packages, kernel source, ccache
+    container:
+      image: ubuntu:24.04
+      options: -v /home/jey/ci-cache:/cache
     timeout-minutes: 120
     env:
       # Empty on purpose: otherwise the kernel release gets a + suffix
@@ -20,13 +23,18 @@ jobs:
       CROSS_COMPILE: aarch64-linux-gnu-
       CC: aarch64-linux-gnu-gcc
       GH_REPO: ${{ github.repository }}
+      CCACHE_DIR: /cache/ccache
+      CCACHE_MAXSIZE: 10G
     steps:
       - uses: actions/checkout@v4
 
       - name: Install tools
         run: |
+          rm -f /etc/apt/apt.conf.d/docker-clean
+          mkdir -p /cache/apt/partial
+          echo 'Dir::Cache::archives "/cache/apt";' > /etc/apt/apt.conf.d/90cache
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y build-essential bc bison flex libssl-dev \
+          DEBIAN_FRONTEND=noninteractive apt-get install -y ccache build-essential bc bison flex libssl-dev \
             libelf-dev device-tree-compiler cpio kmod git curl python3 gh ca-certificates \
             gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross
           # The initramfs runs on the tablet: take an arm64 static busybox
@@ -44,11 +52,16 @@ jobs:
           install -m755 "$(ls /tmp/bb/usr/bin/busybox /tmp/bb/bin/busybox 2>/dev/null | head -1)" /usr/local/lib/busybox-arm64
           # Ubuntu's mkbootimg package is missing its gki module
           git clone --depth 1 https://android.googlesource.com/platform/system/tools/mkbootimg mkbootimg-src
+          # Compilers through ccache: unchanged files come from /cache/ccache
+          update-ccache-symlinks
+          echo /usr/lib/ccache >> "$GITHUB_PATH"
 
       - name: Fetch Linux v7.3 and apply patches
         run: |
-          git clone --depth 1 --branch v7.3 \
-            https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git linux
+          # One download of the tag, kept on the server
+          [ -d /cache/linux-v7.3.git ] || git clone --bare --depth 1 --branch v7.3 \
+            https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git /cache/linux-v7.3.git
+          git clone --branch v7.3 /cache/linux-v7.3.git linux
           cd linux
           git config user.name ci
           git config user.email ci@example.invalid
@@ -75,6 +88,7 @@ jobs:
           # modules_install needs the full kernel; the second Image step only adds the installer
           make -s O=build -j"$(nproc)" Image modules qcom/sm8250-samsung-gts7xlwifi.dtb
           make -s O=build INSTALL_MOD_PATH="$PWD/../modroot" INSTALL_MOD_STRIP=1 modules_install
+          ccache -s | grep -iE 'hits|misses' || true
           # Optional modules become pacman packages instead of part of the system
           python3 ../tools/module-repo.py ../modroot ../module-repo "$GITHUB_RUN_ID"
           tar -C ../modroot -czf ../modules.tar.gz lib
@@ -134,7 +148,7 @@ jobs:
     runs-on: [self-hosted, gts7xl]
     container:
       image: ubuntu:24.04
-      options: --privileged
+      options: --privileged -v /home/jey/ci-cache:/cache
     timeout-minutes: 120
     env:
       GH_REPO: ${{ github.repository }}
@@ -148,14 +162,22 @@ jobs:
 
       - name: Install tools
         run: |
+          rm -f /etc/apt/apt.conf.d/docker-clean
+          mkdir -p /cache/apt/partial
+          echo 'Dir::Cache::archives "/cache/apt";' > /etc/apt/apt.conf.d/90cache
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y libarchive-tools lz4 zip curl gh \
             python3 ca-certificates xz-utils
 
       - name: Build the root filesystem
         run: |
-          curl -fsSLO http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
-          rootfs/arch-install.sh ArchLinuxARM-aarch64-latest.tar.gz \
+          # Downloaded again only when the server's copy is newer
+          T=/cache/alarm/ArchLinuxARM-aarch64-latest.tar.gz
+          mkdir -p /cache/alarm
+          if [ -f "$T" ]; then curl -fsSL -z "$T" -o "$T.new" http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz
+          else curl -fsSL -o "$T.new" http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz; fi
+          [ -s "$T.new" ] && mv "$T.new" "$T"; rm -f "$T.new"
+          PKG_CACHE=/cache/pacman rootfs/arch-install.sh "$T" \
             artifact/modules-7.3.0-gts7xl.tar.gz "$PWD/rootfs.tar.gz"
 
       - name: Package for TWRP and Odin
