@@ -1,7 +1,7 @@
-From af302392afb041b8e4052ac5f1321a9aac7a59d5 Mon Sep 17 00:00:00 2001
+From 76ff70adad62d7819fe216a1cd271e761f33b7f9 Mon Sep 17 00:00:00 2001
 From: Claudius <claudiusthebot@gmail.com>
 Date: Sun, 8 Nov 2026 01:53:49 +0000
-Subject: [PATCH] iio: imu: add ssc-motion-bridge, gyro, magnetometer and
+Subject: [PATCH 72/73] iio: imu: add ssc-motion-bridge, gyro, magnetometer and
  compass fed from userspace
 
 The Tab S7+ gyroscope (LSM6DSO) and magnetometer (AK0991x) sit behind
@@ -375,5 +375,5 @@ index 000000000..f111ff965
 +MODULE_DESCRIPTION("Gyroscope, magnetometer and compass fed in from a userspace SSC client");
 +MODULE_LICENSE("GPL");
 -- 
-2.43.0
+2.56.0
 

@@ -7,3 +7,6 @@ ExecStartPre=/usr/bin/modprobe ssc-motion-bridge
 ExecStart=/usr/local/bin/gts7xl-sensord-motion %i
 Restart=always
 RestartSec=10
+# sensord must die when its awk reader exits (buffer released); systemd ignores
+# SIGPIPE by default, which left a stale sensord and stopped the next stream
+IgnoreSIGPIPE=no
