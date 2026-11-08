@@ -1,0 +1,51 @@
+From adacc64dcd1325f7a81c6f8fc55086eac98fc7bf Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Sun, 8 Nov 2026 01:47:45 +0000
+Subject: [PATCH] arm64: dts: qcom: gts7xlwifi: allow setting the PMIC RTC
+ (optional)
+
+The PM8150 RTC counter keeps counting while the tablet is off, but it
+starts from an arbitrary value (reads 1970) and the driver refuses to
+write it without allow-set-time. Samsung's DT does not set it either;
+Android keeps its own offset on top of the counter.
+
+No SM8250 board in mainline sets allow-set-time, so whether the SPMI
+arbiter gives the apps EE write access to the RTC peripheral (0x60) on
+this tablet is untested. If it does not, spmi-pmic-arb rejects the write
+with -EPERM ("disallowed SPMI write") before it reaches the PMIC.
+
+With write access, the kernel's 11-minute mode (RTC_SYSTOHC) and
+'hwclock -w' store NTP time in the counter, and it survives reboots
+without the userspace offset. Android/TWRP would then see a different
+counter until they resync from the network.
+
+Optional: not applied by the CI build (lives in linux-patches/optional).
+---
+ .../arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index e81c8f1a4..30501a902 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -1027,6 +1027,17 @@
+ 	};
+ };
+ 
++/*
++ * The PM8150 RTC counter runs while the tablet is off. Samsung's DT keeps it
++ * read-only (Android adds an offset); allow writing it so that NTP time
++ * (kernel 11-minute mode, hwclock -w) survives a reboot. If the SPMI arbiter
++ * does not grant this EE write access, the write fails with -EPERM and
++ * nothing changes.
++ */
++&{/soc@0/spmi@c440000/pmic@0/rtc@6000} {
++	allow-set-time;
++};
++
+ &pm8150l_adc {
+ 	channel@4d {
+ 		reg = <ADC5_AMUX_THM1_100K_PU>;
+-- 
+2.43.0
+
