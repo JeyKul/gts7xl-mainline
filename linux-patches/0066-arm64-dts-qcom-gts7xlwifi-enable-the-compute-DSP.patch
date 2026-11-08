@@ -1,0 +1,32 @@
+From a17aea88737ab8dbbb90f9a2f30a2da2ce398209 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 02:24:22 +0100
+Subject: [PATCH] arm64: dts: qcom: gts7xlwifi: enable the compute DSP
+
+Its memory region already follows Samsung's map; the firmware is the
+tablet's own from apnhlos, copied by userspace.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index fb400f1f2..e81c8f1a4 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -281,6 +281,11 @@ &adsp {
+ 	status = "okay";
+ };
+ 
++&cdsp {
++	firmware-name = "qcom/sm8250/gts7xl/cdsp.mbn";
++	status = "okay";
++};
++
+ &slpi {
+ 	firmware-name = "qcom/sm8250/gts7xl/slpi.mbn";
+ 	status = "okay";
+-- 
+2.56.0
+
