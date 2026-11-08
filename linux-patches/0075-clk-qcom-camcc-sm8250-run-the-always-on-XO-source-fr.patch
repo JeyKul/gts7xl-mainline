@@ -1,0 +1,38 @@
+From cf32bbaaee221481295e0a0df119bb4d7323f79f Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 22:26:46 +0100
+Subject: [PATCH 75/78] clk: qcom: camcc-sm8250: run the always-on XO source
+ from the active-only CXO
+
+cam_cc_gdsc_clk is critical and runs from cam_cc_xo_clk_src, whose parent
+was bi_tcxo. That kept a CXO vote in RPMh's sleep set for good, so the SoC
+could never reach AOSS sleep. Use bi_tcxo_ao (already in the DT), which
+votes only while the apps subsystem is active.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/clk/qcom/camcc-sm8250.c | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/clk/qcom/camcc-sm8250.c b/drivers/clk/qcom/camcc-sm8250.c
+index 21e942367..c4c0d457c 100644
+--- a/drivers/clk/qcom/camcc-sm8250.c
++++ b/drivers/clk/qcom/camcc-sm8250.c
+@@ -385,8 +385,13 @@ static const struct parent_map cam_cc_parent_map_6[] = {
+ 	{ P_BI_TCXO, 0 },
+ };
+ 
++/*
++ * cam_cc_gdsc_clk is critical and runs from this source, so a plain bi_tcxo
++ * parent kept a CXO vote in RPMh's sleep set forever and AOSS never slept.
++ * The active-only CXO votes only while the apps subsystem is up.
++ */
+ static const struct clk_parent_data cam_cc_parent_data_6[] = {
+-	{ .fw_name = "bi_tcxo" },
++	{ .fw_name = "bi_tcxo_ao" },
+ };
+ 
+ static const struct freq_tbl ftbl_cam_cc_bps_clk_src[] = {
+-- 
+2.56.0
+
