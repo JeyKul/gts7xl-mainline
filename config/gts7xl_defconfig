@@ -90,7 +90,7 @@ CONFIG_NUMA=y
 CONFIG_XEN=y
 CONFIG_COMPAT=y
 CONFIG_RANDOMIZE_BASE=y
-CONFIG_CMDLINE="earlycon=efifb keep_bootcon console=tty0 ignore_loglevel clk_ignore_unused pd_ignore_unused arm-smmu.disable_bypass=0 panic=30"
+CONFIG_CMDLINE="earlycon=efifb keep_bootcon console=tty0 ignore_loglevel clk_ignore_unused pd_ignore_unused arm-smmu.disable_bypass=0 panic=30 firmware_class.path=/usr/lib/firmware"
 CONFIG_CMDLINE_FORCE=y
 CONFIG_HIBERNATION=y
 CONFIG_WQ_POWER_EFFICIENT_DEFAULT=y
