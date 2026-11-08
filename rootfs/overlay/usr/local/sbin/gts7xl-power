@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""Power profiles for the Tab S7+: clock caps and a skin-temperature limit.
+
+The kernel only throttles the SoC itself (CPU trips at 90/95 C, the hardware
+limiter above that). This adds what stock One UI does on top: when the back of
+the tablet gets warm, the big and prime cores and the GPU step down. The battery
+thermistor sits under the back cover and stands in for skin temperature.
+
+  gts7xl-power                 run the limiter (systemd service)
+  gts7xl-power set PROFILE     switch: powersave, balanced or performance
+                               (called by the tuned profiles, so KDE's switch works)
+"""
+import glob, os, sys, time
+
+STATE = '/run/gts7xl-power/profile'
+BATT = '/sys/class/power_supply/max170xx_battery/temp'
+GPU = glob.glob('/sys/class/devfreq/*.gpu')
+CPU = '/sys/devices/system/cpu/cpufreq/'
+BIG = ('policy4', 'policy7')      # gold and prime clusters; the little cores stay free
+
+# cap: fixed upper clock per cluster (kHz) / GPU (Hz); skin: back temperature target in C
+PROFILES = {
+    'powersave':   dict(cap={'policy4': 1670400, 'policy7': 1862400, 'gpu': 441600000}, skin=39.0),
+    'balanced':    dict(cap={}, skin=41.0),
+    # Throttle as late as possible: only past 46 C at the back. The SoC limits stay.
+    'performance': dict(cap={}, skin=46.0),
+}
+DEFAULT = 'balanced'
+MAX_LEVEL = 8          # each level takes one clock step off big and prime, every 2nd off the GPU
+INTERVAL = 2
+UP_DELAY = 10          # seconds below target before clocks come back one level
+
+
+def rd(p):
+    with open(p) as f:
+        return f.read().strip()
+
+
+def wr(p, v):
+    try:
+        with open(p, 'w') as f:
+            f.write(str(v))
+    except OSError as e:
+        print('write %s: %s' % (p, e), flush=True)
+
+
+def freqs(policy):
+    return sorted(int(x) for x in rd(CPU + policy + '/scaling_available_frequencies').split())
+
+
+def gpu_freqs():
+    return sorted(int(x) for x in rd(GPU[0] + '/available_frequencies').split()) if GPU else []
+
+
+def at_most(table, cap):
+    ok = [f for f in table if f <= cap]
+    return ok[-1] if ok else table[0]
+
+
+def profile():
+    try:
+        p = rd(STATE)
+        return p if p in PROFILES else DEFAULT
+    except OSError:
+        return DEFAULT
+
+
+def apply(prof, level):
+    cfg = PROFILES[prof]
+    for pol in BIG:
+        table = freqs(pol)
+        top = at_most(table, cfg['cap'].get(pol, table[-1]))
+        i = max(table.index(top) - level, len(table) // 2)    # never below half the steps
+        wr(CPU + pol + '/scaling_max_freq', table[i])
+    if GPU:
+        table = gpu_freqs()
+        top = at_most(table, cfg['cap'].get('gpu', table[-1]))
+        i = max(table.index(top) - level // 2, 1)
+        wr(GPU[0] + '/max_freq', table[i])
+
+
+def run():
+    level, prof, cool_since, last = 0, None, None, None
+    while True:
+        p = profile()
+        try:
+            skin = int(rd(BATT)) / 10
+        except (OSError, ValueError):
+            skin = None
+        target = PROFILES[p]['skin']
+        if skin is None:
+            level = MAX_LEVEL // 2          # no sensor: stay moderate
+        elif skin > target and level < MAX_LEVEL:
+            level += 1
+            cool_since = None
+        elif skin < target - 1.5 and level > 0:
+            cool_since = cool_since or time.monotonic()
+            if time.monotonic() - cool_since >= UP_DELAY:
+                level -= 1
+                cool_since = None
+        if (p, level) != last:
+            apply(p, level)
+            print('profile %s, skin %s C (target %.0f), throttle level %d'
+                  % (p, '%.1f' % skin if skin is not None else '?', target, level), flush=True)
+            last = (p, level)
+        time.sleep(INTERVAL)
+
+
+def main():
+    if len(sys.argv) == 3 and sys.argv[1] == 'set' and sys.argv[2] in PROFILES:
+        os.makedirs(os.path.dirname(STATE), exist_ok=True)
+        wr(STATE, sys.argv[2])
+        return 0
+    if len(sys.argv) == 1:
+        run()
+    print(__doc__)
+    return 2
+
+
+if __name__ == '__main__':
+    sys.exit(main())

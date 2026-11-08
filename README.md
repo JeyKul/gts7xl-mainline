@@ -62,6 +62,8 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Wi-Fi: QCA6390 | ✅ | |
 | Bluetooth: QCA6390 | ✅ | Audio to a speaker works; RFCOMM profiles not built yet |
 | GPS | ✅ | BCM47531 through Broadcom's gpsd in a small Android root built from the tablet's own partitions (`gts7xl-gnss-extract`). `gts7xl-gnss` serves NMEA to GeoClue and powers the chip only while something reads it. First fix in 39 s by a window. Waits for an agent in KDE: the GeoClue demo agent autostarts |
+| Power profiles | ✅ | KDE/GNOME switch through tuned-ppd. `gts7xl-power`: Power Save caps clocks; all profiles step big/prime cores and GPU down when the back (battery thermistor) passes 39/41/46 C; Performance throttles last. Kernel SoC limits unchanged |
+| Charging thermal throttling | ✅ | `gts7xl-charge-control`: ramps down from 38 C battery / 60 C charger, stops at 50 / 80 C (Samsung's limits) |
 | Waydroid | ✅ | binder via binderfs, PSI, nftables NAT, and what Android's netd needs (policy routing, legacy iptables tables): apps and internet at full speed |
 | USB gadget (serial, network) | ✅ | |
 | USB host | ✅ | USB 2.0, automatic roles through the MAX77705 Type-C driver (`max77705_usbc`): OTG VBUS for sticks, hubs and headsets, a charger on a hub charges and keeps host. Tray applet "USB-C" picks the gadget mode. See `docs/usbc-dp-research.md` |
