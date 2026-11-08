@@ -77,29 +77,64 @@ def main():
         was=online
         time.sleep(3)
 
+# Thermal throttling of the battery current, after Samsung's sec-battery limits for this
+# tablet (stock DT, 0.1 C units): stop at 50 C battery (resume 48), high-temp mode from 42,
+# charger chip limit 80 C (resume 77). Between those, the current ramps down smoothly.
+FULL=2650; FLOOR=500; COLD_CAP=1000; STEP_UP=100      # mA
+def ramp(t,full_at,floor_at,full):
+    if t<=full_at: return full
+    if t>=floor_at: return FLOOR
+    return int(full-(full-FLOOR)*(t-full_at)/(floor_at-full_at))
+FAKE='/run/gts7xl-charge-control/fake'   # test only: "batt chg" in C overrides the sensors
+def temps():
+    try:
+        b,c=open(FAKE).read().split()[:2]; return float(b),float(c)
+    except (OSError,ValueError):
+        return thm('batt_thm'),thm('chg_thm')
+
+class Thermal:
+    def __init__(s): s.stopped=False; s.reason=''
+    def limit(s,b,c,full):
+        """Battery current limit in mA for these temperatures; 0 means do not charge."""
+        if b is None or c is None:
+            s.reason='no sensor'; return FLOOR
+        if s.stopped:
+            if b<=48 and c<=77 and b>=2: s.stopped=False
+        elif b>=50 or c>=80 or b<0:
+            s.stopped=True
+        if s.stopped:
+            s.reason='stopped (batt %.1f, chg %.1f)'%(b,c); return 0
+        lim=min(ramp(b,38,45,full),ramp(c,60,75,full))
+        if b<15: lim=min(lim,COLD_CAP)
+        s.reason='batt %.1f chg %.1f'%(b,c)
+        return lim
+
+def set_cc(ma):
+    # The charger has no off switch here: the smallest current stands in for "stop"
+    open(CH+'constant_charge_current','w').write(str(max(ma,100)*1000))
+
 def kernel_pd():
-    """The driver owns the mailbox and the PD contract: only thermal and charge current here.
+    """The driver owns the mailbox and the PD contract: thermal throttling and charge current here.
     Plugged in comes from its supply, since the charger also reads online on our own boost."""
-    hot=False; was=None; fast=False
+    th=Thermal(); cur=None; was=None
     while True:
         try:
             online=rs(UC+'online')=='1'; mv=int(rs(UC+'voltage_now'))//1000
         except OSError:
             time.sleep(3); continue
-        b=thm('batt_thm'); c=thm('chg_thm')
-        if b is None or c is None or b>=HOT_BATT or c>=HOT_CHG:
-            hot=True
-        elif b<=COOL_BATT and c<=COOL_CHG:
-            hot=False
-        if online and hot:
-            if fast or not was: setlim(500000); log('too hot or no sensor, 500 mA')
-            fast=False
-        elif online and mv>=9000:
-            if not fast:
-                # The driver set the input limit from the contract; raise the battery side.
-                open(CH+'constant_charge_current','w').write('2650000'); fast=True; log('9V (kernel PD)')
-        elif fast or (was and not online):
-            open(CH+'constant_charge_current','w').write(str(SAFE)); fast=False; log('5V or unplugged')
+        b,c=temps()
+        if not online:
+            if was: set_cc(SAFE//1000); log('unplugged')
+            cur=None; was=online; time.sleep(3); continue
+        full=FULL if mv>=9000 else SAFE//1000
+        want=th.limit(b,c,full)
+        # Down at once, up in steps: no hunting around a threshold
+        new=want if cur is None or want<cur else min(want,cur+STEP_UP)
+        if new!=cur:
+            set_cc(new)
+            if cur is None or abs(new-cur)>=200 or new in (0,want) and new!=cur:
+                log('charge current %d mA (%s, %d mV in)'%(new,th.reason,mv))
+            cur=new
         was=online
         time.sleep(3)
 
