@@ -1,0 +1,71 @@
+From 3128e31f73c5bf9a569c62c553261361889cf562 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 18:38:07 +0100
+Subject: [PATCH] arm64: dts: qcom: gts7xlwifi: skin-msm thermal zone
+
+Stock's skin-msm-therm-usr zone reads PM8150L AMUX THM2 (ap_therm). Add
+the ADC channel and a monitoring-only zone for it. It is a board
+thermistor next to the SoC rather than a skin sensor: 70 C after four
+minutes of full CPU and GPU load while the back of the tablet (batt_thm)
+rose by one degree. Stock's other skin input, PM8150 THM1, reads open
+(-40 C) on this board and is left out.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 26 +++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 19a1493b3..3395a8fca 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -1060,6 +1060,18 @@ chg_therm: thermal-sensor-chg {
+ 		io-channel-names = "sensor-channel";
+ 	};
+ 
++	/*
++	 * Stock skin-msm-therm-usr: a board thermistor next to the SoC, despite
++	 * the name (70 C under full load while the back stays cool). Stock's
++	 * skin-therm-usr input (PM8150 THM1) is open on this board.
++	 */
++	skin_msm_therm: thermal-sensor-skin-msm {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&pm8150l_adc ADC5_AMUX_THM2_100K_PU>;
++		io-channel-names = "sensor-channel";
++	};
++
+ 	blkt_therm: thermal-sensor-blkt {
+ 		compatible = "generic-adc-thermal";
+ 		#thermal-sensor-cells = <0>;
+@@ -1075,6 +1087,12 @@ blkt_therm: thermal-sensor-blkt {
+ 	};
+ 
+ 	thermal-zones {
++		skin-msm-thermal {
++			polling-delay-passive = <0>;
++			polling-delay = <0>;
++			thermal-sensors = <&skin_msm_therm>;
++		};
++
+ 		batt-thermal {
+ 			polling-delay-passive = <0>;
+ 			polling-delay = <0>;
+@@ -1096,6 +1114,14 @@ blkt-thermal {
+ };
+ 
+ &pm8150l_adc {
++	channel@4e {
++		reg = <ADC5_AMUX_THM2_100K_PU>;
++		qcom,ratiometric;
++		qcom,hw-settle-time = <200>;
++		qcom,pre-scaling = <1 1>;
++		label = "skin_msm_therm";
++	};
++
+ 	channel@4d {
+ 		reg = <ADC5_AMUX_THM1_100K_PU>;
+ 		qcom,ratiometric;
+-- 
+2.56.0
+
