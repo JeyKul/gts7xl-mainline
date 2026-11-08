@@ -1,0 +1,208 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""GNSS for the Tab S7+: NMEA on a Unix socket, the chip on only while it is read.
+
+Broadcom's gpsd and Samsung's GPS HAL run in the Android root that
+gts7xl-gnss-extract builds. When the first client connects (GeoClue, gpspipe,
+nc -U), they start; NMEA from the HAL goes to every client; a while after the
+last one leaves, both stop and the chip is powered off. gpsd switches the chip's
+GPS_PWR_EN line itself, through a file this service mirrors onto TLMM 91.
+"""
+import os, selectors, signal, socket, subprocess, sys, threading, time
+
+ROOT = os.environ.get('GTS7XL_GNSS_ROOT', '/var/lib/gts7xl-gnss/root')
+SOCK = '/run/gts7xl-gnss/nmea.sock'
+PWR = ROOT + '/data/vendor/gps/pwr'
+LIBS = '/apex/com.android.runtime/lib64/bionic:/apex/com.android.runtime/lib64:/system/lib64:/vendor/lib64'
+GPIO_LINE = 91            # GPS_PWR_EN on the TLMM
+LINGER = 15               # seconds the chip stays on after the last client
+HAL_DELAY = 3             # gpsd must be listening before the HAL connects
+
+
+def log(*a):
+    print(*a, flush=True)
+
+
+def tlmm_chip():
+    """The gpiochip of the SoC's TLMM: the pinctrl with the most lines."""
+    best = None
+    for line in subprocess.run(['gpiodetect'], capture_output=True, text=True).stdout.splitlines():
+        name, rest = line.split(' ', 1)
+        if 'pinctrl' in rest:
+            n = int(rest.rsplit('(', 1)[1].split()[0])
+            if not best or n > best[1]:
+                best = (name, n)
+    if not best:
+        raise RuntimeError('no TLMM gpiochip')
+    return best[0]
+
+
+class Power(threading.Thread):
+    """Mirror the 0/1 gpsd writes into PWR onto the GPIO line."""
+    def __init__(self, chip):
+        super().__init__(daemon=True)
+        self.chip, self.proc, self.stop = chip, None, threading.Event()
+
+    def set(self, v):
+        if self.proc:
+            self.proc.terminate()
+            self.proc.wait()
+        # gpioset keeps the line requested (and driven) until it exits
+        self.proc = subprocess.Popen(['gpioset', '-c', self.chip, '%d=%s' % (GPIO_LINE, v)])
+
+    def run(self):
+        last = None
+        while not self.stop.wait(0.01):
+            try:
+                with open(PWR) as f:
+                    v = f.read(1)
+            except OSError:
+                continue
+            if v in ('0', '1') and v != last:
+                log('chip power', v)
+                self.set(v)
+                last = v
+
+    def off(self):
+        self.stop.set()
+        self.join()
+        self.set('0')
+        time.sleep(0.05)
+        self.proc.terminate()
+        self.proc.wait()
+        self.proc = None
+
+
+class Session:
+    """gpsd and the HAL client in the Android root."""
+    def __init__(self, chip):
+        self.chip = chip
+        self.gpsd = self.hal = self.power = None
+
+    def mounts(self):
+        with open('/proc/mounts') as f:
+            have = {l.split()[1] for l in f}
+        for d in ('dev', 'proc', 'sys'):
+            if ROOT + '/' + d not in have:
+                subprocess.run(['mount', '--bind', '/' + d, ROOT + '/' + d], check=True)
+
+    def chroot(self, *argv, **kw):
+        return subprocess.Popen(['chroot', ROOT] + list(argv), env={'LD_LIBRARY_PATH': LIBS},
+                                stdin=subprocess.DEVNULL, **kw)
+
+    def start(self):
+        self.mounts()
+        with open(PWR, 'w') as f:
+            f.write('0')
+        self.power = Power(self.chip)
+        self.power.start()
+        self.gpsd = self.chroot('/vendor/bin/hw/gpsd', '-c', '/vendor/etc/gnss/gps.linux.xml',
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(HAL_DELAY)
+        self.hal = self.chroot('/gnss-hal', stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
+        log('started')
+
+    def alive(self):
+        return self.hal and self.hal.poll() is None and self.gpsd.poll() is None
+
+    def stop(self):
+        for p in (self.hal, self.gpsd):
+            if p and p.poll() is None:
+                p.terminate()
+                try:
+                    p.wait(3)
+                except subprocess.TimeoutExpired:
+                    p.kill()
+                    p.wait()
+        if self.power:
+            self.power.off()
+        self.gpsd = self.hal = self.power = None
+        log('stopped, chip off')
+
+
+def main():
+    chip = tlmm_chip()
+    os.makedirs(os.path.dirname(SOCK), exist_ok=True)
+    if os.path.exists(SOCK):
+        os.unlink(SOCK)
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(SOCK)
+    os.chmod(SOCK, 0o666)
+    srv.listen(8)
+    srv.setblocking(False)
+
+    sel = selectors.DefaultSelector()
+    sel.register(srv, selectors.EVENT_READ, 'accept')
+    clients, sess, idle_since, buf = set(), Session(chip), None, b''
+    quit = []
+
+    def drop_hal():
+        if sess.hal and sess.hal.stdout:
+            try:
+                sel.unregister(sess.hal.stdout)
+            except (KeyError, ValueError):
+                pass
+    signal.signal(signal.SIGTERM, lambda *a: quit.append(1))
+    log('listening on', SOCK)
+
+    while not quit:
+        for key, _ in sel.select(1):
+            if key.data == 'accept':
+                c, _ = srv.accept()
+                c.setblocking(False)
+                clients.add(c)
+                sel.register(c, selectors.EVENT_READ, 'client')
+            elif key.data == 'client':
+                try:
+                    gone = not key.fileobj.recv(4096)
+                except (BlockingIOError, InterruptedError):
+                    gone = False
+                except OSError:
+                    gone = True
+                if gone:
+                    sel.unregister(key.fileobj)
+                    clients.discard(key.fileobj)
+                    key.fileobj.close()
+            elif key.data == 'hal':
+                data = os.read(key.fileobj.fileno(), 65536)
+                if not data:
+                    sel.unregister(key.fileobj)
+                    continue
+                buf += data
+                *lines, buf = buf.split(b'\n')
+                for l in lines:
+                    if l.startswith(b'$'):
+                        for c in list(clients):
+                            try:
+                                c.send(l + b'\r\n')
+                            except (BlockingIOError, OSError):
+                                pass       # a slow reader misses this sentence
+                    elif l.startswith(b'#') and not l.startswith(b'#FIX'):
+                        log('hal:', l.decode(errors='replace'))
+
+        if clients:
+            idle_since = None
+            if not sess.alive():
+                if sess.gpsd:
+                    log('gpsd or HAL exited, restarting')
+                    drop_hal()
+                    sess.stop()
+                    time.sleep(2)
+                sess.start()
+                buf = b''
+                sel.register(sess.hal.stdout, selectors.EVENT_READ, 'hal')
+        elif sess.gpsd:
+            idle_since = idle_since or time.monotonic()
+            if time.monotonic() - idle_since > LINGER:
+                drop_hal()
+                sess.stop()
+                idle_since = None
+
+    if sess.gpsd:
+        sess.stop()
+    os.unlink(SOCK)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

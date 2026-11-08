@@ -36,7 +36,7 @@ jobs:
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y ccache build-essential bc bison flex libssl-dev \
             libelf-dev device-tree-compiler cpio kmod git curl python3 gh ca-certificates \
-            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross
+            gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu libc6-dev-arm64-cross clang lld
           # The initramfs runs on the tablet: take an arm64 static busybox
           cat > /etc/apt/sources.list.d/arm64.sources <<'SRC'
           Types: deb
@@ -55,6 +55,10 @@ jobs:
           # Compilers through ccache: unchanged files come from /cache/ccache
           update-ccache-symlinks
           echo /usr/lib/ccache >> "$GITHUB_PATH"
+
+      - name: Build the GNSS helpers
+        # Bionic binaries, linked against stubs: the tablet supplies the real Android libraries
+        run: make -C gnss install DESTDIR="$PWD/rootfs/overlay"
 
       - name: Fetch Linux v7.3 and apply patches
         run: |
@@ -167,7 +171,10 @@ jobs:
           echo 'Dir::Cache::archives "/cache/apt";' > /etc/apt/apt.conf.d/90cache
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y libarchive-tools lz4 zip curl gh \
-            python3 ca-certificates xz-utils
+            python3 ca-certificates xz-utils make clang lld
+
+      - name: Build the GNSS helpers
+        run: make -C gnss install DESTDIR="$PWD/rootfs/overlay"
 
       - name: Build the root filesystem
         run: |

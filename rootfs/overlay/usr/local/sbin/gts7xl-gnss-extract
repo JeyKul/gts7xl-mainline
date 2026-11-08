@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""Build the GNSS daemon's Android root from this tablet's own partitions.
+
+Broadcom's gpsd and Samsung's GPS HAL only exist as Android binaries. This copies
+them, the Android libraries they load and the bionic runtime out of super
+(vendor and system, mounted read-only) into a small chroot. Nothing is
+redistributed. Uses the helpers in gts7xl-firstboot.
+"""
+import argparse, importlib.machinery, importlib.util, os, shutil, struct, sys, tempfile, zipfile
+
+FIRSTBOOT = os.environ.get('GTS7XL_FIRSTBOOT', '/usr/local/sbin/gts7xl-firstboot')
+OURS = '/usr/local/lib/gts7xl-gnss'
+ROOTS = ('apex/com.android.runtime/lib64/bionic', 'apex/com.android.runtime/lib64', 'system/lib64', 'vendor/lib64')
+
+
+def load_firstboot():
+    loader = importlib.machinery.SourceFileLoader('gts7xl_firstboot', FIRSTBOOT)
+    spec = importlib.util.spec_from_loader('gts7xl_firstboot', loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def needed(path):
+    """DT_NEEDED entries of a 64-bit little-endian ELF file."""
+    with open(path, 'rb') as f:
+        d = f.read()
+    if d[:4] != b'\x7fELF' or d[4] != 2:
+        return []
+    phoff, = struct.unpack_from('<Q', d, 32)
+    phentsize, phnum = struct.unpack_from('<HH', d, 54)
+    loads, dyn = [], None
+    for i in range(phnum):
+        p_type, _, p_offset, p_vaddr, _, p_filesz = struct.unpack_from('<IIQQQQ', d, phoff + i * phentsize)
+        if p_type == 1:
+            loads.append((p_vaddr, p_offset, p_filesz))
+        elif p_type == 2:
+            dyn = (p_offset, p_filesz)
+    if not dyn:
+        return []
+    names, strtab = [], None
+    for o in range(dyn[0], dyn[0] + dyn[1], 16):
+        tag, val = struct.unpack_from('<qQ', d, o)
+        if tag == 0:
+            break
+        if tag == 1:
+            names.append(val)
+        elif tag == 5:
+            strtab = next(off + val - va for va, off, sz in loads if va <= val < va + sz)
+    return [d[strtab + n:d.index(b'\0', strtab + n)].decode() for n in names]
+
+
+class Super:
+    """A logical partition of super on a read-only loop device, mounted read-only."""
+    def __init__(self, fb, name):
+        self.fb, self.name = fb, name
+
+    def __enter__(self):
+        ext = self.fb.super_extents(self.name)
+        if len(ext) > 1:
+            raise RuntimeError('%s is split into %d pieces, not supported yet' % (self.name, len(ext)))
+        sectors, start = ext[0]
+        self.dev = self.fb.run('losetup', '--find', '--show', '--read-only', '--offset', str(start * 512),
+                               '--sizelimit', str(sectors * 512),
+                               os.path.realpath(self.fb.PL + 'super')).strip()
+        try:
+            self.mount = self.fb.Ro(self.dev, None, 'ro')
+            return self.mount.__enter__()
+        except Exception:
+            self.fb.run('losetup', '--detach', self.dev)
+            raise
+
+    def __exit__(self, *x):
+        try:
+            self.mount.__exit__(*x)
+        finally:
+            self.fb.run('losetup', '--detach', self.dev)
+
+
+def copy(src, dst):
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    shutil.copyfile(src, dst)
+    shutil.copymode(src, dst)
+
+
+def runtime_apex(fb, system, root):
+    """linker64 and bionic from the runtime APEX, flattened or packed."""
+    flat = system + '/system/apex/com.android.runtime'
+    if os.path.isdir(flat + '/lib64/bionic'):
+        take_runtime(flat, root)
+        return
+    apex = system + '/system/apex/com.android.runtime.apex'
+    with zipfile.ZipFile(apex) as z, tempfile.TemporaryDirectory(prefix='gts7xl-apex-') as t:
+        z.extract('apex_payload.img', t)
+        dev = fb.run('losetup', '--find', '--show', '--read-only', t + '/apex_payload.img').strip()
+        try:
+            with fb.Ro(dev, None, 'ro') as m:
+                take_runtime(m, root)
+        finally:
+            fb.run('losetup', '--detach', dev)
+
+
+def take_runtime(src, root):
+    a = root + '/apex/com.android.runtime'
+    copy(src + '/bin/linker64', a + '/bin/linker64')
+    for f in os.listdir(src + '/lib64/bionic'):
+        if os.path.isfile(src + '/lib64/bionic/' + f):     # not hwasan/
+            copy(src + '/lib64/bionic/' + f, a + '/lib64/bionic/' + f)
+
+
+def find_lib(name, root, system, vendor):
+    for base, rel in ((root, r) for r in ROOTS):
+        if os.path.exists(os.path.join(base, rel, name)):
+            return None
+    for src, rel in ((vendor, 'lib64'), (system, 'system/lib64')):
+        p = os.path.join(src, rel, name)
+        if os.path.exists(p):
+            return p, os.path.join(root, 'vendor/lib64' if src == vendor else 'system/lib64', name)
+    raise RuntimeError('library %s is in neither vendor nor system' % name)
+
+
+def config(vendor, root):
+    """Samsung's gps.xml with paths for this root; the rest stays stock."""
+    with open(vendor + '/etc/gnss/gps.xml') as f:
+        x = f.read()
+    for a, b in (('/sys/class/sec/gps/GPS_PWR_EN/value', '/data/vendor/gps/pwr'),
+                 ('/storage/emulated/0/gps/broadcom/storage', '/data/vendor/gps/log')):
+        if a not in x:
+            raise RuntimeError('gps.xml has no %s' % a)
+        x = x.replace(a, b)
+    with open(root + '/vendor/etc/gnss/gps.linux.xml', 'w') as f:
+        f.write(x)
+
+
+def build(fb, root):
+    os.makedirs(root, exist_ok=True)
+    with Super(fb, 'vendor') as vendor, Super(fb, 'system') as system:
+        for rel in ('bin/hw/gpsd', 'lib64/hw/gps.default.so'):
+            copy(vendor + '/' + rel, root + '/vendor/' + rel)
+        for f in os.listdir(vendor + '/etc/gnss'):
+            copy(vendor + '/etc/gnss/' + f, root + '/vendor/etc/gnss/' + f)
+        runtime_apex(fb, system, root)
+        # Our stand-in comes first, so the real libhardware_legacy is never needed
+        copy(OURS + '/libhardware_legacy.so', root + '/system/lib64/libhardware_legacy.so')
+        todo = [root + '/vendor/bin/hw/gpsd', root + '/vendor/lib64/hw/gps.default.so']
+        while todo:
+            for n in needed(todo.pop()):
+                hit = find_lib(n, root, system, vendor)
+                if hit:
+                    copy(*hit)
+                    todo.append(hit[1])
+        config(vendor, root)
+    copy(OURS + '/gnss-hal', root + '/gnss-hal')
+    os.makedirs(root + '/system/bin', exist_ok=True)
+    if not os.path.lexists(root + '/system/bin/linker64'):
+        os.symlink('/apex/com.android.runtime/bin/linker64', root + '/system/bin/linker64')
+    for d in ('dev', 'proc', 'sys', 'data/vendor/gps/log', 'cache'):
+        os.makedirs(root + '/' + d, exist_ok=True)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument('--root', default='/var/lib/gts7xl-gnss/root')
+    ap.add_argument('--if-missing', action='store_true', help='do nothing if the root is already built')
+    a = ap.parse_args()
+    if a.if_missing and os.path.exists(a.root + '/gnss-hal'):
+        return 0
+    # The service binds /dev, /proc and /sys in there: never delete through them
+    with open('/proc/mounts') as f:
+        busy = [l.split()[1] for l in f if l.split()[1].startswith(os.path.dirname(a.root) + '/')]
+    if busy:
+        print('FAILED: still mounted: %s (stop gts7xl-gnss first)' % ' '.join(busy))
+        return 1
+    tmp = a.root + '.new'
+    shutil.rmtree(tmp, ignore_errors=True)
+    try:
+        build(load_firstboot(), tmp)
+    except Exception as e:
+        print('FAILED: %s' % e)
+        shutil.rmtree(tmp, ignore_errors=True)
+        return 1
+    shutil.rmtree(a.root, ignore_errors=True)
+    os.rename(tmp, a.root)
+    n = sum(len(f) for _, _, f in os.walk(a.root))
+    print('gnss root: %d files in %s' % (n, a.root))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
