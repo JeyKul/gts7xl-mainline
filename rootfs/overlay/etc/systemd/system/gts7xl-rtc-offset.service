@@ -1,0 +1,17 @@
+[Unit]
+Description=Wall clock from the PMIC RTC plus a saved offset
+Documentation=file:///usr/local/sbin/gts7xl-rtc-offset
+DefaultDependencies=no
+After=local-fs.target systemd-modules-load.service systemd-udev-trigger.service
+Before=time-set.target sysinit.target systemd-timesyncd.service shutdown.target
+Wants=time-set.target
+Conflicts=shutdown.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/gts7xl-rtc-offset restore
+# Saves only if NTP synchronized the clock during this boot
+ExecStop=/usr/local/sbin/gts7xl-rtc-offset save
+TimeoutSec=30
+[Install]
+WantedBy=sysinit.target
