@@ -1,0 +1,13 @@
+[Unit]
+Description=GNSS (GPS, GLONASS) for GeoClue, chip on only while in use
+After=local-fs.target
+
+[Service]
+# Built once from this tablet's own vendor and system partitions
+ExecStartPre=/usr/local/sbin/gts7xl-gnss-extract --if-missing
+ExecStart=/usr/local/sbin/gts7xl-gnss
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

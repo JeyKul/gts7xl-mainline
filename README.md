@@ -61,7 +61,8 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 |---|---|---|
 | Wi-Fi: QCA6390 | ✅ | |
 | Bluetooth: QCA6390 | ✅ | Audio to a speaker works; RFCOMM profiles not built yet |
-| GPS | ⬜ | |
+| GPS | ✅ | BCM47531 through Broadcom's gpsd in a small Android root built from the tablet's own partitions (`gts7xl-gnss-extract`). `gts7xl-gnss` serves NMEA to GeoClue and powers the chip only while something reads it. First fix in 39 s by a window. Waits for an agent in KDE: the GeoClue demo agent autostarts |
+| Waydroid kernel support | 🟡 | binder and binderfs, PSI, nftables NAT in the kernel; Waydroid itself not tested yet |
 | USB gadget (serial, network) | ✅ | |
 | USB host | ✅ | USB 2.0, automatic roles through the MAX77705 Type-C driver (`max77705_usbc`): OTG VBUS for sticks, hubs and headsets, a charger on a hub charges and keeps host. Tray applet "USB-C" picks the gadget mode. See `docs/usbc-dp-research.md` |
 | DisplayPort over USB-C | 🟡 | HDMI through a USB-C hub with its charger: picture up to 4K60 (2 lanes, pin D) and audio ("HDMI" output), automatic on plug-in, both plug orientations. Some hubs need a power cycle after a replug; no DP when the tablet powers the hub; USB 3 not yet. See `docs/usbc-dp-research.md` |

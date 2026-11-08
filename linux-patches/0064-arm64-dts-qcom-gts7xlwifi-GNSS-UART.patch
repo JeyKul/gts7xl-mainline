@@ -1,0 +1,89 @@
+From 54a3bf08c708c623caf440e7093cd19448744eaf Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 01:41:20 +0100
+Subject: [PATCH] arm64: dts: qcom: gts7xlwifi: GNSS UART
+
+The Broadcom BCM47531 GNSS chip sits on QUP SE3 (0x98c000) with RTS/CTS,
+pins from the stock device tree. Its power line (TLMM 91) is left to the
+userspace GNSS daemon, which sequences it itself.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 47 +++++++++++++++++++
+ 1 file changed, 47 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 0c554459a..4e2ba2876 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -25,6 +25,7 @@ / {
+ 
+ 	aliases {
+ 		serial1 = &uart6;
++		serial2 = &uart3;
+ 	};
+ 
+ 	/* Stock limits are 4.38V and 3.15A; stay conservative during bring-up */
+@@ -640,6 +641,28 @@ &qupv3_id_0 {
+ 	status = "okay";
+ };
+ 
++&qupv3_id_0 {
++	/*
++	 * GNSS: Broadcom BCM47531 at 921600 baud with RTS/CTS. Its power line
++	 * GPS_PWR_EN is TLMM 91, switched by the GNSS daemon in userspace.
++	 */
++	uart3: serial@98c000 {
++		compatible = "qcom,geni-uart";
++		reg = <0 0x0098c000 0 0x4000>;
++		clock-names = "se";
++		clocks = <&gcc GCC_QUPV3_WRAP0_S3_CLK>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&qup_uart3_default>;
++		interrupts = <GIC_SPI 604 IRQ_TYPE_LEVEL_HIGH>;
++		power-domains = <&rpmhpd RPMHPD_CX>;
++		operating-points-v2 = <&qup_opp_table>;
++		interconnects = <&qup_virt MASTER_QUP_CORE_0 0 &qup_virt SLAVE_QUP_CORE_0 0>,
++				<&gem_noc MASTER_AMPSS_M0 0 &config_noc SLAVE_QUP_0 0>;
++		interconnect-names = "qup-core",
++				     "qup-config";
++	};
++};
++
+ &uart6 {
+ 	status = "okay";
+ 
+@@ -1226,6 +1249,30 @@ sdc2_card_det_n: sd-card-det-n-state {
+ 		bias-disable;
+ 	};
+ 
++	/* Samsung DT: qupv3_se3_ctsrx, _rts, _tx */
++	qup_uart3_default: qup-uart3-default-state {
++		cts-rx-pins {
++			pins = "gpio119", "gpio122";
++			function = "qup3";
++			drive-strength = <2>;
++			bias-disable;
++		};
++
++		rts-pins {
++			pins = "gpio120";
++			function = "qup3";
++			drive-strength = <2>;
++			bias-pull-down;
++		};
++
++		tx-pins {
++			pins = "gpio121";
++			function = "qup3";
++			drive-strength = <2>;
++			bias-pull-up;
++		};
++	};
++
+ 	panel_default: panel-default-state {
+ 		te-pins {
+ 			pins = "gpio66";
+-- 
+2.56.0
+
