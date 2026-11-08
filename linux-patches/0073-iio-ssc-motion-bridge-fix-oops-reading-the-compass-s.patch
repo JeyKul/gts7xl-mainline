@@ -1,0 +1,39 @@
+From 5a6dfe744514e8902495e578c74cb5cf662427fa Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 19:28:29 +0100
+Subject: [PATCH 73/73] iio: ssc-motion-bridge: fix oops reading the compass
+ scale
+
+guard(mutex) sat directly under a case label, so reading the _scale
+attribute jumped past its initialisation while its cleanup still ran,
+unlocking a garbage pointer (write to read-only memory, the reader dies).
+Give the case its own scope.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/iio/imu/ssc-motion-bridge.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/iio/imu/ssc-motion-bridge.c b/drivers/iio/imu/ssc-motion-bridge.c
+index f111ff965..d11912656 100644
+--- a/drivers/iio/imu/ssc-motion-bridge.c
++++ b/drivers/iio/imu/ssc-motion-bridge.c
+@@ -167,12 +167,14 @@ static int ssc_compass_read_raw(struct iio_dev *indio_dev,
+ 	struct ssc_compass *c = iio_priv(indio_dev);
+ 
+ 	switch (mask) {
+-	case IIO_CHAN_INFO_RAW:
++	case IIO_CHAN_INFO_RAW: {
++		/* Braces: the guard's cleanup must not cover the other cases */
+ 		guard(mutex)(&c->lock);
+ 		if (!c->valid)
+ 			return -ENODATA;
+ 		*val = c->heading;
+ 		return IIO_VAL_INT;
++	}
+ 	case IIO_CHAN_INFO_SCALE:
+ 		*val = 0;
+ 		*val2 = 1000;	/* millidegrees to degrees */
+-- 
+2.56.0
+

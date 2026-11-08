@@ -65,6 +65,8 @@ class Compass(Gtk.ApplicationWindow):
             print('compass claim failed:', e.message, flush=True)
             self.proxy = None
         GLib.timeout_add(100, self.tick)
+        # Leave at once: helper threads otherwise kept closed instances alive
+        self.connect('close-request', lambda _w: os._exit(0))
 
     def tick(self):
         m, g = dev('ssc-magn'), dev('ssc-gyro')

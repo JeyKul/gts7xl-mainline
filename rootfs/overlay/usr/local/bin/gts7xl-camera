@@ -129,7 +129,7 @@ class Camera(Gtk.Application):
         focus = Gtk.Button(label="Focus")
         focus.connect("clicked", lambda _b: self.autofocus())
         # Rear LED as a torch; stays on through a photo, so it doubles as the flash
-        light = Gtk.ToggleButton(label="Light")
+        self.light = light = Gtk.ToggleButton(label="Light")
         light.connect("toggled", lambda b: self.torch(b.get_active()))
         self.switch = Gtk.Button(label=CAMERAS[0][0])
         self.switch.connect("clicked", lambda _b: self.next_camera())
@@ -172,6 +172,11 @@ class Camera(Gtk.Application):
         self.stop_preview()
         self.camera = (self.camera + 1) % len(CAMERAS)
         self.switch.set_label(CAMERAS[self.camera][0])
+        # The LED is on the back: no use for the front camera
+        front = CAMERAS[self.camera][0] == "Front"
+        if front:
+            self.light.set_active(False)
+        self.light.set_visible(not front)
         self.status.set_text("")
         self.start_preview()
         GLib.timeout_add(1500, self.first_focus)

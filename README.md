@@ -82,8 +82,8 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Hardware | State | Notes |
 |---|---|---|
 | Accelerometer, auto-rotate | ✅ | LSM6DSO on the sensor DSP, through iio-sensor-proxy |
-| Gyroscope | 🟡 | Streams from the DSP; not passed to desktops |
-| Magnetometer | 🟡 | AK0991x streams from the DSP; not passed to desktops |
+| Gyroscope | ✅ | DSP stream into `ssc-motion-bridge` (IIO `ssc-gyro`, rad/s) through `gts7xl-sensord-motion@gyro` |
+| Magnetometer | 🟡 | AK0991x into `ssc-magn` (gauss), raw: about 2.8 G fixed offset from magnets in the tablet, not calibrated. Compass heading (DSP rotation vector) reaches iio-sensor-proxy and matches a phone; `Compass` app to test |
 | Ambient light, auto-brightness | ✅ | VEML3328 through `ssc-light-bridge` and iio-sensor-proxy; second light sensor and RGB missing |
 | Hall sensor (cover) | ✅ | The Book Cover Keyboard reports closed/open over pogo: closing sleeps, opening wakes. `gpio157` (stock flip-cover hall) never reacts to it and is unused |
 
@@ -91,9 +91,9 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| Rear: 13 MP wide | 🟡 | 4128x3096 at 30 fps through libcamera, focus motor works by hand; no autofocus or tuned colour |
-| Rear: 5 MP ultrawide | 🟡 | 2576x1932 through `s5k-tab`, colour not tuned |
-| Front: 8 MP | 🟡 | 3264x2448 through `s5k-tab`, colour not tuned |
+| Rear: 13 MP wide | ✅ | Preview through libcamera with contrast autofocus; photos from raw frames (`gts7xl-still`): own exposure up to 1/4 s, 2x2 blocks to 2064x1548 PNG, grey-world white balance. Light button for the LED |
+| Rear: 5 MP ultrawide | ✅ | Same path, 1288x966 PNG photos |
+| Front: 8 MP | ✅ | Same path, 1632x1224 PNG photos, mirrored like a selfie camera; long exposures blur in dim light |
 | Flash LED | ✅ | `Flashlight` app, up to 100mA |
 
 ## Installing

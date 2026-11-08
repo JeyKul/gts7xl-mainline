@@ -2,7 +2,7 @@
 
 ## What changed
 
-- Kernel `linux-patches/0067` + `CONFIG_SSC_MOTION_BRIDGE=m`: module
+- Kernel `linux-patches/0072` + `CONFIG_SSC_MOTION_BRIDGE=m`: module
   `ssc-motion-bridge` with three IIO devices that userspace fills in, like
   `ssc-light-bridge` (0047):
   - `ssc-gyro`: `in_anglvel_{x,y,z}_input` (rad/s)
@@ -98,4 +98,4 @@ one off: `sudo systemctl mask --now gts7xl-sensord-motion@gyro` (or `@mag`).
     sudo make -C sensord install-autostart   # from main, restores the old udev rule
     sudo modprobe -r ssc-motion-bridge
 
-and drop 0067 + the defconfig line from the kernel build.
+and drop 0072 + the defconfig line from the kernel build.
