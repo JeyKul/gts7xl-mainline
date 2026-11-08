@@ -33,7 +33,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Touchscreen | ✅ | Multitouch |
 | S Pen digitizer | 🟡 | Position and pressure work, range fitted with `gts7xl-pen-calibrate` (3x3 targets, writes a udev hwdb entry), hover works; a few px of non-linear error at the bottom edge; side button, hover, tilt unconfirmed |
 | S Pen Bluetooth remote | 🟡 | S Pen Pro button and air gestures work through `gts7xl-spen`, `Pen Actions` app to change them; built-in S Pen untested |
-| Fingerprint reader (under display) | ❌ | Goodix GW9558 on SPI owned by TrustZone (gpio20-23; touching them resets the SoC). Only Samsung's trusted app can reach it |
+| Fingerprint reader (under display) | ❌ | Goodix GW9558 on SPI owned by TrustZone (gpio20-23; touching them resets the SoC). Only Samsung's trusted app can reach it, see [docs/fingerprint.md](docs/fingerprint.md) |
 | Pogo keyboard | ✅ | Recovers by itself after trackpad use; tablet mode switch on detach, see [docs/keyboard-cover.md](docs/keyboard-cover.md) |
 | Pogo trackpad | ✅ | Works without stalls as of 2026-11-07 (first seen after the PMIC interrupt pin fix, 0051; cause not confirmed) |
 
@@ -138,6 +138,7 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 - `docs/sensors.md`: sensor DSP stack, power rails, rotation and light, troubleshooting
 - `docs/keyboard-cover.md`: keyboard, trackpad stalls, tablet mode
 - `docs/usbc-dp-research.md`: USB-C host and DisplayPort plan, MAX77705 CCIC protocol, safety rules, test results
+- `docs/fingerprint.md`: what the Android fingerprint stack does (Goodix GW9558 behind TrustZone) and what a Linux port needs
 - `initramfs/init`: first code to run, picks the system or the installer
 - `kmod/`: panel register tool used for display research
 - `sensord/`: sensor DSP file service and client; accelerometer and light into iio-sensor-proxy
