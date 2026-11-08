@@ -24,7 +24,7 @@ Not run on the tablet.
 
 ## Install for a test
 
-Kernel: build with the series (0067 included) and the updated defconfig as
+Kernel: build with the series (0072 and 0073 included) and the updated defconfig as
 usual, flash, then copy the module if you don't install all modules:
 
     sudo install -Dm644 ssc-motion-bridge.ko /lib/modules/7.3.0-gts7xl/kernel/drivers/iio/imu/ssc-motion-bridge.ko
