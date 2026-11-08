@@ -1,0 +1,11 @@
+[Unit]
+Description=Touchscreen off while the Book Cover is closed
+After=systemd-udevd.service
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/sbin/gts7xl-cover-touch
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
