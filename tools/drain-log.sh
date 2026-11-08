@@ -46,11 +46,12 @@ install)
 	mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
 	echo 1 > /sys/power/pm_debug_messages 2>/dev/null   # wakeup reasons in dmesg
 	mkdir -p "$(dirname "$HOOK")"
+	install -m755 "$0" /usr/local/sbin/gts7xl-drain-log
 	cat > "$HOOK" <<HOOKEOF
 #!/bin/sh
 # \$1 = pre|post, \$2 = suspend|hibernate|...
 mountpoint -q /sys/kernel/debug || mount -t debugfs none /sys/kernel/debug
-sh "$(readlink -f "$0")" snap "\$1-\$2" >> "$LOG" 2>&1
+sh /usr/local/sbin/gts7xl-drain-log snap "\$1-\$2" >> "$LOG" 2>&1
 HOOKEOF
 	chmod 755 "$HOOK"
 	: > "$LOG"
