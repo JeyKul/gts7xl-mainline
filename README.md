@@ -53,7 +53,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 |---|---|---|
 | 4 speakers, CS35L41 amps | ✅ | 4.0, protection firmware and factory calibration loaded; stock gain, software limiter in front |
 | Microphones | 🟡 | Sub mic works, main mic reads zero |
-| USB-C headphones | 🟡 | Digital USB-C headsets enumerate as a sound card (playback untested); analog adapters not done |
+| USB-C headphones | ✅ | Digital USB-C adapters and headsets (USB Audio class) play; PulseAudio switches to them on plug-in (tested with a CX31993 DAC, 2026-11-08). Passive analog adapters untested |
 
 ### Connectivity
 
