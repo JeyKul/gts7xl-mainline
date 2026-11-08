@@ -80,3 +80,12 @@ Short dated findings, newest first. Status lives in README.md.
 - gpio157 (stock flip-cover hall) never toggled with this cover. Its SW_LID node is gone (0063) because UPower follows only the first lid switch and so ignored the keyboard.
 - Suspend aborted on dw9807 VCM (-ENXIO from writes to a runtime-suspended, unpowered lens). Fixed with pm_runtime_force_suspend/resume (0061).
 - The pogo IRQ (gpio31, PDC 69) is a wakeup source while the keyboard is attached: opening the cover wakes the tablet.
+
+## 2026-11-08: GNSS as a service, Waydroid kernel bits
+- gnss/ builds gnss-hal and the libhardware_legacy stand-in for bionic with clang + lld, linked against generated stubs, so CI needs no Android files. Tested on the tablet: identical behaviour.
+- gts7xl-gnss-extract builds /var/lib/gts7xl-gnss/root from super (vendor + system, runtime APEX payload) following DT_NEEDED from gpsd and the HAL: 33 files, 18 MB, 0.4 s. It refuses to rebuild while anything is mounted inside.
+- gts7xl-gnss: Unix socket /run/gts7xl-gnss/nmea.sock (GeoClue `[network-nmea] nmea-socket`, conf.d drop-in). Starts gpsd + HAL on the first client, stops 15 s after the last; mirrors gpsd's power file onto TLMM 91 with gpioset. Verified: GeoClue connects, chip on/off. Indoors no fix in 45 s, so GeoClue used Wi-Fi/IP.
+- GeoClue needs an agent for desktop apps: geoclue-demo-agent autostarts but needs libnotify (now installed).
+- Kernel: ANDROID_BINDER_IPC + BINDERFS (devices via binderfs), PSI, nftables NAT/masq/compat as modules. binderfs mounts on #83.
+- Overlay copies left /usr, /etc and others at 775 (checkout umask 002), hence pacman's "directory permissions differ" warnings; installers now clear go-w on overlay dirs.
+- One-off boot hang on 2026-11-08 (kernel #82 + GNSS DT): no "Run /init", stalled after 1.9 s; the same image booted fine next time. Watch for repeats.
