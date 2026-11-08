@@ -1,0 +1,38 @@
+From 3e54e0d8877fe70fcd993ce7575ccafe5c955679 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 22:56:14 +0100
+Subject: [PATCH] arm64: dts: qcom: gts7xlwifi: fuel gauge sense resistor is 2
+ mOhm
+
+At 5 mOhm the gauge read 2.6x below the charger's programmed current in
+the constant-current phase (1.1 to 2.3 A steps) and reported a 3754 mAh
+design capacity for a 10090 mAh (typical) battery. 2 mOhm matches the
+charger within its tolerance and turns Samsung's DesignCap (0xeaa) into
+9385 mAh.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 3395a8fca..15fe60371 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -1009,7 +1009,12 @@ max77705_typec_sbu: endpoint {
+ 	fuel-gauge@36 {
+ 		compatible = "maxim,max77705-battery";
+ 		reg = <0x36>;
+-		maxim,rsns-microohm = <5000>;
++		/*
++		 * 2 mOhm: in the constant-current phase the charger's programmed
++		 * current reads 2.6x the gauge at 5 mOhm (1.1-2.3 A steps), and
++		 * Samsung's DesignCap 0xeaa then gives 9385 mAh.
++		 */
++		maxim,rsns-microohm = <2000>;
+ 		power-supplies = <&max77705_charger>;
+ 		/* The gauge's own thermistor input is unused and reads 25 C */
+ 		io-channels = <&pm8150l_adc ADC5_AMUX_THM1_100K_PU>;
+-- 
+2.56.0
+
