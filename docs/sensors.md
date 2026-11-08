@@ -6,8 +6,8 @@ On the Tab S7+ the motion, compass and light sensors are not wired to the CPU. T
 
 | Sensor | Chip | Bus (DSP side) | State |
 |---|---|---|---|
-| Accelerometer + gyroscope | ST LSM6DSO | I3C 1 | ✅ auto-rotate through iio-sensor-proxy; gyro as IIO `ssc-gyro` (0067, untested) |
-| Magnetometer | AKM AK0991x | DSP | ✅ listed, streams; raw as IIO `ssc-magn`, heading as `ssc-compass` → iio-sensor-proxy Compass (0067, untested) |
+| Accelerometer + gyroscope | ST LSM6DSO | I3C 1 | ✅ auto-rotate through iio-sensor-proxy; gyro as IIO `ssc-gyro` (0072, tested 2026-11-08) |
+| Magnetometer | AKM AK0991x | DSP | ✅ listed, streams; raw as IIO `ssc-magn`, heading as `ssc-compass` → iio-sensor-proxy Compass (0072, tested 2026-11-08) |
 | Ambient light | Vishay VEML3328 (instance 0) | I2C 4, 0x10 | ✅ auto-brightness through iio-sensor-proxy |
 | Virtual: gravity, rotation vector, game rotation vector, gyro/mag calibration, motion detect, tilt | DSP algorithms | | ✅ listed |
 | Second light sensor (veml3328_1) | VEML3328 | I2C 5, 0x10 | ❌ never probes |
