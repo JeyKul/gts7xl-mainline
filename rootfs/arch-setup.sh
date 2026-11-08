@@ -83,6 +83,7 @@ systemctl enable systemd-resolved
 systemctl enable NetworkManager "$DM" bluetooth systemd-timesyncd \
   gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log gts7xl-spen gts7xl-webcam gts7xl-gnss gts7xl-power gts7xl-cover-touch gts7xl-rtc-offset gts7xl-rtc-offset-save.path tuned tuned-ppd \
   $([ -e /etc/systemd/system/gts7xl-sensord-setup.service ] && echo gts7xl-sensord-setup)
+systemctl --global enable gts7xl-audio-sleep
 systemctl set-default graphical.target
 sed -i 's/^load-module module-suspend-on-idle/#&/' /etc/pulse/default.pa
 sed -i 's/^#\?AutoEnable=.*/AutoEnable=true/' /etc/bluetooth/main.conf

@@ -1,0 +1,59 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: MIT
+"""Pause PulseAudio's streams while the tablet sleeps.
+
+PulseAudio keeps the speaker and mic streams running (idle suspend is off for
+the amps), which keeps the audio DSP busy through suspend. This runs in the
+user session: it holds a logind "delay" inhibitor, pauses every sink and
+source on PrepareForSleep(true), then lets the system sleep, and resumes them
+after wake. (A system-sleep hook can't do it: by then the session is frozen.)
+"""
+import subprocess
+from gi.repository import Gio, GLib
+
+bus = Gio.bus_get_sync(Gio.BusType.SYSTEM)
+lock = None
+
+
+def pactl(*args):
+    try:
+        return subprocess.run(["pactl", *args], capture_output=True, text=True, timeout=3).stdout
+    except subprocess.TimeoutExpired:
+        return ""
+
+
+def pulse(on):
+    for kind in ("sink", "source"):
+        for line in pactl("list", "short", kind + "s").splitlines():
+            name = line.split("\t")[1]
+            if not name.endswith(".monitor"):
+                pactl("suspend-" + kind, name, "1" if on else "0")
+
+
+def inhibit():
+    global lock
+    res, fds = bus.call_with_unix_fd_list_sync(
+        "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager",
+        "Inhibit", GLib.Variant("(ssss)", ("sleep", "gts7xl-audio-sleep", "pause audio", "delay")),
+        GLib.VariantType("(h)"), Gio.DBusCallFlags.NONE, -1, None, None)
+    lock = fds.steal_fds()[res.unpack()[0]]
+
+
+def prepare(conn, sender, path, iface, signal, params):
+    global lock
+    going = params.unpack()[0]
+    if going:
+        pulse(True)
+        if lock is not None:
+            import os
+            os.close(lock)
+            lock = None
+    else:
+        pulse(False)
+        inhibit()
+
+
+bus.signal_subscribe("org.freedesktop.login1", "org.freedesktop.login1.Manager", "PrepareForSleep",
+                     "/org/freedesktop/login1", None, Gio.DBusSignalFlags.NONE, prepare)
+inhibit()
+GLib.MainLoop().run()
