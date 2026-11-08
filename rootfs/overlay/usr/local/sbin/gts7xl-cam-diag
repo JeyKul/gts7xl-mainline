@@ -1,0 +1,145 @@
+#!/bin/bash
+# Why are photos dark when the preview is fine? Runs the camera the way the Camera app
+# does and records the sensor's exposure and gain plus libcamera's AGC and AWB log.
+# Only reads and sets V4L2 format, exposure and gain; no focus, power or register writes.
+#
+#   gts7xl-cam-diag [rear|ultrawide|front] [--long]
+#
+# Close the Camera app first. Output goes to ~/cam-diag-<time>/; send summary.txt
+# (and the *.log files if asked).
+set -u
+
+which=rear
+long=0
+for a in "$@"; do
+	case "$a" in
+	rear|ultrawide|front) which=$a ;;
+	--long) long=1 ;;
+	*) echo "usage: $0 [rear|ultrawide|front] [--long]" >&2; exit 2 ;;
+	esac
+done
+
+case $which in
+rear)      CAM=/base/soc@0/cci@ac4f000/i2c-bus@0/camera@2d; PW=1000 PH=756;  FW=4120 FH=3096; SW=4128 SH=3096 ;;
+ultrawide) CAM=/base/soc@0/cci@ac50000/i2c-bus@0/camera@10; PW=1288 PH=972;  FW=2568 FH=1932; SW=2576 SH=1932 ;;
+front)     CAM=/base/soc@0/cci@ac4f000/i2c-bus@1/camera@2d; PW=792  PH=600;  FW=3256 FH=2448; SW=3264 SH=2448 ;;
+esac
+
+if pgrep -f 'gts7xl-camera' >/dev/null || pgrep -f 'gst-launch-1.0.*libcamerasrc' >/dev/null; then
+	echo "Close the Camera app (and anything using the webcam) first." >&2
+	exit 1
+fi
+
+SUB=
+for d in /sys/class/video4linux/v4l-subdev*; do
+	[ "$(readlink -f "$d/device/of_node" 2>/dev/null)" = "/sys/firmware/devicetree$CAM" ] && SUB=/dev/${d##*/}
+done
+[ -n "$SUB" ] || { echo "No sensor subdevice for $CAM" >&2; exit 1; }
+
+OUT=$HOME/cam-diag-$(date +%Y%m%d-%H%M%S)
+mkdir -p "$OUT"
+S=$OUT/summary.txt
+export LIBCAMERA_SOFTISP_MODE=${LIBCAMERA_SOFTISP_MODE:-cpu}
+export LIBCAMERA_LOG_LEVELS='*:WARN,IPASoft:INFO,IPASoftExposure:DEBUG,IPASoftAwb:DEBUG,SimplePipeline:INFO'
+say() { echo "$*" | tee -a "$S"; }
+ctrls() { v4l2-ctl -d "$SUB" --get-ctrl=exposure,analogue_gain 2>&1 | tr '\n' ' '; }
+ctrl() { v4l2-ctl -d "$SUB" --get-ctrl="$1" 2>/dev/null | awk '{print $2}'; }
+
+# run NAME W H FRAMES [KEEP]: stream like the app, JPEG every frame (or only the last KEEP)
+run() {
+	local keep=${5:-0}
+	timeout 300 gst-launch-1.0 -q libcamerasrc camera-name="$CAM" ! \
+		"video/x-raw,width=$2,height=$3" ! identity eos-after="$4" ! videoconvert ! \
+		jpegenc quality=90 ! multifilesink location="$OUT/$1-%03d.jpg" max-files="$keep" \
+		>"$OUT/$1.log" 2>&1
+	local rc=$?
+	[ $rc = 0 ] || say "  $1: gst-launch exit $rc (see $1.log)"
+}
+
+# agc NAME: the exposure and gain AGC worked from, first and last, and how many updates
+agc() {
+	local f=$OUT/$1.log n
+	n=$(grep -c 'exposureMSV' "$f")
+	say "  AGC updates: $n"
+	[ "$n" -gt 0 ] && {
+		say "  first: $(grep 'exposureMSV' "$f" | head -1 | sed 's/.*exposureMSV/exposureMSV/')"
+		say "  last:  $(grep 'exposureMSV' "$f" | tail -1 | sed 's/.*exposureMSV/exposureMSV/')"
+	}
+	say "  last AWB: $(grep 'gain R/B' "$f" | tail -1 | sed 's/.*gain R\/B/gain R\/B/')"
+}
+
+# level NAME: mean R G B (0-255) of the first and last saved JPEG
+level() {
+	python3 -I - "$OUT" "$1" <<'EOF' | tee -a "$S"
+import glob, sys
+import gi
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf
+files = sorted(glob.glob(f"{sys.argv[1]}/{sys.argv[2]}-*.jpg"))
+for f in files[:1] + files[-1:] if len(files) > 1 else files:
+    p = GdkPixbuf.Pixbuf.new_from_file(f)
+    w, h, rs, n = p.get_width(), p.get_height(), p.get_rowstride(), p.get_n_channels()
+    d = p.get_pixels()
+    s = [0, 0, 0]; c = 0; mx = 0
+    for y in range(0, h, max(1, h // 64)):
+        row = d[y * rs:y * rs + w * n]
+        for k in range(3):
+            v = row[k::n * 16]
+            s[k] += sum(v); mx = max(mx, max(v))
+        c += len(row[0::n * 16])
+    print(f"  {f.rsplit('/', 1)[1]}: mean R {s[0]/c:.1f} G {s[1]/c:.1f} B {s[2]/c:.1f}, max {mx}")
+EOF
+}
+
+say "== gts7xl-cam-diag $(date -Is), camera $which ($CAM), sensor $SUB"
+say "kernel $(uname -r); $(pacman -Q libcamera libcamera-ipa gst-plugin-libcamera 2>/dev/null | tr '\n' ' ')"
+say "LIBCAMERA_SOFTISP_MODE=$LIBCAMERA_SOFTISP_MODE; tuning files: $(ls /usr/share/libcamera/ipa/simple/ 2>/dev/null | tr '\n' ' ')"
+say "sensor format now: $(v4l2-ctl -d "$SUB" --get-subdev-fmt pad=0 2>&1 | grep -E 'Width|Mediabus' | tr -s ' \n' ' ')"
+say "Keep the tablet still, pointed at one indoor scene, for the whole run."
+say ""
+
+say "1. Preview mode ${PW}x${PH}, 90 frames (like the app's viewfinder)"
+run A "$PW" "$PH" 90 3
+say "  sensor after: $(ctrls)"
+agc A
+level A
+EA=$(ctrl exposure) GA=$(ctrl analogue_gain)
+say ""
+
+say "2. Straight to full size ${FW}x${FH}, 12 frames (like the app's photo today)"
+say "  sensor before: $(ctrls)"
+run B "$FW" "$FH" 12
+say "  sensor after: $(ctrls)"
+agc B
+level B
+say ""
+
+say "3. Preview again, then full size with the preview's exposure set by hand first"
+run A2 "$PW" "$PH" 90 3
+EA=$(ctrl exposure) GA=$(ctrl analogue_gain)
+v4l2-ctl -d "$SUB" --set-subdev-fmt pad=0,width=$SW,height=$SH >/dev/null 2>&1
+v4l2-ctl -d "$SUB" --set-ctrl=analogue_gain="$GA",exposure="$EA" >/dev/null 2>&1
+say "  preview ended at exposure $EA gain $GA; after mode switch + set: $(ctrls)"
+run C "$FW" "$FH" 12
+say "  sensor after: $(ctrls)"
+agc C
+level C
+say ""
+
+if [ $long = 1 ]; then
+	say "4. Full size for 400 frames, so AGC settles at full size (takes minutes)"
+	run D "$FW" "$FH" 400 2
+	ED=$(ctrl exposure) GD=$(ctrl analogue_gain)
+	say "  sensor after: $(ctrls)"
+	agc D
+	level D
+	python3 -I -c "import sys; a,b,c,d=map(float,sys.argv[1:]); print(f'  preview/full sensitivity (MODE_GAIN): {(c*d)/(a*b):.2f}' if a*b else '')" \
+		"$EA" "$GA" "$ED" "$GD" | tee -a "$S"
+	say "  (only meaningful if 'last' AGC in step 4 shows |error| <= 0.2, or the same exposure as step 1 would have)"
+fi
+
+say ""
+say "How to read this: if step 2 starts AGC at exposure 256 (rear) and its JPEGs are dark and"
+say "green while step 3's are as bright as step 1's, the exposure reset on mode switch is the"
+say "cause and the fixed Camera app (or kernel patch 0067) cures it."
+say "Results in $OUT"
