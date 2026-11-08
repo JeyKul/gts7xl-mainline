@@ -18,7 +18,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | RAM | ✅ | Reserved memory follows the stock map |
 | Storage: UFS | ✅ | Booting and running from `userdata` |
 | microSD slot | ✅ | UHS-I SDR104 (sdhc_2, card detect on gpio77) |
-| Suspend | 🟡 | s2idle with the native display: power key and timer wake work; battery drain not measured |
+| Suspend | 🟡 | s2idle with the native display: power key, timer and keyboard cover wake work; battery drain not measured |
 | Thermal sensors and throttling | 🟡 | SoC, battery and charger sensors read; third thermistor reads high; throttling not checked |
 | Real-time clock | 🟡 | Driver loaded, runs from 1970; time still set over Wi-Fi |
 | Hardware buttons: power, volume | ✅ | Emergency reboot combo works |
@@ -82,7 +82,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | Gyroscope | 🟡 | Streams from the DSP; not passed to desktops |
 | Magnetometer | 🟡 | AK0991x streams from the DSP; not passed to desktops |
 | Ambient light, auto-brightness | ✅ | VEML3328 through `ssc-light-bridge` and iio-sensor-proxy; second light sensor and RGB missing |
-| Hall sensor (cover) | 🟡 | `gpio157` as a lid switch, polarity from stock, does not react to the keyboard cover; lid suspend is off |
+| Hall sensor (cover) | ✅ | The Book Cover Keyboard reports closed/open over pogo: closing sleeps, opening wakes. `gpio157` (stock flip-cover hall) never reacts to it and is unused |
 
 ### Cameras
 
