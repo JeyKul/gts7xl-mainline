@@ -1,0 +1,134 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""Compass test for the Tab S7+: heading, magnetometer and gyroscope.
+
+Reads the ssc-motion-bridge IIO devices (ssc-compass, ssc-magn, ssc-gyro).
+Heading is the direction of the top edge (camera edge in landscape),
+clockwise from magnetic north.
+"""
+import glob, math, os
+import gi
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gio, GLib, Gtk
+
+IIO = '/sys/bus/iio/devices/'
+CARD = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+
+
+def dev(name):
+    for n in glob.glob(IIO + '*/name'):
+        try:
+            with open(n) as f:
+                if f.read().strip() == name:
+                    return os.path.dirname(n) + '/'
+        except OSError:
+            pass
+    return None
+
+
+def rd(path, default=None):
+    try:
+        with open(path) as f:
+            return float(f.read())
+    except (OSError, ValueError, TypeError):
+        return default
+
+
+class Compass(Gtk.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title='Compass')
+        self.set_default_size(480, 640)
+        self.heading = None
+        self.mag = (0, 0, 0)
+        self.gyro = (0, 0, 0)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        for m in ('top', 'bottom', 'start', 'end'):
+            getattr(box, 'set_margin_' + m)(16)
+        self.area = Gtk.DrawingArea(vexpand=True, hexpand=True)
+        self.area.set_draw_func(self.draw)
+        self.title = Gtk.Label()
+        self.info = Gtk.Label(xalign=0)
+        self.info.add_css_class('monospace')
+        box.append(self.title)
+        box.append(self.area)
+        box.append(self.info)
+        self.set_child(box)
+        GLib.timeout_add(100, self.tick)
+
+    def tick(self):
+        c, m, g = dev('ssc-compass'), dev('ssc-magn'), dev('ssc-gyro')
+        if c:
+            raw = rd(c + 'in_rot_from_north_magnetic_tilt_comp_raw')
+            scale = rd(c + 'in_rot_from_north_magnetic_tilt_comp_scale', 0.001)
+            self.heading = None if raw is None else (raw * scale) % 360
+        if m:
+            self.mag = tuple(rd(m + 'in_magn_%s_input' % a, 0) for a in 'xyz')
+        if g:
+            self.gyro = tuple(rd(g + 'in_anglvel_%s_input' % a, 0) for a in 'xyz')
+        if self.heading is None:
+            self.title.set_markup('<span size="xx-large">no compass</span>\n'
+                                  'is gts7xl-sensord-motion@compass running?')
+        else:
+            h = self.heading
+            self.title.set_markup('<span size="xx-large" weight="bold">%.0f° %s</span>'
+                                  % (h, CARD[int((h + 22.5) // 45) % 8]))
+        mx, my, mz = self.mag
+        field = math.sqrt(mx * mx + my * my + mz * mz)
+        self.info.set_text(
+            'mag   x %+6.3f  y %+6.3f  z %+6.3f G   |B| %.2f G%s\n'
+            'gyro  x %+6.2f  y %+6.2f  z %+6.2f rad/s'
+            % (mx, my, mz, field, '  (Earth: 0.25-0.65)' if field > 0.7 else '',
+               *self.gyro))
+        self.area.queue_draw()
+        return True
+
+    def draw(self, area, cr, w, h):
+        r = min(w, h) / 2 - 10
+        cx, cy = w / 2, h / 2
+        fg = area.get_color()
+        cr.set_source_rgba(fg.red, fg.green, fg.blue, 1)
+        cr.set_line_width(3)
+        cr.arc(cx, cy, r, 0, 2 * math.pi)
+        cr.stroke()
+        # The rose turns so that N points to magnetic north
+        rot = -math.radians(self.heading or 0)
+        cr.select_font_face('Sans')
+        for i in range(0, 360, 15):
+            a = rot + math.radians(i)
+            inner = r * (0.85 if i % 45 else 0.78)
+            cr.set_line_width(4 if i % 90 == 0 else 2)
+            cr.move_to(cx + inner * math.sin(a), cy - inner * math.cos(a))
+            cr.line_to(cx + r * math.sin(a), cy - r * math.cos(a))
+            cr.stroke()
+        cr.set_font_size(r * 0.14)
+        for i, t in enumerate('NESW'):
+            a = rot + math.radians(i * 90)
+            ext = cr.text_extents(t)
+            x = cx + r * 0.62 * math.sin(a) - ext.width / 2 - ext.x_bearing
+            y = cy - r * 0.62 * math.cos(a) - ext.height / 2 - ext.y_bearing
+            cr.set_source_rgba(0.85, 0.2, 0.2, 1) if t == 'N' else \
+                cr.set_source_rgba(fg.red, fg.green, fg.blue, 1)
+            cr.move_to(x, y)
+            cr.show_text(t)
+        # Fixed marker: the tablet's top edge
+        cr.set_source_rgba(0.2, 0.5, 0.9, 1)
+        cr.move_to(cx, cy - r - 8)
+        cr.line_to(cx - 12, cy - r + 16)
+        cr.line_to(cx + 12, cy - r + 16)
+        cr.close_path()
+        cr.fill()
+
+
+def main():
+    # NON_UNIQUE: no bus name to hold, so a stuck old instance can't block a new one.
+    # os._exit: GTK and Mesa helper threads kept the process alive after the window
+    # closed (main thread a zombie), which is what made later starts hang and fail.
+    app = Gtk.Application(application_id='org.gts7xl.compass',
+                          flags=Gio.ApplicationFlags.NON_UNIQUE)
+    app.connect('activate', lambda a: Compass(a).present())
+    app.run(None)
+    os._exit(0)
+
+
+if __name__ == '__main__':
+    main()

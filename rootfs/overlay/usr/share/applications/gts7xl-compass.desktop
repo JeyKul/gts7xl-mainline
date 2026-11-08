@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Compass
+Comment=Heading, magnetometer and gyroscope test
+Exec=/usr/local/bin/gts7xl-compass
+Icon=compass
+Categories=Utility;

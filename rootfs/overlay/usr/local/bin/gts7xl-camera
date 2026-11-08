@@ -1,6 +1,6 @@
 #!/usr/bin/python3
-# Rear camera: libcamera preview, contrast autofocus through the focus motor, full size photos.
-import fcntl, glob, os, struct, sys, time
+# Cameras: libcamera preview, contrast autofocus through the focus motor, PNG photos from raw (gts7xl-still).
+import fcntl, glob, os, struct, subprocess, sys, time
 
 os.environ.setdefault("LIBCAMERA_SOFTISP_MODE", "cpu")
 
@@ -18,7 +18,69 @@ CAMERAS = [
 FOCUS_MAX = 1023
 VIDIOC_S_CTRL = 0xc008561c
 V4L2_CID_FOCUS_ABSOLUTE = 0x009a090a
+VIDIOC_G_CTRL = 0xc008561b
+VIDIOC_QUERYCTRL = 0xc0445624
+V4L2_CID_EXPOSURE = 0x00980911
+V4L2_CID_ANALOGUE_GAIN = 0x009e0903
+STATE_DIR = os.path.expanduser("~/.cache/gts7xl-camera")
 SETTLE_MS = 170
+
+
+class Exposure:
+    """Start each preview from the camera's last settled exposure and gain (or a middle
+    guess the first time). libcamera's auto exposure starts from whatever the sensor
+    holds and climbs only about 6 % every fourth frame, so a good start saves seconds."""
+
+    def __init__(self, name, camera_id):
+        self.dev = None
+        self.file = os.path.join(STATE_DIR, f"exposure-{name.lower()}")
+        for d in glob.glob("/sys/class/video4linux/v4l-subdev*"):
+            node = os.path.realpath(d + "/device/of_node")
+            if node.startswith("/sys/firmware/devicetree") and node.endswith(camera_id):
+                self.dev = "/dev/" + os.path.basename(d)
+
+    def _ctrl(self, fd, cid, value=None):
+        if value is None:
+            return struct.unpack("<Ii", fcntl.ioctl(fd, VIDIOC_G_CTRL, struct.pack("<Ii", cid, 0)))[1]
+        fcntl.ioctl(fd, VIDIOC_S_CTRL, struct.pack("<Ii", cid, int(value)))
+
+    @staticmethod
+    def _range(fd, cid):
+        q = fcntl.ioctl(fd, VIDIOC_QUERYCTRL, struct.pack("<II32s", cid, 0, b"").ljust(68, b"\0"))
+        return struct.unpack_from("<ii", q, 40)
+
+    def save(self):
+        try:
+            fd = os.open(self.dev, os.O_RDWR)
+            try:
+                values = self._ctrl(fd, V4L2_CID_EXPOSURE), self._ctrl(fd, V4L2_CID_ANALOGUE_GAIN)
+            finally:
+                os.close(fd)
+            os.makedirs(STATE_DIR, exist_ok=True)
+            with open(self.file, "w") as f:
+                f.write("%d %d\n" % values)
+        except (OSError, TypeError):
+            pass
+
+    def restore(self):
+        try:
+            fd = os.open(self.dev, os.O_RDWR)
+        except (OSError, TypeError):
+            return
+        try:
+            emin, emax = self._range(fd, V4L2_CID_EXPOSURE)
+            gmin, gmax = self._range(fd, V4L2_CID_ANALOGUE_GAIN)
+            try:
+                exposure, gain = (int(v) for v in open(self.file).read().split())
+            except (OSError, ValueError):
+                # First start: half the frame, 2x gain, a typical lit room
+                exposure, gain = emax // 2, gmin * 2
+            self._ctrl(fd, V4L2_CID_ANALOGUE_GAIN, min(gmax, max(gmin, gain)))
+            self._ctrl(fd, V4L2_CID_EXPOSURE, min(emax, max(emin, exposure)))
+        except OSError as e:
+            print("could not set the start exposure:", e, file=sys.stderr, flush=True)
+        finally:
+            os.close(fd)
 
 
 class Focus:
@@ -83,10 +145,13 @@ class Camera(Gtk.Application):
         return False
 
     def start_preview(self):
-        w, h = CAMERAS[self.camera][3]
+        name, cid, _, (w, h), _ = CAMERAS[self.camera]
+        self.exposure = Exposure(name, cid)
+        self.exposure.restore()
+        flip = "videoflip method=horizontal-flip ! " if name == "Front" else ""
         self.pipeline = Gst.parse_launch(
-            f"libcamerasrc name=src camera-name={CAMERAS[self.camera][1]} ! "
-            f"video/x-raw,width={w},height={h} ! videoconvert ! "
+            f"libcamerasrc name=src camera-name={cid} ! "
+            f"video/x-raw,width={w},height={h} ! videoconvert ! {flip}"
             "video/x-raw,format=BGRA ! tee name=t "
             "t. ! queue leaky=downstream max-size-buffers=1 ! gtk4paintablesink name=view "
             "t. ! queue leaky=downstream max-size-buffers=1 ! appsink name=meter drop=true max-buffers=1 sync=false")
@@ -108,6 +173,7 @@ class Camera(Gtk.Application):
 
     def stop_preview(self):
         if self.pipeline:
+            self.exposure.save()
             self.pipeline.get_bus().remove_signal_watch()
             self.pipeline.set_state(Gst.State.NULL)
             self.pipeline = None
@@ -178,43 +244,34 @@ class Camera(Gtk.Application):
         return False
 
     def photo(self):
+        # Photos come from the raw sensor frames through gts7xl-still: its own exposure,
+        # 2x2 blocks to RGB (rear 2064x1548), PNG. The preview must be stopped first.
         if self.busy or self.sweep is not None:
             return
         self.busy = True
         self.status.set_text("Taking photo")
         self.stop_preview()
         self.picture.set_paintable(None)
-        w, h = CAMERAS[self.camera][2]
         folder = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) or os.path.expanduser("~/Pictures")
         os.makedirs(folder, exist_ok=True)
-        self.path = os.path.join(folder, time.strftime("IMG_%Y%m%d_%H%M%S.jpg"))
-        self.shot = Gst.parse_launch(
-            f"libcamerasrc camera-name={CAMERAS[self.camera][1]} ! "
-            f"video/x-raw,width={w},height={h} ! videoconvert ! jpegenc quality=92 ! "
-            "appsink name=out max-buffers=1 drop=true sync=false")
-        self.out = self.shot.get_by_name("out")
-        self.frames = 0
-        self.shot.set_state(Gst.State.PLAYING)
+        self.path = os.path.join(folder, time.strftime("IMG_%Y%m%d_%H%M%S.png"))
+        cmd = ["gts7xl-still", CAMERAS[self.camera][1], self.path]
+        if CAMERAS[self.camera][0] == "Front":
+            cmd.append("--mirror")
+        self.shot = subprocess.Popen(cmd,
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
         GLib.timeout_add(100, self.wait_photo)
 
     def wait_photo(self):
-        # Let exposure settle before keeping a frame
-        sample = self.out.emit("try-pull-sample", 10 * Gst.MSECOND)
-        if not sample:
+        if self.shot.poll() is None:
             return True
-        self.frames += 1
-        if self.frames < 10:
-            return True
-        buf = sample.get_buffer()
-        ok, info = buf.map(Gst.MapFlags.READ)
-        with open(self.path, "wb") as f:
-            f.write(bytes(info.data))
-        buf.unmap(info)
-        self.shot.set_state(Gst.State.NULL)
+        err = self.shot.stderr.read()
+        sys.stderr.write(err)
+        ok = self.shot.returncode == 0 and os.path.exists(self.path)
         self.shot = None
         self.busy = False
-        self.status.set_text("Saved " + self.path)
-        print("saved", self.path, flush=True)
+        self.status.set_text(("Saved " + self.path) if ok else
+                             "Photo failed: " + (err.strip().splitlines() or ["?"])[-1])
         self.start_preview()
         return False
 
