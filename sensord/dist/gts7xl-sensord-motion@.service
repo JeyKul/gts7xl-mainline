@@ -1,0 +1,9 @@
+[Unit]
+Description=SSC %i to the ssc-motion-bridge IIO device
+After=gts7xl-sensord-fs.service
+
+[Service]
+ExecStartPre=/usr/bin/modprobe ssc-motion-bridge
+ExecStart=/usr/local/bin/gts7xl-sensord-motion %i
+Restart=always
+RestartSec=10

@@ -1,0 +1,379 @@
+From af302392afb041b8e4052ac5f1321a9aac7a59d5 Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Sun, 8 Nov 2026 01:53:49 +0000
+Subject: [PATCH] iio: imu: add ssc-motion-bridge, gyro, magnetometer and
+ compass fed from userspace
+
+The Tab S7+ gyroscope (LSM6DSO) and magnetometer (AK0991x) sit behind
+the Qualcomm sensor DSP, which the kernel has no driver for. Like
+ssc-light-bridge for the light sensor, a userspace SSC client
+(gts7xl-sensord) writes the readings into small IIO devices:
+
+  ssc-gyro     in_anglvel_{x,y,z}_input, rad/s
+  ssc-magn     in_magn_{x,y,z}_input, gauss
+  ssc-compass  in_rot_from_north_magnetic_tilt_comp_raw, millidegrees
+               (scale 0.001), also pushed into a kfifo buffer
+
+The compass buffer is what iio-sensor-proxy's iio-buffer-compass
+driver reads (its udev rule matches the scan element), which in turn
+feeds GeoClue's heading. postenable hands over the last heading at once
+because iio-sensor-proxy only accepts a buffer with data within 0.5 s.
+
+Lock order is the IIO mode lock first, then the driver lock: postenable
+runs with the mode lock held, write_raw takes it through
+iio_device_try_claim_buffer_mode() before the driver lock.
+---
+ drivers/iio/imu/Kconfig             |  13 ++
+ drivers/iio/imu/Makefile            |   1 +
+ drivers/iio/imu/ssc-motion-bridge.c | 304 ++++++++++++++++++++++++++++
+ 3 files changed, 318 insertions(+)
+ create mode 100644 drivers/iio/imu/ssc-motion-bridge.c
+
+diff --git a/drivers/iio/imu/Kconfig b/drivers/iio/imu/Kconfig
+index 8bab4616b..f018010cc 100644
+--- a/drivers/iio/imu/Kconfig
++++ b/drivers/iio/imu/Kconfig
+@@ -127,6 +127,19 @@ config SMI240
+ 	  called smi240.
+ 
+ source "drivers/iio/imu/smi330/Kconfig"
++config SSC_MOTION_BRIDGE
++	tristate "Gyroscope, magnetometer and compass fed in from userspace"
++	select IIO_BUFFER
++	select IIO_KFIFO_BUF
++	help
++	  IIO gyroscope, magnetometer and compass-heading devices whose
++	  values a userspace daemon writes. For motion sensors behind the
++	  Qualcomm sensor DSP (SSC), so that iio-sensor-proxy, GeoClue and
++	  other IIO readers can use them.
++
++	  To compile this driver as a module, choose M here: the module
++	  will be called ssc-motion-bridge.
++
+ source "drivers/iio/imu/st_lsm6dsx/Kconfig"
+ source "drivers/iio/imu/st_lsm9ds0/Kconfig"
+ 
+diff --git a/drivers/iio/imu/Makefile b/drivers/iio/imu/Makefile
+index 3268dc237..771afbb49 100644
+--- a/drivers/iio/imu/Makefile
++++ b/drivers/iio/imu/Makefile
+@@ -34,5 +34,6 @@ obj-$(CONFIG_KMX61) += kmx61.o
+ obj-$(CONFIG_SMI240) += smi240.o
+ 
+ obj-y += smi330/
++obj-$(CONFIG_SSC_MOTION_BRIDGE) += ssc-motion-bridge.o
+ obj-y += st_lsm6dsx/
+ obj-y += st_lsm9ds0/
+diff --git a/drivers/iio/imu/ssc-motion-bridge.c b/drivers/iio/imu/ssc-motion-bridge.c
+new file mode 100644
+index 000000000..f111ff965
+--- /dev/null
++++ b/drivers/iio/imu/ssc-motion-bridge.c
+@@ -0,0 +1,304 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Gyroscope, magnetometer and compass heading fed in from userspace.
++ *
++ * On Qualcomm boards the motion sensors can sit behind the sensor DSP (SSC),
++ * which the kernel has no driver for. A userspace SSC client writes the
++ * readings here, so that readers see ordinary IIO devices:
++ *
++ *  ssc-gyro     in_anglvel_{x,y,z}_input   rad/s
++ *  ssc-magn     in_magn_{x,y,z}_input      gauss
++ *  ssc-compass  in_rot_from_north_magnetic_tilt_comp_raw (x scale = degrees),
++ *               also pushed to a buffer, the interface iio-sensor-proxy's
++ *               compass driver (and so GeoClue) reads
++ */
++
++#include <linux/device/faux.h>
++#include <linux/iio/buffer.h>
++#include <linux/iio/iio.h>
++#include <linux/iio/kfifo_buf.h>
++#include <linux/module.h>
++#include <linux/mutex.h>
++
++/* ---- three-axis devices, values written to the _input attributes ---- */
++
++struct ssc_vec {
++	struct mutex lock;
++	int val[3];
++	int val2[3];
++	int fmt;
++};
++
++#define SSC_VEC_CHAN(_type, _axis, _addr) {				\
++	.type = (_type),						\
++	.modified = 1,							\
++	.channel2 = IIO_MOD_##_axis,					\
++	.address = (_addr),						\
++	.info_mask_separate = BIT(IIO_CHAN_INFO_PROCESSED),		\
++}
++
++static const struct iio_chan_spec ssc_gyro_channels[] = {
++	SSC_VEC_CHAN(IIO_ANGL_VEL, X, 0),
++	SSC_VEC_CHAN(IIO_ANGL_VEL, Y, 1),
++	SSC_VEC_CHAN(IIO_ANGL_VEL, Z, 2),
++};
++
++static const struct iio_chan_spec ssc_magn_channels[] = {
++	SSC_VEC_CHAN(IIO_MAGN, X, 0),
++	SSC_VEC_CHAN(IIO_MAGN, Y, 1),
++	SSC_VEC_CHAN(IIO_MAGN, Z, 2),
++};
++
++static int ssc_vec_read_raw(struct iio_dev *indio_dev,
++			    struct iio_chan_spec const *chan,
++			    int *val, int *val2, long mask)
++{
++	struct ssc_vec *data = iio_priv(indio_dev);
++
++	if (mask != IIO_CHAN_INFO_PROCESSED || chan->address > 2)
++		return -EINVAL;
++
++	guard(mutex)(&data->lock);
++	*val = data->val[chan->address];
++	*val2 = data->val2[chan->address];
++	return data->fmt;
++}
++
++static int ssc_vec_write_raw(struct iio_dev *indio_dev,
++			     struct iio_chan_spec const *chan,
++			     int val, int val2, long mask)
++{
++	struct ssc_vec *data = iio_priv(indio_dev);
++
++	if (mask != IIO_CHAN_INFO_PROCESSED || chan->address > 2)
++		return -EINVAL;
++
++	guard(mutex)(&data->lock);
++	data->val[chan->address] = val;
++	data->val2[chan->address] = val2;
++	return 0;
++}
++
++static int ssc_vec_write_raw_get_fmt(struct iio_dev *indio_dev,
++				     struct iio_chan_spec const *chan,
++				     long mask)
++{
++	struct ssc_vec *data = iio_priv(indio_dev);
++
++	return data->fmt;
++}
++
++static const struct iio_info ssc_vec_info = {
++	.read_raw = ssc_vec_read_raw,
++	.write_raw = ssc_vec_write_raw,
++	.write_raw_get_fmt = ssc_vec_write_raw_get_fmt,
++};
++
++static int ssc_vec_register(struct device *dev, const char *name,
++			    const struct iio_chan_spec *channels, int fmt)
++{
++	struct iio_dev *indio_dev;
++	struct ssc_vec *data;
++
++	indio_dev = devm_iio_device_alloc(dev, sizeof(*data));
++	if (!indio_dev)
++		return -ENOMEM;
++
++	data = iio_priv(indio_dev);
++	mutex_init(&data->lock);
++	data->fmt = fmt;
++
++	indio_dev->name = name;
++	indio_dev->info = &ssc_vec_info;
++	indio_dev->channels = channels;
++	indio_dev->num_channels = 3;
++	indio_dev->modes = INDIO_DIRECT_MODE;
++
++	return devm_iio_device_register(dev, indio_dev);
++}
++
++/* ---- compass heading, also pushed to a buffer ---- */
++
++/* The heading is written in millidegrees, 0..359999 */
++#define SSC_COMPASS_MAX 359999
++
++struct ssc_compass {
++	/* Lock order: the IIO mode lock first, then this one */
++	struct mutex lock;
++	int heading;
++	bool valid;
++	struct {
++		s32 heading;
++		aligned_s64 timestamp;
++	} scan;
++};
++
++static const struct iio_chan_spec ssc_compass_channels[] = {
++	{
++		.type = IIO_ROT,
++		.modified = 1,
++		.channel2 = IIO_MOD_NORTH_MAGN_TILT_COMP,
++		.info_mask_separate = BIT(IIO_CHAN_INFO_RAW) |
++				      BIT(IIO_CHAN_INFO_SCALE),
++		.scan_index = 0,
++		.scan_type = {
++			.sign = 's',
++			.realbits = 32,
++			.storagebits = 32,
++			.endianness = IIO_CPU,
++		},
++	},
++	IIO_CHAN_SOFT_TIMESTAMP(1),
++};
++
++/* Called with c->lock held */
++static void ssc_compass_push(struct iio_dev *indio_dev, struct ssc_compass *c)
++{
++	memset(&c->scan, 0, sizeof(c->scan));
++	c->scan.heading = c->heading;
++	iio_push_to_buffers_with_ts(indio_dev, &c->scan, sizeof(c->scan),
++				    iio_get_time_ns(indio_dev));
++}
++
++static int ssc_compass_read_raw(struct iio_dev *indio_dev,
++				struct iio_chan_spec const *chan,
++				int *val, int *val2, long mask)
++{
++	struct ssc_compass *c = iio_priv(indio_dev);
++
++	switch (mask) {
++	case IIO_CHAN_INFO_RAW:
++		guard(mutex)(&c->lock);
++		if (!c->valid)
++			return -ENODATA;
++		*val = c->heading;
++		return IIO_VAL_INT;
++	case IIO_CHAN_INFO_SCALE:
++		*val = 0;
++		*val2 = 1000;	/* millidegrees to degrees */
++		return IIO_VAL_INT_PLUS_MICRO;
++	default:
++		return -EINVAL;
++	}
++}
++
++static int ssc_compass_write_raw(struct iio_dev *indio_dev,
++				 struct iio_chan_spec const *chan,
++				 int val, int val2, long mask)
++{
++	struct ssc_compass *c = iio_priv(indio_dev);
++
++	if (mask != IIO_CHAN_INFO_RAW || val < 0 || val > SSC_COMPASS_MAX)
++		return -EINVAL;
++
++	scoped_guard(mutex, &c->lock) {
++		c->heading = val;
++		c->valid = true;
++	}
++
++	if (iio_device_try_claim_buffer_mode(indio_dev)) {
++		scoped_guard(mutex, &c->lock)
++			ssc_compass_push(indio_dev, c);
++		iio_device_release_buffer_mode(indio_dev);
++	}
++	return 0;
++}
++
++static int ssc_compass_write_raw_get_fmt(struct iio_dev *indio_dev,
++					 struct iio_chan_spec const *chan,
++					 long mask)
++{
++	return IIO_VAL_INT;
++}
++
++/*
++ * Hand the last heading to a reader as soon as it enables the buffer:
++ * iio-sensor-proxy only accepts a buffer that has data within 0.5 s.
++ */
++static int ssc_compass_postenable(struct iio_dev *indio_dev)
++{
++	struct ssc_compass *c = iio_priv(indio_dev);
++
++	guard(mutex)(&c->lock);
++	if (c->valid)
++		ssc_compass_push(indio_dev, c);
++	return 0;
++}
++
++static const struct iio_buffer_setup_ops ssc_compass_buffer_ops = {
++	.postenable = ssc_compass_postenable,
++};
++
++static const struct iio_info ssc_compass_info = {
++	.read_raw = ssc_compass_read_raw,
++	.write_raw = ssc_compass_write_raw,
++	.write_raw_get_fmt = ssc_compass_write_raw_get_fmt,
++};
++
++static int ssc_compass_register(struct device *dev)
++{
++	struct iio_dev *indio_dev;
++	struct ssc_compass *c;
++	int ret;
++
++	indio_dev = devm_iio_device_alloc(dev, sizeof(*c));
++	if (!indio_dev)
++		return -ENOMEM;
++
++	c = iio_priv(indio_dev);
++	mutex_init(&c->lock);
++
++	indio_dev->name = "ssc-compass";
++	indio_dev->info = &ssc_compass_info;
++	indio_dev->channels = ssc_compass_channels;
++	indio_dev->num_channels = ARRAY_SIZE(ssc_compass_channels);
++	indio_dev->modes = INDIO_DIRECT_MODE;
++
++	ret = devm_iio_kfifo_buffer_setup(dev, indio_dev,
++					  &ssc_compass_buffer_ops);
++	if (ret)
++		return ret;
++
++	return devm_iio_device_register(dev, indio_dev);
++}
++
++static int ssc_motion_probe(struct faux_device *fdev)
++{
++	struct device *dev = &fdev->dev;
++	int ret;
++
++	ret = ssc_vec_register(dev, "ssc-gyro", ssc_gyro_channels,
++			       IIO_VAL_INT_PLUS_NANO);
++	if (ret)
++		return ret;
++
++	ret = ssc_vec_register(dev, "ssc-magn", ssc_magn_channels,
++			       IIO_VAL_INT_PLUS_MICRO);
++	if (ret)
++		return ret;
++
++	return ssc_compass_register(dev);
++}
++
++static const struct faux_device_ops ssc_motion_ops = {
++	.probe = ssc_motion_probe,
++};
++
++static struct faux_device *ssc_motion_fdev;
++
++static int __init ssc_motion_init(void)
++{
++	ssc_motion_fdev = faux_device_create("ssc-motion-bridge", NULL,
++					     &ssc_motion_ops);
++	return ssc_motion_fdev ? 0 : -ENODEV;
++}
++module_init(ssc_motion_init);
++
++static void __exit ssc_motion_exit(void)
++{
++	faux_device_destroy(ssc_motion_fdev);
++}
++module_exit(ssc_motion_exit);
++
++MODULE_DESCRIPTION("Gyroscope, magnetometer and compass fed in from a userspace SSC client");
++MODULE_LICENSE("GPL");
+-- 
+2.43.0
+
