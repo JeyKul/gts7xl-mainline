@@ -1,0 +1,110 @@
+From 660570c6335468e5f3e366ee6103ebf58e4081b0 Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Sun, 8 Nov 2026 02:00:01 +0000
+Subject: [PATCH] arm64: dts: qcom: gts7xlwifi: thermal zones for the PM8150L
+ thermistors, fix blkt_thm
+
+The three PM8150L thermistors (0022) were only IIO channels, and the
+third one, blkt_thm on GPIO4, read far too high (about 50 C at room
+temperature).
+
+Cause: it is not a plain 100k NTC on the 100k pull-up. Samsung's
+sec-battery node (kona-sec-gts7xlwifi-eur-overlay-r06.dts) reads the
+same three channels (io-channels 0x4d, 0x4f, 0x55: adc-temp,
+adc-chg-temp, adc-blkt-temp) with a voltage-to-temperature table each.
+The batt and chg tables match the ADC driver's 100k table within about
+1 C (25 C: 920 / 929 mV vs 937 mV), so those two are right. The blkt
+table has 439 mV at 25 C, which the 100k table turns into 52 C.
+
+Add generic-adc-thermal sensors and thermal zones for all three
+(batt-thermal, chg-thermal, blkt-thermal). blkt gets a lookup table that
+maps the ADC driver's (100k-table) value back to the real temperature
+through Samsung's blkt_temp_table, 90 C to -20 C in 5 C steps (its
+range; the driver clamps outside it). The zones have no trips and no
+polling: charging and skin limits stay in userspace, as on stock.
+
+The blkt_thm IIO channel itself still shows the 100k-table value; read
+the thermal zone (or the generic-adc-thermal IIO device) instead.
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    | 65 +++++++++++++++++++
+ 1 file changed, 65 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index e81c8f1a4..14abfe7d9 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -1027,6 +1027,71 @@
+ 	};
+ };
+ 
++/*
++ * Thermal zones for the three PM8150L thermistors, for monitoring only (no
++ * trips: the charging and skin limits stay in userspace, gts7xl-charge-control
++ * and gts7xl-power, like Samsung's are in its battery driver and thermal HAL).
++ *
++ * batt_thm and chg_thm are 100k NTCs on the internal 100k pull-up, which the
++ * ADC already converts right (Samsung's battery tables agree within ~1 C).
++ *
++ * blkt_thm (GPIO4, Samsung's "adc-blkt-temp") is wired differently: it reads
++ * 439 mV at 25 C where a 100k NTC reads 937 mV, so the ADC's 100k table turns
++ * 25 C into 52 C. The lookup table below maps the ADC's value back through
++ * Samsung's blkt_temp_table (sec-battery node, kona-sec-gts7xlwifi r06):
++ * <real m°C, value the 100k table gives for Samsung's voltage at that
++ * temperature>, from 90 C down to -20 C (Samsung's range; clamped outside).
++ */
++/ {
++	batt_therm: thermal-sensor-batt {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&pm8150l_adc ADC5_AMUX_THM1_100K_PU>;
++		io-channel-names = "sensor-channel";
++	};
++
++	chg_therm: thermal-sensor-chg {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&pm8150l_adc ADC5_AMUX_THM3_100K_PU>;
++		io-channel-names = "sensor-channel";
++	};
++
++	blkt_therm: thermal-sensor-blkt {
++		compatible = "generic-adc-thermal";
++		#thermal-sensor-cells = <0>;
++		io-channels = <&pm8150l_adc ADC5_GPIO4_100K_PU>;
++		io-channel-names = "sensor-channel";
++		temperature-lookup-table = <
++			 90000 103986   85000 100186   80000  96547   75000  92639
++			 70000  88873   65000  85079   60000  81231   55000  77138
++			 50000  72940   45000  68761   40000  64348   35000  59647
++			 30000  55617   25000  52036   20000  48707   15000  45204
++			 10000  42338    5000  39546       0  37252  (-5000) 35237
++			(-10000) 33751 (-15000) 32290 (-20000) 30991>;
++	};
++
++	thermal-zones {
++		batt-thermal {
++			polling-delay-passive = <0>;
++			polling-delay = <0>;
++			thermal-sensors = <&batt_therm>;
++		};
++
++		chg-thermal {
++			polling-delay-passive = <0>;
++			polling-delay = <0>;
++			thermal-sensors = <&chg_therm>;
++		};
++
++		blkt-thermal {
++			polling-delay-passive = <0>;
++			polling-delay = <0>;
++			thermal-sensors = <&blkt_therm>;
++		};
++	};
++};
++
+ &pm8150l_adc {
+ 	channel@4d {
+ 		reg = <ADC5_AMUX_THM1_100K_PU>;
+-- 
+2.43.0
+
