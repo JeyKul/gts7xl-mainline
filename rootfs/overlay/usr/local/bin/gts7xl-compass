@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: MIT
 """Compass test for the Tab S7+: heading, magnetometer and gyroscope.
 
-Reads the ssc-motion-bridge IIO devices (ssc-compass, ssc-magn, ssc-gyro).
+Heading comes from iio-sensor-proxy (ClaimCompass), which is what starts the
+DSP's rotation vector streaming; magnetometer and gyroscope are read from the
+ssc-motion-bridge IIO devices (ssc-magn, ssc-gyro).
 Heading is the direction of the top edge (camera edge in landscape),
 clockwise from magnetic north.
 """
@@ -53,21 +55,31 @@ class Compass(Gtk.ApplicationWindow):
         box.append(self.area)
         box.append(self.info)
         self.set_child(box)
+        self.proxy = None
+        try:
+            self.proxy = Gio.DBusProxy.new_for_bus_sync(
+                Gio.BusType.SYSTEM, Gio.DBusProxyFlags.NONE, None, 'net.hadess.SensorProxy',
+                '/net/hadess/SensorProxy/Compass', 'net.hadess.SensorProxy.Compass', None)
+            self.proxy.call_sync('ClaimCompass', None, Gio.DBusCallFlags.NONE, 5000, None)
+        except GLib.Error as e:
+            print('compass claim failed:', e.message, flush=True)
+            self.proxy = None
         GLib.timeout_add(100, self.tick)
 
     def tick(self):
-        c, m, g = dev('ssc-compass'), dev('ssc-magn'), dev('ssc-gyro')
-        if c:
-            raw = rd(c + 'in_rot_from_north_magnetic_tilt_comp_raw')
-            scale = rd(c + 'in_rot_from_north_magnetic_tilt_comp_scale', 0.001)
-            self.heading = None if raw is None else (raw * scale) % 360
+        m, g = dev('ssc-magn'), dev('ssc-gyro')
+        self.heading = None
+        if self.proxy:
+            v = self.proxy.get_cached_property('CompassHeading')
+            if v is not None and v.get_double() >= 0:
+                self.heading = v.get_double() % 360
         if m:
             self.mag = tuple(rd(m + 'in_magn_%s_input' % a, 0) for a in 'xyz')
         if g:
             self.gyro = tuple(rd(g + 'in_anglvel_%s_input' % a, 0) for a in 'xyz')
         if self.heading is None:
             self.title.set_markup('<span size="xx-large">no compass</span>\n'
-                                  'is gts7xl-sensord-motion@compass running?')
+                                  'iio-sensor-proxy has no heading yet')
         else:
             h = self.heading
             self.title.set_markup('<span size="xx-large" weight="bold">%.0f° %s</span>'
