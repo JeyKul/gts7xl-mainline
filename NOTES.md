@@ -89,3 +89,8 @@ Short dated findings, newest first. Status lives in README.md.
 - Kernel: ANDROID_BINDER_IPC + BINDERFS (devices via binderfs), PSI, nftables NAT/masq/compat as modules. binderfs mounts on #83.
 - Overlay copies left /usr, /etc and others at 775 (checkout umask 002), hence pacman's "directory permissions differ" warnings; installers now clear go-w on overlay dirs.
 - One-off boot hang on 2026-11-08 (kernel #82 + GNSS DT): no "Run /init", stalled after 1.9 s; the same image booted fine next time. Watch for repeats.
+
+## 2026-11-08: video codec, power profiles, Waydroid network
+- Venus: mainline drops qcom,sm8250-venus from venus when CONFIG_VIDEO_QCOM_IRIS is set, so qcom_iris drives it (venus bind gave a silent -ENODEV from driver matching). Firmware venus.mdt + .b00-.b10, .b19 from apnhlos (firstboot video()). First iris load gave -ELOOP for venus.b19 on every firmware path, and later loads were fine; seen right after swapping a debug venus module, so not reproduced. Watch after a clean boot.
+- Waydroid had no internet: netd needs IP_MULTIPLE_TABLES, legacy xtables (NETFILTER_XTABLES_LEGACY + IP(6)_NF_IPTABLES_LEGACY for filter/mangle/raw), owner/mark/quota/... matches, NFLOG, XFRM_USER. Then it works at full speed.
+- KDE's power profile switch: tuned-ppd + gts7xl-power. PowerDevil only looks for a PPD service at startup.
