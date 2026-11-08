@@ -69,7 +69,7 @@ See the status tables in `README.md`.
 - [ ] Battery reads 27.1C from the fuel gauge, which is fake; `batt_thm` is the real value
 - [ ] Sleep: s2idle works, about 2%/h measured by the user over 15h46 (79% to 48%), roughly 0.8W; find what keeps it above stock levels
 - [x] IRQ 156 (MAX77705) storm: wrong gpio11 pin config, fixed with stock bias-pull-up + power-source 1 (2026-11-07)
-- [ ] Use the RTC offset to keep time across reboots
+- [x] Use the RTC offset to keep time across reboots (`gts7xl-rtc-offset`, 2026-11-08)
 
 ## Later
 

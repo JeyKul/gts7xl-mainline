@@ -1,0 +1,96 @@
+From 1421a99209907ba1512b02f020a5722ad83e625d Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 17:56:56 +0100
+Subject: [PATCH] power: supply: max17042: report the battery temperature from
+ an IIO channel
+
+On the Galaxy Tab S7+ the MAX77705 fuel gauge's thermistor input is not
+connected; the battery NTC sits on the PM8150L ADC (batt_thm) and the
+gauge's TEMP register holds a fixed 25.0 C. Everything reading the
+battery power supply's temp (UPower, the skin-temperature limiter in
+userspace, the battery thermal zone) therefore saw 25 C forever.
+
+Take an optional "temp" IIO channel and report it instead of the TEMP
+register. Without io-channels the driver behaves as before.
+
+Wire batt_thm to the gauge in the gts7xlwifi DT.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ .../dts/qcom/sm8250-samsung-gts7xlwifi.dts    |  3 +++
+ drivers/power/supply/max17042_battery.c       | 24 +++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+index 14abfe7d9..19a1493b3 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
++++ b/arch/arm64/boot/dts/qcom/sm8250-samsung-gts7xlwifi.dts
+@@ -1011,6 +1011,9 @@ fuel-gauge@36 {
+ 		reg = <0x36>;
+ 		maxim,rsns-microohm = <5000>;
+ 		power-supplies = <&max77705_charger>;
++		/* The gauge's own thermistor input is unused and reads 25 C */
++		io-channels = <&pm8150l_adc ADC5_AMUX_THM1_100K_PU>;
++		io-channel-names = "temp";
+ 	};
+ };
+ 
+diff --git a/drivers/power/supply/max17042_battery.c b/drivers/power/supply/max17042_battery.c
+index 505a68c26..4da5f0531 100644
+--- a/drivers/power/supply/max17042_battery.c
++++ b/drivers/power/supply/max17042_battery.c
+@@ -14,6 +14,7 @@
+ #include <linux/module.h>
+ #include <linux/slab.h>
+ #include <linux/i2c.h>
++#include <linux/iio/consumer.h>
+ #include <linux/delay.h>
+ #include <linux/interrupt.h>
+ #include <linux/platform_device.h>
+@@ -80,6 +81,7 @@ struct max17042_chip {
+ 	enum max170xx_chip_type chip_type;
+ 	struct max17042_config_data *config_data;
+ 	struct delayed_work work;
++	struct iio_channel *temp_chan;	/* external battery thermistor */
+ 	int    irq;
+ 	int    task_period;
+ 	bool   enable_current_sense;
+@@ -132,6 +134,15 @@ static int max17042_get_temperature(struct max17042_chip *chip, int *temp)
+ 	u32 data;
+ 	struct regmap *map = chip->regmap;
+ 
++	if (chip->temp_chan) {
++		ret = iio_read_channel_processed(chip->temp_chan, temp);
++		if (ret < 0)
++			return ret;
++		/* millidegrees to deci-centigrade */
++		*temp /= 100;
++		return 0;
++	}
++
+ 	ret = regmap_read(map, MAX17042_TEMP, &data);
+ 	if (ret < 0)
+ 		return ret;
+@@ -1455,6 +1466,19 @@ static int max17042_probe(struct i2c_client *client, struct device *dev, int irq
+ 		regmap_config = &max77759_fg_regmap_cfg;
+ 	else
+ 		regmap_config = &max17042_regmap_config;
++	/*
++	 * Some boards leave the gauge's own thermistor input unused and wire
++	 * the battery NTC to a PMIC ADC instead (the gauge then reads a fixed
++	 * 25 C). Report that channel when the firmware names one.
++	 */
++	chip->temp_chan = devm_iio_channel_get(dev, "temp");
++	if (IS_ERR(chip->temp_chan)) {
++		ret = PTR_ERR(chip->temp_chan);
++		if (ret != -ENODEV)
++			return dev_err_probe(dev, ret, "temp channel\n");
++		chip->temp_chan = NULL;
++	}
++
+ 	chip->regmap = devm_regmap_init_i2c(client, regmap_config);
+ 	if (IS_ERR(chip->regmap))
+ 		return dev_err_probe(dev, PTR_ERR(chip->regmap),
+-- 
+2.56.0
+
