@@ -32,6 +32,8 @@ install: gts7xl-sensord
 	install -Dm755 dist/gts7xl-sensord-light $(DESTDIR)$(PREFIX)/bin/gts7xl-sensord-light
 	install -Dm644 dist/gts7xl-sensord-light.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-light.service
 	install -Dm644 dist/gts7xl-sensord-light.conf $(DESTDIR)/etc/modules-load.d/gts7xl-sensord-light.conf
+	install -Dm755 dist/gts7xl-sensord-motion $(DESTDIR)$(PREFIX)/bin/gts7xl-sensord-motion
+	install -Dm644 dist/gts7xl-sensord-motion@.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-motion@.service
 	install -Dm644 dist/gts7xl-sensord-fs.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-fs.service
 	install -Dm644 dist/gts7xl-sensord-setup.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-setup.service
 	install -Dm644 dist/gts7xl-sensord-accel.service $(DESTDIR)/etc/systemd/system/gts7xl-sensord-accel.service
