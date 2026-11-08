@@ -23,6 +23,7 @@ VIDIOC_QUERYCTRL = 0xc0445624
 V4L2_CID_EXPOSURE = 0x00980911
 V4L2_CID_ANALOGUE_GAIN = 0x009e0903
 STATE_DIR = os.path.expanduser("~/.cache/gts7xl-camera")
+TORCH = "/sys/class/leds/white:flash/brightness"
 SETTLE_MS = 170
 
 
@@ -127,10 +128,14 @@ class Camera(Gtk.Application):
         shoot.connect("clicked", lambda _b: self.photo())
         focus = Gtk.Button(label="Focus")
         focus.connect("clicked", lambda _b: self.autofocus())
+        # Rear LED as a torch; stays on through a photo, so it doubles as the flash
+        light = Gtk.ToggleButton(label="Light")
+        light.connect("toggled", lambda b: self.torch(b.get_active()))
         self.switch = Gtk.Button(label=CAMERAS[0][0])
         self.switch.connect("clicked", lambda _b: self.next_camera())
         box.append(shoot)
         box.append(focus)
+        box.append(light)
         box.append(self.switch)
         overlay.add_overlay(box)
         self.status = Gtk.Label(halign=Gtk.Align.START, valign=Gtk.Align.END, margin_start=16, margin_bottom=12)
@@ -275,7 +280,15 @@ class Camera(Gtk.Application):
         self.start_preview()
         return False
 
+    def torch(self, on):
+        try:
+            with open(TORCH, "w") as f:
+                f.write("255" if on else "0")
+        except OSError as e:
+            self.status.set_text(f"Light: {e.strerror}")
+
     def closing(self, _win):
+        self.torch(False)
         self.stop_preview()
         return False
 
