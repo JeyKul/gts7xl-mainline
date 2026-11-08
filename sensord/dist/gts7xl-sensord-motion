@@ -1,0 +1,81 @@
+#!/bin/sh
+# Feeds the SSC motion sensors into the ssc-motion-bridge IIO devices
+# (linux-patches/0067), where ordinary IIO readers find them:
+#
+#   gyro     gyroscope, rad/s     -> ssc-gyro     in_anglvel_{x,y,z}_input
+#   mag      magnetometer, uT     -> ssc-magn     in_magn_{x,y,z}_input (gauss)
+#   compass  heading from the DSP's rotation vector -> ssc-compass, read by
+#            iio-sensor-proxy's compass (GeoClue). Streams only while a reader
+#            has the compass buffer enabled.
+#
+# Values are as the DSP reports them, at most 10 writes a second (5 for the
+# compass). Heading: direction of the tablet's top edge (the camera edge in
+# landscape, sensor +X) clockwise from magnetic north, in millidegrees.
+set -u
+what=${1:-}
+case "$what" in
+gyro) dev=ssc-gyro; type=gyro ;;
+mag) dev=ssc-magn; type=mag ;;
+compass) dev=ssc-compass; type=rotv ;;
+*) echo "usage: $0 gyro|mag|compass" >&2; exit 2 ;;
+esac
+N=$(grep -lx "$dev" /sys/bus/iio/devices/*/name 2>/dev/null | head -1)
+[ -n "$N" ] || { echo "no $dev IIO device (modprobe ssc-motion-bridge)" >&2; exit 1; }
+D=$(dirname "$N")
+
+if [ "$what" != compass ]; then
+	if [ "$what" = gyro ]; then ch=anglvel; div=1; else ch=magn; div=100; fi
+	stdbuf -oL gts7xl-sensord --stream "$type" --rate 10 --wait 300 |
+		awk -v d="$D" -v ch="$ch" -v div="$div" '
+		$1 == "'"$type"'" && NF >= 6 {
+			t = $2; sub(/^t=/, "", t)
+			if (t - last < 0.1) next
+			last = t
+			split("x y z", a, " ")
+			for (i = 1; i <= 3; i++) {
+				f = d "/in_" ch "_" a[i] "_input"
+				printf "%.9f\n", $(i + 2) / div > f; close(f)
+			}
+		}'
+	exit 1	# stream ended (DSP restart): systemd restarts us
+fi
+
+# Compass: rotation vector quaternion (x y z w) -> azimuth of sensor +X
+HEADING_AWK='
+function heading(x, y, z, w,   e, n, az) {
+	e = 1 - 2 * (y * y + z * z)	# east component of +X
+	n = 2 * (x * y + z * w)		# north component of +X
+	az = atan2(e, n) * 180 / 3.14159265358979
+	if (az < 0) az += 360
+	return int(az * 1000 + 0.5) % 360000
+}'
+EN="$D/buffer/enable"
+RAW="$D/in_rot_from_north_magnetic_tilt_comp_raw"
+
+# One heading first: iio-sensor-proxy only takes a compass whose buffer has
+# data at once, so announce the device again once it has a value.
+stdbuf -oL gts7xl-sensord --stream rotv --rate 10 --count 1 --wait 300 |
+	awk -v raw="$RAW" "$HEADING_AWK"'
+	$1 == "rotv" && NF >= 7 { print heading($3, $4, $5, $6) > raw; close(raw) }'
+cat "$RAW" >/dev/null 2>&1 || exit 1	# no heading: systemd retries
+udevadm trigger --action=add "$D" 2>/dev/null
+
+while :; do
+	# Idle until a reader (iio-sensor-proxy after ClaimCompass) enables the buffer
+	while [ "$(cat "$EN" 2>/dev/null)" != 1 ]; do sleep 2; done
+	# awk exits when the buffer is disabled again; sensord then ends on SIGPIPE
+	stdbuf -oL gts7xl-sensord --stream rotv --rate 10 --wait 300 |
+		awk -v raw="$RAW" -v en="$EN" "$HEADING_AWK"'
+		$1 == "rotv" && NF >= 7 {
+			t = $2; sub(/^t=/, "", t)
+			if (t - last < 0.2) next
+			last = t
+			print heading($3, $4, $5, $6) > raw; close(raw)
+			if (t - checked >= 2) {
+				checked = t
+				s = ""; getline s < en; close(en)
+				if (s != "1") exit 0
+			}
+		}'
+	sleep 1
+done

@@ -21,13 +21,13 @@ Build: `make`. Tests, no hardware needed: `make check`. Install: `make install i
 - `src/client.c`: SSC client over a QRTR socket
 - `src/main.c`: command line, streaming, uinput
 - `tools/gts7xl-sensord-extract`: copies this tablet's firmware and sensor files, read-only
-- `dist/`: systemd units, udev rules, `gts7xl-sensord-light` (light value into the kernel's `ssc-light-bridge` IIO device)
-- `linux-patches/0043`-`0045` and `0047` in the repo: DSP, power rails, light bridge
+- `dist/`: systemd units, udev rules, `gts7xl-sensord-light` (light value into the kernel's `ssc-light-bridge` IIO device), `gts7xl-sensord-motion` (gyro, magnetometer and compass heading into `ssc-motion-bridge`)
+- `linux-patches/0043`-`0045`, `0047` and `0067` in the repo: DSP, power rails, light bridge, motion bridge
 - `docs/RESEARCH.md`: facts with sources, licence decisions
 
 ## Why uinput
 
-`iio-sensor-proxy` already has an `input-accel` driver, chosen by a udev property on any device with `INPUT_PROP_ACCELEROMETER`. It reads `ABS_X/Y/Z` by `EVIOCGABS` every 700 ms at 256 counts per g, and takes `ACCEL_MOUNT_MATRIX` from udev. That needs no kernel driver and no change to the Arch package. libinput ignores such devices. The alternatives cost more: there is no way to make a real IIO device from userspace, and its `ssc-accel` driver needs a build against libssc, libqmi and glib. Limit: this covers the accelerometer only. Light and compass have no equivalent input path.
+`iio-sensor-proxy` already has an `input-accel` driver, chosen by a udev property on any device with `INPUT_PROP_ACCELEROMETER`. It reads `ABS_X/Y/Z` by `EVIOCGABS` every 700 ms at 256 counts per g, and takes `ACCEL_MOUNT_MATRIX` from udev. That needs no kernel driver and no change to the Arch package. libinput ignores such devices. The alternatives cost more: there is no way to make a real IIO device from userspace, and its `ssc-accel` driver needs a build against libssc, libqmi and glib. Limit: this covers the accelerometer only. Light, gyroscope, magnetometer and compass go through small IIO bridge modules instead (`ssc-light-bridge`, `ssc-motion-bridge`), fed by shell scripts around `--stream`.
 
 ## Licence
 
