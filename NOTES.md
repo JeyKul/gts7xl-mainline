@@ -74,3 +74,9 @@ Short dated findings, newest first. Status lives in README.md.
 - Speakers missing on a fresh install: audio-up raced PulseAudio's start. It now retries each load.
 - KDE splash 32 s: PulseAudio's bluez5 module starts GStreamer, and libgstvulkan's init hangs ~30 s early in boot (it's fast later). A pulseaudio drop-in whitelists core/base/good plugins with its own registry. Splash is now 5 s.
 - gts7xl-spen retries Pair/Connect every 5 s and keeps LE discovery running while the pen isn't connected; a stale bond after a reinstall makes this loop forever. To do: pair only on dock or on request.
+
+## 2026-11-08: cover sleep and wake
+- The Book Cover Keyboard sends POGO_ID_HALL packets: 3 = closed over the screen, 2 = open (folded behind also reads 2), 1 appears briefly while closing. The pogo driver reports SW_LID from them (patch 0062).
+- gpio157 (stock flip-cover hall) never toggled with this cover. Its SW_LID node is gone (0063) because UPower follows only the first lid switch and so ignored the keyboard.
+- Suspend aborted on dw9807 VCM (-ENXIO from writes to a runtime-suspended, unpowered lens). Fixed with pm_runtime_force_suspend/resume (0061).
+- The pogo IRQ (gpio31, PDC 69) is a wakeup source while the keyboard is attached: opening the cover wakes the tablet.

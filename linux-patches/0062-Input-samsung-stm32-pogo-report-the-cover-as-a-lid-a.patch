@@ -1,0 +1,142 @@
+From 8df8af56a96ea43ccb0f0e993b484394c13be20f Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 01:17:11 +0100
+Subject: [PATCH 62/63] Input: samsung-stm32-pogo: report the cover as a lid
+ and wake on it
+
+The keyboard sends a hall event when its cover closes over the screen
+(3) or opens (2). Report it as SW_LID, and arm the keyboard interrupt as
+a wakeup source while attached, so opening the cover or pressing a key
+wakes the tablet.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/input/keyboard/samsung-stm32-pogo.c | 59 +++++++++++++++++++--
+ 1 file changed, 56 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/input/keyboard/samsung-stm32-pogo.c b/drivers/input/keyboard/samsung-stm32-pogo.c
+index 3b9b03f14..fa42ccb5e 100644
+--- a/drivers/input/keyboard/samsung-stm32-pogo.c
++++ b/drivers/input/keyboard/samsung-stm32-pogo.c
+@@ -28,6 +28,14 @@
+ #define POGO_ID_KEYPAD		3
+ #define POGO_ID_HALL		4
+ 
++/*
++ * POGO_ID_HALL payload, as read on the Book Cover Keyboard: 2 open (folded
++ * behind reads the same), 3 closed over the screen. 1 shows up briefly while
++ * closing; stock treats anything but 2 as closed for the keys.
++ */
++#define POGO_HALL_OPEN		2
++#define POGO_HALL_CLOSED	3
++
+ #define POGO_CMD_GET_MODE	0x01
+ #define POGO_CMD_CHECK_VERSION	0x02
+ #define POGO_CMD_CHECK_CRC	0x03
+@@ -56,6 +64,8 @@ struct pogo_kbd {
+ 	struct input_dev *input;
+ 	struct input_dev *touchpad;
+ 	struct input_dev *tablet_sw;
++	u8 hall;		/* POGO_HALL_*, from the keyboard */
++	bool wake_armed;
+ 	struct regulator *vdd;
+ 	struct gpio_desc *conn;
+ 	struct delayed_work conn_work;
+@@ -247,6 +257,16 @@ static void pogo_check_ic_work(struct work_struct *work)
+ 	}
+ }
+ 
++/* The cover closed over the screen is the lid; without the keyboard it is a tablet */
++static void pogo_report_cover(struct pogo_kbd *kbd, bool attached)
++{
++	if (!attached)
++		kbd->hall = POGO_HALL_OPEN;
++	input_report_switch(kbd->tablet_sw, SW_LID, kbd->hall == POGO_HALL_CLOSED);
++	input_report_switch(kbd->tablet_sw, SW_TABLET_MODE, !attached);
++	input_sync(kbd->tablet_sw);
++}
++
+ static irqreturn_t pogo_irq(int irq, void *dev_id)
+ {
+ 	static const u8 req[POGO_HDR_SIZE] = { POGO_HDR_SIZE, 0, POGO_ID_MCU };
+@@ -300,6 +320,11 @@ static irqreturn_t pogo_irq(int irq, void *dev_id)
+ 	case POGO_ID_HALL:
+ 		pogo_release_keys(kbd);
+ 		pogo_release_touchpad(kbd);
++		dev_dbg(&client->dev, "cover hall %u\n", data[0]);
++		if (data[0] == POGO_HALL_OPEN || data[0] == POGO_HALL_CLOSED) {
++			kbd->hall = data[0];
++			pogo_report_cover(kbd, true);
++		}
+ 		break;
+ 	default:
+ 		break;
+@@ -363,9 +388,7 @@ static void pogo_tablet_work(struct work_struct *work)
+ {
+ 	struct pogo_kbd *kbd = container_of(work, struct pogo_kbd, tablet_work.work);
+ 
+-	input_report_switch(kbd->tablet_sw, SW_TABLET_MODE,
+-			    !gpiod_get_value_cansleep(kbd->conn));
+-	input_sync(kbd->tablet_sw);
++	pogo_report_cover(kbd, gpiod_get_value_cansleep(kbd->conn));
+ }
+ 
+ static irqreturn_t pogo_conn_irq(int irq, void *dev_id)
+@@ -485,6 +508,8 @@ static int pogo_probe(struct i2c_client *client)
+ 	kbd->tablet_sw->name = "Samsung Book Cover Tablet Mode Switch";
+ 	kbd->tablet_sw->id.bustype = BUS_I2C;
+ 	input_set_capability(kbd->tablet_sw, EV_SW, SW_TABLET_MODE);
++	input_set_capability(kbd->tablet_sw, EV_SW, SW_LID);
++	kbd->hall = POGO_HALL_OPEN;
+ 	input_report_switch(kbd->tablet_sw, SW_TABLET_MODE,
+ 			    !gpiod_get_value_cansleep(kbd->conn));
+ 
+@@ -512,10 +537,37 @@ static int pogo_probe(struct i2c_client *client)
+ 	if (ret)
+ 		return dev_err_probe(dev, ret, "failed to request conn irq\n");
+ 
++	/* Opening the cover (a hall event) or a key press wakes the tablet */
++	i2c_set_clientdata(client, kbd);
++	ret = devm_device_init_wakeup(dev);
++	if (ret)
++		return ret;
++
+ 	schedule_delayed_work(&kbd->conn_work, 0);
+ 	return 0;
+ }
+ 
++static int pogo_suspend(struct device *dev)
++{
++	struct pogo_kbd *kbd = i2c_get_clientdata(to_i2c_client(dev));
++
++	kbd->wake_armed = device_may_wakeup(dev) && kbd->connected &&
++			  !enable_irq_wake(kbd->client->irq);
++	return 0;
++}
++
++static int pogo_resume(struct device *dev)
++{
++	struct pogo_kbd *kbd = i2c_get_clientdata(to_i2c_client(dev));
++
++	if (kbd->wake_armed)
++		disable_irq_wake(kbd->client->irq);
++	kbd->wake_armed = false;
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(pogo_pm_ops, pogo_suspend, pogo_resume);
++
+ static const struct of_device_id pogo_of_match[] = {
+ 	{ .compatible = "samsung,stm32-pogo-keyboard" },
+ 	{ }
+@@ -526,6 +578,7 @@ static struct i2c_driver pogo_driver = {
+ 	.driver = {
+ 		.name = "samsung-stm32-pogo",
+ 		.of_match_table = pogo_of_match,
++		.pm = pm_sleep_ptr(&pogo_pm_ops),
+ 	},
+ 	.probe = pogo_probe,
+ };
+-- 
+2.56.0
+
