@@ -1,0 +1,233 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+"""Show the thermal zones, trip points and cooling devices, then load the CPUs
+for a while and show whether the kernel's cpufreq cooling engages.
+
+  gts7xl-thermal-check                 list, then 60 s of load on every core
+  gts7xl-thermal-check --list          list only, no load
+  gts7xl-thermal-check --duration 300  longer load (the SoC needs time to reach 90 C)
+  gts7xl-thermal-check --emulate       ALSO pretend cpu4-top reads 92 C for 15 s
+                                       (writes emul_temp, set back to 0 afterwards)
+
+Read-only apart from the load (and emul_temp with --emulate): no trip point,
+governor or clock limit is changed. Thermal cooling shows as cur_state > 0 on
+the cpufreq-cpuN cooling devices; gts7xl-power (skin limiter) and the power
+profiles change scaling_max_freq directly, so they are reported separately.
+"""
+import glob, os, signal, sys, time
+
+ROOT = os.environ.get('GTS7XL_SYSFS_ROOT', '')   # for testing against a fake sysfs
+TZ = ROOT + '/sys/class/thermal'
+CPUFREQ = ROOT + '/sys/devices/system/cpu/cpufreq'
+
+
+def rd(path, default=None):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except OSError:
+        return default
+
+
+def num(s):
+    try:
+        return int(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def c(milli):
+    return '   n/a' if milli is None else '%6.1f' % (milli / 1000)
+
+
+def zones():
+    out = []
+    for z in sorted(glob.glob(TZ + '/thermal_zone*'), key=lambda p: int(p.rsplit('zone', 1)[1])):
+        trips = []
+        for t in sorted(glob.glob(z + '/trip_point_*_temp'), key=lambda p: int(p.split('_')[-2])):
+            i = t.split('_')[-2]
+            trips.append((num(rd(t)), rd('%s/trip_point_%s_type' % (z, i)), num(rd('%s/trip_point_%s_hyst' % (z, i)))))
+        cdevs = []
+        for l in sorted(glob.glob(z + '/cdev[0-9]*')):
+            if os.path.islink(l):
+                n = os.path.basename(l)
+                cdevs.append((rd(l + '/type'), num(rd('%s/%s_trip_point' % (z, n)))))
+        out.append(dict(path=z, name=os.path.basename(z), type=rd(z + '/type'), temp=num(rd(z + '/temp')),
+                        policy=rd(z + '/policy'), mode=rd(z + '/mode'), trips=trips, cdevs=cdevs))
+    return out
+
+
+def cooling():
+    out = []
+    for d in sorted(glob.glob(TZ + '/cooling_device*'), key=lambda p: int(p.rsplit('device', 1)[1])):
+        out.append(dict(name=os.path.basename(d), type=rd(d + '/type'),
+                        cur=num(rd(d + '/cur_state')), max=num(rd(d + '/max_state'))))
+    return out
+
+
+def policies():
+    out = []
+    for p in sorted(glob.glob(CPUFREQ + '/policy*'), key=lambda p: int(p.rsplit('policy', 1)[1])):
+        out.append(dict(name=os.path.basename(p), cpus=rd(p + '/related_cpus'),
+                        cur=num(rd(p + '/scaling_cur_freq')), max=num(rd(p + '/scaling_max_freq')),
+                        hwmax=num(rd(p + '/cpuinfo_max_freq')), gov=rd(p + '/scaling_governor')))
+    return out
+
+
+def show_static():
+    zs = zones()
+    print('== Thermal zones (%d) ==' % len(zs))
+    for z in zs:
+        trips = ', '.join('%s %s%s' % (c(t).strip(), ty, '' if not h else ' (hyst %g)' % (h / 1000)) for t, ty, h in z['trips'])
+        print('%-15s %-22s %s C  %-9s %s' % (z['name'], z['type'], c(z['temp']), z['policy'] or '', z['mode'] or ''))
+        if trips:
+            print('%38s trips: %s' % ('', trips))
+        for ty, trip in z['cdevs']:
+            print('%38s cools: %s at trip %s' % ('', ty, trip))
+    print()
+    print('== Cooling devices ==')
+    for d in cooling():
+        print('%-18s %-28s state %s/%s' % (d['name'], d['type'], d['cur'], d['max']))
+    print()
+    print('== CPU frequency ==')
+    for p in policies():
+        print('%-8s cpus %-8s %-10s cur %5s MHz  limit %5s MHz  hw max %5s MHz' % (
+            p['name'], p['cpus'], p['gov'], mhz(p['cur']), mhz(p['max']), mhz(p['hwmax'])))
+    if os.path.exists('/run/gts7xl-power/profile'):
+        print('note: gts7xl-power (skin limiter, profile %s) also lowers "limit"; '
+              'stop it for a clean test: sudo systemctl stop gts7xl-power' % rd('/run/gts7xl-power/profile', '?'))
+    print()
+
+
+def mhz(khz):
+    return '?' if khz is None else str(khz // 1000)
+
+
+def burn():
+    signal.signal(signal.SIGTERM, lambda *a: os._exit(0))
+    x = 0
+    while True:
+        x = (x * 1103515245 + 12345) & 0xffffffff
+
+
+def load_test(duration, emulate):
+    ncpu = os.cpu_count() or 8
+    cpu_zones = [z for z in zones() if (z['type'] or '').startswith('cpu')]
+    cpu_cdevs = [d for d in cooling() if (d['type'] or '').startswith('cpufreq')]
+    passive = [t for z in cpu_zones for t, ty, _ in z['trips'] if ty == 'passive' and t]
+    first_passive = min(passive) if passive else None
+    print('== Load test: %d s, %d busy processes ==' % (duration, ncpu))
+    if not cpu_cdevs:
+        print('!! no cpufreq cooling devices: the CPU zones cannot throttle (cpufreq-hw / #cooling-cells?)')
+    emul = None
+    if emulate:
+        emul = next((z['path'] for z in cpu_zones if z['type'] == 'cpu4-top-thermal'), None)
+        if emul is None or not os.path.exists(emul + '/emul_temp'):
+            print('!! --emulate: no cpu4-top-thermal zone with emul_temp (CONFIG_THERMAL_EMULATION)')
+            emul = None
+    kids = []
+    peak = (-10**9, '')
+    seen = {}
+    lim_drop = {}
+    base = {p['name']: p['max'] for p in policies()}
+    t0 = time.time()
+    emul_from = duration - 20 if emul else None
+
+    def stop():
+        for k in kids:
+            try:
+                os.kill(k, signal.SIGTERM)
+            except OSError:
+                pass
+        for k in kids:
+            try:
+                os.waitpid(k, 0)
+            except OSError:
+                pass
+        kids.clear()
+        if emul:
+            try:
+                open(emul + '/emul_temp', 'w').write('0')
+            except OSError as e:
+                print('!! could not reset %s/emul_temp: %s' % (emul, e))
+
+    signal.signal(signal.SIGINT, lambda *a: (stop(), sys.exit(130)))
+    signal.signal(signal.SIGTERM, lambda *a: (stop(), sys.exit(143)))
+    try:
+        for _ in range(ncpu):
+            pid = os.fork()
+            if pid == 0:
+                burn()
+            kids.append(pid)
+        print('%5s  %-20s %6s  %s  %s' % ('t/s', 'hottest cpu zone', 'C', 'cur/limit MHz per policy', 'cpufreq cooling states'))
+        emul_on = False
+        while True:
+            el = time.time() - t0
+            if el >= duration:
+                break
+            if emul and not emul_on and el >= emul_from:
+                open(emul + '/emul_temp', 'w').write('92000')
+                emul_on = True
+                print('       -- cpu4-top-thermal emulated at 92 C --')
+            if emul and emul_on and el >= emul_from + 15:
+                open(emul + '/emul_temp', 'w').write('0')
+                emul = None
+                print('       -- emulation off --')
+            zs = [z for z in zones() if (z['type'] or '').startswith('cpu')]
+            hot = max(zs, key=lambda z: z['temp'] or -10**9) if zs else None
+            if hot and (hot['temp'] or -10**9) > peak[0]:
+                peak = (hot['temp'], hot['type'])
+            ps = policies()
+            for p in ps:
+                if base.get(p['name']) and p['max'] and p['max'] < base[p['name']]:
+                    lim_drop[p['name']] = min(lim_drop.get(p['name'], p['max']), p['max'])
+            cs = [d for d in cooling() if (d['type'] or '').startswith('cpufreq')]
+            for d in cs:
+                seen[d['type']] = max(seen.get(d['type'], 0), d['cur'] or 0)
+            print('%5d  %-20s %s  %s  %s' % (
+                el, hot['type'] if hot else '-', c(hot['temp'] if hot else None),
+                ' '.join('%s/%s' % (mhz(p['cur']), mhz(p['max'])) for p in ps),
+                ' '.join('%s=%s' % (d['type'].replace('cpufreq-', ''), d['cur']) for d in cs)), flush=True)
+            time.sleep(2)
+    finally:
+        stop()
+    print()
+    print('== Result ==')
+    print('peak CPU zone temperature: %s C (%s)' % (c(peak[0]).strip(), peak[1]))
+    engaged = {k: v for k, v in seen.items() if v > 0}
+    print('cpufreq cooling engaged: %s' % (('yes, max state ' + ', '.join('%s=%d' % kv for kv in sorted(engaged.items()))) if engaged else 'no'))
+    if lim_drop:
+        print('scaling_max_freq went below its start value: %s' % ', '.join('%s %s MHz' % (k, mhz(v)) for k, v in sorted(lim_drop.items())))
+    if emulate:
+        print('(--emulate: a state that rose in the 15 s window shows the zone -> cooling path works; '
+              'it says nothing about real heat)')
+    if first_passive and peak[0] < first_passive and not engaged:
+        print('the CPUs stayed below the first passive trip (%s C), so throttling was not exercised; '
+              'try --duration 300 or --emulate' % c(first_passive).strip())
+    elif first_passive and peak[0] >= first_passive and not engaged:
+        print('!! a CPU zone passed its passive trip but no cpufreq cooling state rose: throttling is NOT working')
+
+
+def main():
+    args = sys.argv[1:]
+    if '-h' in args or '--help' in args:
+        print(__doc__)
+        return
+    duration = 60
+    if '--duration' in args:
+        duration = int(args[args.index('--duration') + 1])
+    emulate = '--emulate' in args
+    if emulate and duration < 30:
+        duration = 30
+    show_static()
+    if '--list' in args:
+        return
+    if emulate and os.geteuid() != 0:
+        sys.exit('--emulate needs root')
+    load_test(duration, emulate)
+    print()
+    show_static()
+
+
+if __name__ == '__main__':
+    main()
