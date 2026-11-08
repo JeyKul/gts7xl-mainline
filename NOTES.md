@@ -96,3 +96,7 @@ Short dated findings, newest first. Status lives in README.md.
 - KDE's power profile switch: tuned-ppd + gts7xl-power. PowerDevil only looks for a PPD service at startup.
 - The iris -ELOOP was real, also on a clean boot: iris loads its firmware inside open() of the video node, so the firmware lookups nest in the open's path walk and share its symlink budget (MAXSYMLINKS 40). Each of up to 4 search paths per segment crosses /lib -> usr/lib, so by venus.b19 the budget is gone. Fix: firmware_class.path=/usr/lib/firmware on the kernel command line, a direct path without a symlink. 1080p round trip clean afterwards, no -40.
 - CDSP: patch 0066, firmware cdsp.* from apnhlos (firstboot video()); FASTRPC_IOCTL_INIT_ATTACH succeeds on /dev/fastrpc-cdsp.
+
+## 2026-11-08: dark green photos (branch camera-stills-fix, untested on the tablet)
+- Owner: photos mean ~3/255, max ~25, green; preview fine. Likely cause, from code: `s5k3m5`/`s5k-tab` set_fmt resets exposure to the mode default (rear 256 lines, ~2.2 ms) on the preview -> photo mode switch; libcamera 0.7.2 soft IPA starts from the sensor's value, AGC steps <= 6% only every 4th frame, app kept frame 10. AWB gains reset to 1 at configure and stay 1 on near-black frames -> raw green.
+- Fix: app seeds sensor mode + previous exposure/gain via the subdev before each pipeline and waits for stable frames; kernel 0067 drops the reset (not compiled). `gts7xl-cam-diag` checks it; see TESTING-camera-stills.md. Open: whether the binned preview mode is more sensitive than full size (`--long`).

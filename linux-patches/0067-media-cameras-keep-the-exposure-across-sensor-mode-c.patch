@@ -1,0 +1,67 @@
+From 96fd87f22e09a2ca1e49f0808763ef246b70c025 Mon Sep 17 00:00:00 2001
+From: Claudius <claudiusthebot@gmail.com>
+Date: Sun, 8 Nov 2026 01:56:21 +0000
+Subject: [PATCH] media: cameras: keep the exposure across sensor mode changes
+
+s5k3m5 and s5k-tab reset the exposure control to the mode default whenever
+the format changes. The camera app previews in a small binned mode and takes
+photos in the full size mode, so every photo started at 256 lines (about
+2.2 ms on the rear camera) instead of the exposure the preview had settled
+on. libcamera's software ISP raises exposure by at most ~6% every fourth
+frame, so a photo taken after ten frames is badly underexposed, which fits
+the nearly black, green photos seen (not yet confirmed on the tablet).
+
+The modes of each sensor share HTS, VTS and the pixel clock, so an exposure
+in lines means the same time in every mode. Keep the current value and only
+clamp it to the new range, which v4l2_ctrl_modify_range() already does.
+---
+ drivers/media/i2c/s5k-tab.c | 5 ++++-
+ drivers/media/i2c/s5k3m5.c  | 8 ++++++--
+ 2 files changed, 10 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/media/i2c/s5k-tab.c b/drivers/media/i2c/s5k-tab.c
+index 0014b7d..19484f3 100644
+--- a/drivers/media/i2c/s5k-tab.c
++++ b/drivers/media/i2c/s5k-tab.c
+@@ -542,8 +542,11 @@ static int s5ktab_set_fmt(struct v4l2_subdev *sd, struct v4l2_subdev_state *stat
+ 	__v4l2_ctrl_modify_range(s->vblank, m->vts - m->height, S5KTAB_VTS_MAX - m->height, 1,
+ 				 m->vts - m->height);
+ 	__v4l2_ctrl_s_ctrl(s->vblank, m->vts - m->height);
++	/*
++	 * Keep the exposure, clamped to the new range: the modes of each sensor
++	 * share HTS, so it means the same time, and AGC need not start again.
++	 */
+ 	__v4l2_ctrl_modify_range(s->exposure, 2, m->vts - S5KTAB_EXPOSURE_MARGIN, 1, m->vts / 4);
+-	__v4l2_ctrl_s_ctrl(s->exposure, m->vts / 4);
+ 	return 0;
+ }
+ 
+diff --git a/drivers/media/i2c/s5k3m5.c b/drivers/media/i2c/s5k3m5.c
+index b1a733c..292fe37 100644
+--- a/drivers/media/i2c/s5k3m5.c
++++ b/drivers/media/i2c/s5k3m5.c
+@@ -940,7 +940,12 @@ static int s5k3m5_set_pad_format(struct v4l2_subdev *sd,
+ 	if (fmt->which == V4L2_SUBDEV_FORMAT_TRY || s5k3m5->mode == mode)
+ 		goto set_format;
+ 
+-	/* Update limits and set FPS and exposure to default values */
++	/*
++	 * Update limits and set FPS to the mode default. Keep the exposure, clamped
++	 * to the new range: all modes share HTS and the pixel clock, so a line lasts
++	 * as long in each, and resetting it made the first frames after a mode
++	 * switch (preview to photo) many times too dark while AGC climbed back.
++	 */
+ 	hblank = mode->hts - mode->width;
+ 	__v4l2_ctrl_modify_range(s5k3m5->hblank, hblank, hblank, 1, hblank);
+ 
+@@ -953,7 +958,6 @@ static int s5k3m5_set_pad_format(struct v4l2_subdev *sd,
+ 	__v4l2_ctrl_modify_range(s5k3m5->exposure, S5K3M5_EXPOSURE_MIN,
+ 				 exposure_max, S5K3M5_EXPOSURE_STEP,
+ 				 mode->exposure);
+-	__v4l2_ctrl_s_ctrl(s5k3m5->exposure, mode->exposure);
+ 
+ 	if (s5k3m5->sd.ctrl_handler->error)
+ 		return s5k3m5->sd.ctrl_handler->error;
+-- 
+2.43.0
+

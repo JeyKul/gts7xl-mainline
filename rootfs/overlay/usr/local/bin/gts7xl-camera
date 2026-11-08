@@ -7,7 +7,8 @@ os.environ.setdefault("LIBCAMERA_SOFTISP_MODE", "cpu")
 import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gst", "1.0")
-from gi.repository import GLib, Gst, Gtk
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf, GLib, Gst, Gtk
 
 # Name, libcamera id, photo size, preview size, has a focus motor
 CAMERAS = [
@@ -16,9 +17,98 @@ CAMERAS = [
     ("Front", "/base/soc@0/cci@ac4f000/i2c-bus@1/camera@2d", (3256, 2448), (792, 600), False),
 ]
 FOCUS_MAX = 1023
+VIDIOC_G_CTRL = 0xc008561b
 VIDIOC_S_CTRL = 0xc008561c
+VIDIOC_QUERYCTRL = 0xc0445624
+VIDIOC_SUBDEV_G_FMT = 0xc0585604
+VIDIOC_SUBDEV_S_FMT = 0xc0585605
 V4L2_CID_FOCUS_ABSOLUTE = 0x009a090a
+V4L2_CID_EXPOSURE = 0x00980911
+V4L2_CID_ANALOGUE_GAIN = 0x009e0903
 SETTLE_MS = 170
+# A photo is kept once this many frames are in and the last PHOTO_WINDOW agree within
+# PHOTO_STABLE, or after PHOTO_TIMEOUT_S whatever they look like. The software ISP updates
+# exposure and white balance only every fourth frame, so the window spans more than four.
+PHOTO_MIN_FRAMES = 10
+PHOTO_WINDOW = 6
+PHOTO_STABLE = 0.04
+PHOTO_TIMEOUT_S = 8
+# How much brighter the preview's binned mode is than the full size mode at the same
+# exposure and gain (1 = the same). Measure with gts7xl-cam-diag; override per run with
+# GTS7XL_CAMERA_MODE_GAIN.
+MODE_GAIN = float(os.environ.get("GTS7XL_CAMERA_MODE_GAIN", "1"))
+
+
+class Sensor:
+    """The camera's sensor subdevice. Switching sensor mode resets its exposure to a
+    short default, and the software ISP then needs many seconds to climb back, so photos
+    came out nearly black. Carry the exposure over by hand: set the sensor mode first,
+    then the exposure the last stream ended with, so libcamera starts from it."""
+
+    def __init__(self, camera_id):
+        self.path = None
+        for dev in glob.glob("/sys/class/video4linux/v4l-subdev*"):
+            try:
+                node = os.path.realpath(dev + "/device/of_node")
+            except OSError:
+                continue
+            if node.endswith(camera_id) and node.startswith("/sys/firmware/devicetree"):
+                self.path = "/dev/" + os.path.basename(dev)
+
+    def _open(self):
+        return os.open(self.path, os.O_RDWR) if self.path else None
+
+    @staticmethod
+    def _get(fd, cid):
+        return struct.unpack("<Ii", fcntl.ioctl(fd, VIDIOC_G_CTRL, struct.pack("<Ii", cid, 0)))[1]
+
+    @staticmethod
+    def _max(fd, cid):
+        q = fcntl.ioctl(fd, VIDIOC_QUERYCTRL, struct.pack("<II32s", cid, 0, b"").ljust(68, b"\0"))
+        return struct.unpack_from("<i", q, 44)[0]
+
+    def read(self):
+        """Exposure (lines) and analogue gain code now in use, or None"""
+        try:
+            fd = self._open()
+        except OSError:
+            return None
+        if fd is None:
+            return None
+        try:
+            return self._get(fd, V4L2_CID_EXPOSURE), self._get(fd, V4L2_CID_ANALOGUE_GAIN)
+        except OSError:
+            return None
+        finally:
+            os.close(fd)
+
+    def seed(self, size, state, scale=1.0):
+        """Put the sensor in the mode libcamera will pick for size, then restore state"""
+        if not state:
+            return
+        try:
+            fd = self._open()
+        except OSError:
+            return
+        if fd is None:
+            return
+        try:
+            fmt = bytearray(fcntl.ioctl(fd, VIDIOC_SUBDEV_G_FMT, struct.pack("<II", 1, 0).ljust(88, b"\0")))
+            struct.pack_into("<II", fmt, 8, size[0], size[1])
+            fcntl.ioctl(fd, VIDIOC_SUBDEV_S_FMT, bytes(fmt))
+            exposure, gain = state
+            want = exposure * scale
+            top = self._max(fd, V4L2_CID_EXPOSURE)
+            if want > top:
+                gain = min(self._max(fd, V4L2_CID_ANALOGUE_GAIN), round(gain * want / top))
+                want = top
+            fcntl.ioctl(fd, VIDIOC_S_CTRL, struct.pack("<Ii", V4L2_CID_ANALOGUE_GAIN, max(1, int(gain))))
+            fcntl.ioctl(fd, VIDIOC_S_CTRL, struct.pack("<Ii", V4L2_CID_EXPOSURE, max(1, round(want))))
+            print(f"seeded {size[0]}x{size[1]}: exposure {round(want)} gain {gain}", flush=True)
+        except OSError as e:
+            print("could not seed the exposure:", e, file=sys.stderr, flush=True)
+        finally:
+            os.close(fd)
 
 
 class Focus:
@@ -46,6 +136,8 @@ class Camera(Gtk.Application):
         self.position = 500
         self.busy = False
         self.camera = 0
+        self.sensor = Sensor(CAMERAS[0][1])
+        self.exposure = None
 
     def do_activate(self):
         self.win = Gtk.ApplicationWindow(application=self, title="Camera")
@@ -84,6 +176,7 @@ class Camera(Gtk.Application):
 
     def start_preview(self):
         w, h = CAMERAS[self.camera][3]
+        self.sensor.seed((w, h), self.exposure, 1 / MODE_GAIN)
         self.pipeline = Gst.parse_launch(
             f"libcamerasrc name=src camera-name={CAMERAS[self.camera][1]} ! "
             f"video/x-raw,width={w},height={h} ! videoconvert ! "
@@ -101,6 +194,8 @@ class Camera(Gtk.Application):
             return
         self.stop_preview()
         self.camera = (self.camera + 1) % len(CAMERAS)
+        self.sensor = Sensor(CAMERAS[self.camera][1])
+        self.exposure = None
         self.switch.set_label(CAMERAS[self.camera][0])
         self.status.set_text("")
         self.start_preview()
@@ -108,6 +203,7 @@ class Camera(Gtk.Application):
 
     def stop_preview(self):
         if self.pipeline:
+            self.exposure = self.sensor.read() or self.exposure
             self.pipeline.get_bus().remove_signal_watch()
             self.pipeline.set_state(Gst.State.NULL)
             self.pipeline = None
@@ -188,35 +284,90 @@ class Camera(Gtk.Application):
         folder = GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES) or os.path.expanduser("~/Pictures")
         os.makedirs(folder, exist_ok=True)
         self.path = os.path.join(folder, time.strftime("IMG_%Y%m%d_%H%M%S.jpg"))
+        self.sensor.seed((w, h), self.exposure, MODE_GAIN)
         self.shot = Gst.parse_launch(
             f"libcamerasrc camera-name={CAMERAS[self.camera][1]} ! "
-            f"video/x-raw,width={w},height={h} ! videoconvert ! jpegenc quality=92 ! "
+            f"video/x-raw,width={w},height={h} ! videoconvert ! video/x-raw,format=RGB ! "
             "appsink name=out max-buffers=1 drop=true sync=false")
         self.out = self.shot.get_by_name("out")
         self.frames = 0
+        self.levels = []
+        self.started = time.monotonic()
         self.shot.set_state(Gst.State.PLAYING)
         GLib.timeout_add(100, self.wait_photo)
 
+    @staticmethod
+    def level(data, w, h, stride):
+        """Mean red, green and blue of a sparse grid of pixels"""
+        sums = [0, 0, 0]
+        rows = range(h // 16, h, max(1, h // 48))
+        for y in rows:
+            row = data[y * stride:y * stride + w * 3]
+            for c in range(3):
+                sums[c] += sum(row[c::48])
+        n = len(rows) * len(range(0, w * 3, 48)) or 1
+        return [v / n for v in sums]
+
+    def settled(self):
+        if self.frames < PHOTO_MIN_FRAMES or len(self.levels) < PHOTO_WINDOW:
+            return False
+        last = self.levels[-PHOTO_WINDOW:]
+        for c in range(3):
+            lo, hi = min(v[c] for v in last), max(v[c] for v in last)
+            if hi - lo > PHOTO_STABLE * max(hi, 8):
+                return False
+        return True
+
     def wait_photo(self):
-        # Let exposure settle before keeping a frame
+        # Keep a frame once exposure and white balance have settled
         sample = self.out.emit("try-pull-sample", 10 * Gst.MSECOND)
         if not sample:
+            if time.monotonic() - self.started > PHOTO_TIMEOUT_S + 10:
+                self.photo_failed("no frames from the camera")
+                return False
             return True
         self.frames += 1
-        if self.frames < 10:
-            return True
+        caps = sample.get_caps().get_structure(0)
+        w, h = caps.get_value("width"), caps.get_value("height")
         buf = sample.get_buffer()
         ok, info = buf.map(Gst.MapFlags.READ)
-        with open(self.path, "wb") as f:
-            f.write(bytes(info.data))
+        if not ok:
+            return True
+        stride = len(info.data) // h
+        self.levels.append(self.level(info.data, w, h, stride))
+        timed_out = time.monotonic() - self.started > PHOTO_TIMEOUT_S
+        if not (self.settled() or timed_out):
+            buf.unmap(info)
+            return True
+        data = bytes(info.data)
         buf.unmap(info)
+        self.exposure = self.sensor.read() or self.exposure
         self.shot.set_state(Gst.State.NULL)
         self.shot = None
+        r, g, b = self.levels[-1]
+        print(f"photo after {self.frames} frames{' (timed out)' if timed_out else ''}: "
+              f"mean R {r:.0f} G {g:.0f} B {b:.0f}, sensor {self.exposure}", flush=True)
+        try:
+            pixbuf = GdkPixbuf.Pixbuf.new_from_bytes(GLib.Bytes.new(data), GdkPixbuf.Colorspace.RGB,
+                                                     False, 8, w, h, stride)
+            pixbuf.savev(self.path, "jpeg", ["quality"], ["92"])
+        except GLib.Error as e:
+            self.photo_failed(e.message)
+            return False
         self.busy = False
         self.status.set_text("Saved " + self.path)
         print("saved", self.path, flush=True)
         self.start_preview()
         return False
+
+    def photo_failed(self, why):
+        if self.shot:
+            self.shot.set_state(Gst.State.NULL)
+            self.shot = None
+        self.busy = False
+        self.status.set_text("Photo failed: " + why)
+        print("photo failed:", why, file=sys.stderr, flush=True)
+        self.start_preview()
 
     def closing(self, _win):
         self.stop_preview()
