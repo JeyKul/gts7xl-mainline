@@ -24,6 +24,8 @@ sed -i 's|^#\?NoExtract *=.*|NoExtract = usr/lib/firmware/cirrus/cs35l41-dsp1-sp
 # The tablet's config must exist before services are enabled
 cp -a "$HERE/overlay/." "$A/"
 (cd "$HERE/overlay" && find . -print0) | (cd "$A" && xargs -0 chown -h 0:0)
+# Directory modes come from the checkout's umask (775 with 002): only root writes system folders
+(cd "$HERE/overlay" && find . -type d -print0) | (cd "$A" && xargs -0 chmod go-w)
 # GPU firmware from linux-firmware: Arch's packages don't provide these two here
 LFW=https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/qcom
 mkdir -p "$A/usr/lib/firmware/qcom"
