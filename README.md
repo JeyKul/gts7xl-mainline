@@ -41,8 +41,8 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 
 | Hardware | State | Notes |
 |---|---|---|
-| GPU: Adreno 650 | ✅ | OpenGL; `glxgears` about 100 FPS |
-| Video decode and encode (Venus) | ⬜ | |
+| GPU: Adreno 650 | ✅ | OpenGL and Vulkan (Turnip; `vkcube` runs well). `vulkaninfo` aborts in its VK_KHR_display check, apps are fine |
+| Video decode and encode (Venus) | ✅ | `qcom_iris` driver, firmware copied from apnhlos at first boot. Decode H.264, HEVC, VP9; encode H.264, HEVC (GStreamer `v4l2h264dec` etc., mpv `--hwdec=v4l2m2m-copy`). 720p H.264 decodes at about 550 fps |
 | Audio DSP (ADSP) | ✅ | |
 | Compute DSP (CDSP) | ⬜ | |
 | Sensor DSP (SLPI) | ✅ | Booted with the tablet's own firmware, served by `gts7xl-sensord`, see [docs/sensors.md](docs/sensors.md) |

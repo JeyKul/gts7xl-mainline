@@ -85,6 +85,18 @@ def apnhlos():
             b=os.path.basename(f)
             copy(f,DEST+'/qcom/sm8250/'+('a650_zap.mbn' if b=='a650_zap.mdt' else b))
 
+def video():
+    # Venus video codec firmware, signed for this tablet
+    out=DEST+'/qcom/sm8250/gts7xl/'
+    if os.path.exists(out+'venus.mbn'):
+        return
+    with Ro(PL+'apnhlos','vfat','ro,shortname=lower') as m:
+        img=need(m+'/image/venus.mdt').rsplit('/',1)[0]
+        os.makedirs(out,exist_ok=True)
+        for f in sorted(glob.glob(img+'/venus.*')):
+            b=os.path.basename(f)
+            copy(f,out+('venus.mbn' if b=='venus.mdt' else b))
+
 def vendor():
     if os.path.exists(DEST+'/cirrus/cs35l41-dsp1-spk-prot.wmfw') and os.path.exists(DEST+'/cirrus/cs35l41-dsp1-spk-prot.bin'):
         return
@@ -136,7 +148,7 @@ def wifimac():
 
 def main():
     failed=[]
-    for name,fn,needed in (('audio DSP and GPU, apnhlos',apnhlos,True),('amp firmware, vendor',vendor,True),
+    for name,fn,needed in (('audio DSP and GPU, apnhlos',apnhlos,True),('amp firmware, vendor',vendor,True),('video codec, apnhlos',video,False),
                            ('speaker calibration, sec_efs',calibration,False),('Bluetooth address, efs',btaddr,False),
                            ('Wi-Fi address, efs',wifimac,False)):
         try:
