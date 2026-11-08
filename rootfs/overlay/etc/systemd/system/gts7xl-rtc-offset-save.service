@@ -1,0 +1,6 @@
+[Unit]
+Description=Save the RTC offset after an NTP sync
+After=local-fs.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/gts7xl-rtc-offset save

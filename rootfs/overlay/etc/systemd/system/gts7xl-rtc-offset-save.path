@@ -1,0 +1,7 @@
+[Unit]
+Description=Save the RTC offset whenever systemd-timesyncd synchronizes the clock
+[Path]
+# timesyncd creates/touches this file after a successful NTP sync
+PathChanged=/run/systemd/timesync/synchronized
+[Install]
+WantedBy=multi-user.target
