@@ -1,0 +1,9 @@
+[Unit]
+Description=Power profiles: clock caps and skin temperature limit
+
+[Service]
+ExecStart=/usr/local/sbin/gts7xl-power
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
