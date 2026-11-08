@@ -1,0 +1,115 @@
+#!/bin/sh
+# SPDX-License-Identifier: MIT
+# Keep wall-clock time across reboots on the Tab S7+ without writing the PMIC RTC.
+#
+# The PM8150 RTC counter keeps running while the tablet is off, but it is
+# read-only from Linux (no allow-set-time) and counts from an arbitrary start,
+# so it reads 1970. Android does the same trick: it keeps an offset on top of
+# the counter. We store  offset = wall clock - RTC counter  in a file and add it
+# back at boot. Nothing is written to the hardware.
+#
+#   gts7xl-rtc-offset restore   at boot: set the clock to RTC + saved offset
+#   gts7xl-rtc-offset save      store the offset, only if the clock is NTP-synced
+#   gts7xl-rtc-offset save --force   store it anyway (clock set by hand)
+#   gts7xl-rtc-offset status    print RTC, offset and what restore would set
+set -u
+
+STATE_DIR=/var/lib/gts7xl-rtc
+STATE=$STATE_DIR/offset
+SYNCED=/run/systemd/timesync/synchronized
+# Never set the clock earlier than this (2026-01-01 UTC), whatever the file says
+FLOOR=1767225600
+
+log() { echo "gts7xl-rtc-offset: $*"; }
+
+# The PMIC RTC, found by driver name; rtc-pm8xxx is a module, so wait for it
+find_rtc() {
+	i=0
+	while [ $i -lt 100 ]; do
+		for r in /sys/class/rtc/rtc*; do
+			[ -e "$r/name" ] || continue
+			case "$(cat "$r/name" 2>/dev/null)" in
+			*pm8xxx*) echo "$r"; return 0 ;;
+			esac
+		done
+		[ $i -eq 0 ] && modprobe rtc-pm8xxx 2>/dev/null
+		i=$((i + 1))
+		sleep 0.1
+	done
+	return 1
+}
+
+rtc_secs() { cat "$1/since_epoch"; }
+
+is_num() { case "$1" in ''|*[!0-9-]*) return 1 ;; esac; return 0; }
+
+restore() {
+	[ -s "$STATE" ] || { log "no saved offset yet, clock left alone"; return 0; }
+	off=$(cat "$STATE")
+	is_num "$off" || { log "bad offset '$off' in $STATE, ignored"; return 0; }
+	r=$(find_rtc) || { log "PMIC RTC not found"; return 0; }
+	rs=$(rtc_secs "$r")
+	is_num "$rs" || { log "cannot read $r"; return 0; }
+	if [ "$rs" -ge "$FLOOR" ]; then
+		# The counter itself already holds wall time (written through
+		# allow-set-time / hwclock -w): a stale offset must not be added.
+		off=0
+	fi
+	t=$((rs + off))
+	now=$(date +%s)
+	if [ "$t" -lt "$FLOOR" ]; then
+		log "RTC+offset gives $t, before 2026: RTC was reset? clock left alone"
+		return 0
+	fi
+	if [ "$t" -le "$now" ]; then
+		# Never step the clock backwards here (systemd already set it to at
+		# least the build or last-sync time); NTP will correct it.
+		log "RTC+offset ($(date -u -d @"$t")) is not later than now, clock left alone"
+		return 0
+	fi
+	date -u -s "@$t" >/dev/null && log "clock set to $(date -u -d @"$t") (RTC $rs + offset $off)"
+	return 0
+}
+
+save() {
+	force=${1:-}
+	if [ "$force" != "--force" ] && [ ! -e "$SYNCED" ]; then
+		log "clock not NTP-synchronized this boot, offset not saved"
+		return 0
+	fi
+	r=$(find_rtc) || { log "PMIC RTC not found"; return 1; }
+	rs=$(rtc_secs "$r")
+	now=$(date +%s)
+	is_num "$rs" || { log "cannot read $r"; return 1; }
+	if [ "$now" -lt "$FLOOR" ]; then
+		log "clock reads before 2026, not saving"
+		return 1
+	fi
+	off=$((now - rs))
+	mkdir -p "$STATE_DIR"
+	echo "$off" > "$STATE.new" && sync "$STATE.new" 2>/dev/null; mv -f "$STATE.new" "$STATE"
+	log "offset $off saved (RTC $rs, clock $(date -u -d @"$now"))"
+}
+
+status() {
+	r=$(find_rtc) || { echo "PMIC RTC: not found"; return 1; }
+	rs=$(rtc_secs "$r")
+	echo "RTC device:   $r ($(cat "$r/name"))"
+	echo "RTC counter:  $rs ($(date -u -d @"$rs"))"
+	echo "System clock: $(date +%s) ($(date -u))"
+	echo "NTP synced:   $([ -e "$SYNCED" ] && echo yes || echo no)"
+	if [ -s "$STATE" ]; then
+		off=$(cat "$STATE")
+		echo "Saved offset: $off (file $(date -u -r "$STATE"))"
+		is_num "$off" && echo "RTC+offset:   $(date -u -d @$((rs + off)))   (drift vs clock: $(( $(date +%s) - rs - off )) s)"
+	else
+		echo "Saved offset: none"
+	fi
+}
+
+case "${1:-}" in
+restore) restore ;;
+save) save "${2:-}" ;;
+status) status ;;
+*) echo "usage: $0 restore|save [--force]|status" >&2; exit 2 ;;
+esac
