@@ -48,7 +48,7 @@ See the status tables in `README.md`.
 - [ ] Tablet powered off at 2% battery (UPower action); Arch keeps the default, Alpine has it disabled
 
 - [ ] Trackpad drops after under a second, keyboard recovers. Same on the stock kernel in TWRP, fine on One UI. Not caused by BOB, bus speed or MCU pins. Open lead: sensor DSP stack needs `sns_registry` in `hexagonrpcd`; the MCU watches a second I2C bus towards it
-- [ ] Pen: side button and hover unconfirmed; range is hand-calibrated
+- [x] Pen: side button, hover and tilt confirmed (2026-11-08); range is hand-calibrated
 - [ ] `su -c` fails on the tablet
 - [ ] Charging: input limit from CCIStat / BC1.2 without PD (PC port reads 1.4 A while CC says 500 mA)
 - [ ] `reboot-recovery` failed once; emergency combo is the reliable path
