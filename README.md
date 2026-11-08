@@ -18,7 +18,7 @@ Key: ✅ working, 🟡 partial, ❌ not working, ⬜ not started or not tested.
 | RAM | ✅ | Reserved memory follows the stock map |
 | Storage: UFS | ✅ | Booting and running from `userdata` |
 | microSD slot | ✅ | UHS-I SDR104 (sdhc_2, card detect on gpio77) |
-| Suspend | 🟡 | s2idle with the native display: power key, timer and keyboard cover wake work; battery drain not measured |
+| Suspend | 🟡 | s2idle: power key, timer and cover wake work; touchscreen off while the cover is closed. The apps side now releases every RPMh vote (0075-0078) and `gts7xl-sleep` takes Wi-Fi's PCIe down while asleep; drain about 50-80 mA by the fuel gauge (likely reads ~3x low). AOSS/DDR sleep not reached yet, see `docs/suspend-drain.md` |
 | Thermal sensors and throttling | ✅ | 24 SoC zones plus `batt-thermal`, `chg-thermal`, `blkt-thermal` (blkt through Samsung's table), `skin-msm-thermal` (next to the SoC, not the skin); the fuel gauge reports batt_thm (was a fixed 25 C), so the skin limiter works. CPU cooling engages at the 90 C trip (`gts7xl-thermal-check --emulate`); 10 min of all-core + GPU load levels off at 85.6 C, under the trip: the SoC's hardware limiter (LMh) holds the cores at about 85 C. The skin limiter stays on batt_thm, the only sensor at the back; blkt follows the charger |
 | Real-time clock | ✅ | PMIC RTC is read-only, so `gts7xl-rtc-offset` keeps an offset on top of it like Android: saved after each NTP sync, applied 4.5 s into boot, before Wi-Fi |
 | Hardware buttons: power, volume | ✅ | Emergency reboot combo works |
