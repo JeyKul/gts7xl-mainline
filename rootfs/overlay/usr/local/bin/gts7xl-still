@@ -1,0 +1,267 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: MIT
+"""Photos for the Tab S7+ cameras, straight from the sensor's raw frames.
+
+libcamera's software ISP meters too slowly for stills, so this takes raw Bayer
+frames from V4L2 and does its own exposure and processing:
+
+  * exposure: meters on raw frames and steps through a handheld-friendly ladder
+    (1/30 s at gain 1, then gain to 4x, then up to 1/10 s, then full gain, then
+    up to 1/4 s), keeping highlights unless the scene is too dark for that
+  * resolution: each 2x2 Bayer block becomes one RGB pixel (rear 2064x1548),
+    so there are no demosaic artifacts and noise is halved
+  * colour: black level, grey-world white balance, mild saturation, sRGB
+  * output: PNG
+
+  gts7xl-still CAMERA_ID OUT.png [--exposure LINES --gain CODE]   (hint from the preview)
+
+Run it while nothing else streams from the camera (the app stops its preview first).
+"""
+import argparse, os, re, subprocess, sys, tempfile, time
+import numpy as np
+import gi
+gi.require_version("GdkPixbuf", "2.0")
+from gi.repository import GdkPixbuf, GLib
+
+# libcamera id suffix -> raw size
+SIZES = {"camera@2d": None, "camera@10": (2576, 1932)}
+RAW = {  # media bus code -> (media-ctl name, V4L2 packed format, Bayer order of the 2x2 block)
+    0x300a: ("SGRBG10_1X10", "pgAA", "GRBG"),
+    0x300e: ("SGBRG10_1X10", "pGAA", "GBRG"),
+    0x3007: ("SBGGR10_1X10", "pBAA", "BGGR"),
+    0x300f: ("SRGGB10_1X10", "pRAA", "RGGB"),
+}
+BLACK = 64
+WHITE = 1023
+TARGET = 0.15            # median green, linear, after black level
+SKIP = 3                 # frames until new exposure and gain show up
+
+
+def run(*cmd):
+    return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
+
+
+def log(*a):
+    print("still:", *a, file=sys.stderr, flush=True)
+
+
+def find_sensor(camera_id):
+    for d in os.listdir("/sys/class/video4linux"):
+        if not d.startswith("v4l-subdev"):
+            continue
+        node = os.path.realpath(f"/sys/class/video4linux/{d}/device/of_node")
+        if node.endswith(camera_id):
+            return "/dev/" + d, open(f"/sys/class/video4linux/{d}/name").read().strip()
+    sys.exit(f"no sensor for {camera_id}")
+
+
+def topology():
+    """entity name -> {'node': dev, 'links': [(src_pad, sink_entity, sink_pad)]} (enabled only)"""
+    ents, cur, pad = {}, None, None
+    for line in run("media-ctl", "-d", "/dev/media0", "-p").splitlines():
+        m = re.match(r"- entity \d+: (.+?) \(", line)
+        if m:
+            cur = m.group(1)
+            ents[cur] = {"node": None, "links": []}
+            continue
+        if cur is None:
+            continue
+        m = re.search(r"device node name (\S+)", line)
+        if m:
+            ents[cur]["node"] = m.group(1)
+        m = re.match(r"\s+pad(\d+): (\w+)", line)
+        if m:
+            pad = (int(m.group(1)), m.group(2))
+        m = re.match(r'\s+-> "(.+?)":(\d+) \[([A-Z,]*)', line)
+        if m and pad and pad[1].lower() == "source" and "ENABLED" in m.group(3):
+            ents[cur]["links"].append((pad[0], m.group(1), int(m.group(2))))
+    return ents
+
+
+def chain(ents, sensor):
+    """[(entity, sink_pad, src_pad)] from the sensor to the video node, along enabled links"""
+    out, name, sink = [], sensor, None
+    while True:
+        e = ents[name]
+        if e["node"] and e["node"].startswith("/dev/video"):
+            return out, e["node"]
+        if not e["links"]:
+            sys.exit(f"no enabled link out of {name}; start the camera preview once")
+        src, nxt, nsink = e["links"][0]
+        out.append((name, sink, src))
+        name, sink = nxt, nsink
+
+
+class Sensor:
+    def __init__(self, dev):
+        self.dev = dev
+        self.ctrl = {}
+        for line in run("v4l2-ctl", "-d", dev, "-l").splitlines():
+            m = re.match(r"\s*(\w+) 0x\w+ \((\w+)\)\s*: (.*)", line)
+            if m:
+                kv = dict(re.findall(r"(\w+)=(-?\d+)", m.group(3)))
+                self.ctrl[m.group(1)] = {k: int(v) for k, v in kv.items()}
+
+    def get(self, name):
+        return int(run("v4l2-ctl", "-d", self.dev, "-C", name).split(":")[1])
+
+    def set(self, **kw):
+        # Blanking first: it moves the exposure limit
+        if "vertical_blanking" in kw:
+            run("v4l2-ctl", "-d", self.dev, "-c", f"vertical_blanking={kw.pop('vertical_blanking')}")
+        run("v4l2-ctl", "-d", self.dev, "-c", ",".join(f"{k}={v}" for k, v in kw.items()))
+
+
+def configure(sensor, ents, w, h):
+    fmt = run("v4l2-ctl", "-d", sensor.dev, "--get-subdev-fmt", "0")
+    code = int(re.search(r"Mediabus Code\s*: (0x[0-9a-f]+)", fmt).group(1), 16)
+    if code not in RAW:
+        sys.exit(f"unknown bus code {code:#x}")
+    mname, pix, order = RAW[code]
+    links, video = chain(ents, sensor.name)
+    for ent, sink, src in links:
+        for p in (sink, src):
+            if p is not None:
+                run("media-ctl", "-d", "/dev/media0", "-V", f'"{ent}":{p}[fmt:{mname}/{w}x{h} field:none]')
+    run("v4l2-ctl", "-d", video, f"--set-fmt-video=width={w},height={h},pixelformat={pix}")
+    out = run("v4l2-ctl", "-d", video, "--get-fmt-video")
+    stride = int(re.search(r"Bytes per Line\s*: (\d+)", out).group(1))
+    return video, stride, order
+
+
+def grab(video, count, path):
+    if os.path.exists(path):
+        os.unlink(path)
+    run("v4l2-ctl", "-d", video, "--stream-mmap", f"--stream-count={count}", f"--stream-to={path}")
+    return open(path, "rb").read()
+
+
+def unpack(buf, w, h, stride):
+    """Last frame in buf, MIPI RAW10 packed -> uint16 (h, w)"""
+    size = stride * h
+    a = np.frombuffer(buf[-size:], np.uint8).reshape(h, stride)[:, :w * 5 // 4].reshape(h, w // 4, 5)
+    a = a.astype(np.uint16)
+    px = np.empty((h, w // 4, 4), np.uint16)
+    for i in range(4):
+        px[:, :, i] = (a[:, :, i] << 2) | ((a[:, :, 4] >> (2 * i)) & 3)
+    return px.reshape(h, w)
+
+
+def quads(raw, order):
+    """2x2 Bayer blocks -> R, G, B planes, linear 0..1 after black level"""
+    f = (raw.astype(np.float32) - BLACK) / (WHITE - BLACK)
+    p = {(0, 0): f[0::2, 0::2], (0, 1): f[0::2, 1::2], (1, 0): f[1::2, 0::2], (1, 1): f[1::2, 1::2]}
+    pos = {c: [] for c in "RGB"}
+    for i, c in enumerate(order):
+        pos[c].append(p[(i // 2, i % 2)])
+    return pos["R"][0], (pos["G"][0] + pos["G"][1]) / 2, pos["B"][0]
+
+
+def ladder(want, line_s, gmin, gmax):
+    """Total exposure x gain (seconds x times) -> (lines, gain code): time up to 1/30 s,
+    then gain up to 4x, then time up to 1/10 s, then full gain, then time up to 1/4 s"""
+    top = gmax / gmin
+    t = min(want, 1 / 30)
+    if want / t > 4:
+        t = min(want / 4, 1 / 10)
+    if want / t > top:
+        t = min(want / top, 1 / 4)
+    g = min(top, max(1.0, want / t))
+    return max(8, round(t / line_s)), max(gmin, min(gmax, round(g * gmin)))
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("camera")
+    ap.add_argument("out")
+    ap.add_argument("--exposure", type=int)
+    ap.add_argument("--gain", type=int)
+    ap.add_argument("--mirror", action="store_true", help="flip left-right (front camera)")
+    args = ap.parse_args()
+
+    dev, name = find_sensor(args.camera)
+    sensor = Sensor(dev)
+    sensor.name = name
+    full = SIZES.get(args.camera.rsplit("/", 1)[-1])
+    if args.camera.endswith("i2c-bus@0/camera@2d"):
+        full = (4128, 3096)
+    elif args.camera.endswith("i2c-bus@1/camera@2d"):
+        full = (3264, 2448)
+    w, h = full
+    # Put the sensor back afterwards: the preview must not inherit the long blanking
+    saved = {k: sensor.get(k) for k in ("vertical_blanking", "exposure", "analogue_gain")}
+    try:
+        shoot(args, sensor, w, h)
+    finally:
+        sensor.set(**saved)
+
+
+def shoot(args, sensor, w, h):
+    video, stride, order = configure(sensor, topology(), w, h)
+
+    c = sensor.ctrl
+    gmin, gmax = c["analogue_gain"]["min"], c["analogue_gain"]["max"]
+    vb_min = c["vertical_blanking"]["min"]
+    hblank = c["horizontal_blanking"]["value"] if "horizontal_blanking" in c else 0
+    rate = c["pixel_rate"]["value"] if "pixel_rate" in c else c["pixel_rate"]["max"]
+    line_s = (w + hblank) / rate
+    margin = (h + vb_min) - c["exposure"]["max"] if c["exposure"]["max"] < h + vb_min else 4
+
+    # Start from the preview's state if given, else a middle guess
+    lines = args.exposure or round(1 / 60 / line_s)
+    gain = args.gain or gmin
+    tmp = tempfile.mktemp(prefix="still-", dir="/tmp")
+    for attempt in range(4):
+        vb = max(vb_min, lines + margin - h)
+        sensor.set(vertical_blanking=vb, exposure=lines, analogue_gain=gain)
+        raw = unpack(grab(video, SKIP + 1, tmp), w, h, stride)
+        r, g, b = quads(raw, order)
+        gs = g[::4, ::4]
+        med = float(np.median(gs))
+        hi = float(np.percentile(gs, 99.5))
+        have = lines * line_s * gain / gmin
+        log(f"try {attempt}: {lines} lines ({lines * line_s * 1000:.1f} ms) gain {gain / gmin:.2f}x"
+            f" -> median {med:.4f} p99.5 {hi:.3f}")
+        k = TARGET / max(med, 1e-4)
+        if hi * k > 0.97 and med * (0.97 / max(hi, 1e-4)) >= 0.06:
+            k = 0.97 / max(hi, 1e-4)          # keep the highlights, the median is still fine
+        at_limit = k > 1 and lines >= round(0.25 / line_s) - 1 and gain >= gmax
+        if 0.85 < k < 1.18 or at_limit or attempt == 3:
+            break
+        lines, gain = ladder(have * k, line_s, gmin, gmax)
+    os.unlink(tmp)
+
+    # White balance from mid-tones
+    m = (g > 0.02) & (r < 0.95) & (g < 0.95) & (b < 0.95)
+    if m.sum() > 1000:
+        gr = float(np.clip(g[m].mean() / max(r[m].mean(), 1e-5), 0.6, 3.5))
+        gb = float(np.clip(g[m].mean() / max(b[m].mean(), 1e-5), 0.6, 3.5))
+    else:
+        gr = gb = 1.0
+    rgb = np.stack([r * gr, g, b * gb], axis=-1)
+    clipped = (raw[0::2, 0::2] >= 1015) | (raw[1::2, 1::2] >= 1015)
+    np.clip(rgb, 0, None, out=rgb)
+    # Bring the median to TARGET digitally if metering stopped short (at most 4x)
+    y = 0.2126 * rgb[..., 0] + 0.7152 * rgb[..., 1] + 0.0722 * rgb[..., 2]
+    gain_d = float(np.clip(TARGET / max(float(np.median(y[::4, ::4])), 1e-5), 1.0, 4.0))
+    rgb *= gain_d
+    y *= gain_d
+    rgb = y[..., None] + 1.25 * (rgb - y[..., None])          # mild saturation
+    np.clip(rgb, 0, None, out=rgb)
+    rgb = rgb * (1 + rgb / 2.25) / (1 + rgb)                   # soft highlight roll-off (white 1.5)
+    rgb[clipped] = 1.0
+    rgb = np.where(rgb <= 0.0031308, 12.92 * rgb, 1.055 * np.power(np.clip(rgb, 0, 1), 1 / 2.4) - 0.055)
+    img = (np.clip(rgb, 0, 1) * 255 + 0.5).astype(np.uint8)
+    if args.mirror:
+        img = img[:, ::-1]
+    img = np.ascontiguousarray(img)
+    oh, ow = img.shape[:2]
+    pb = GdkPixbuf.Pixbuf.new_from_bytes(GLib.Bytes.new(img.tobytes()), GdkPixbuf.Colorspace.RGB,
+                                         False, 8, ow, oh, ow * 3)
+    pb.savev(args.out, "png", [], [])
+    log(f"saved {args.out} {ow}x{oh}, wb R {gr:.2f} B {gb:.2f}, digital {gain_d:.2f}x")
+    print(f"{lines} {gain}")
+
+
+if __name__ == "__main__":
+    main()
