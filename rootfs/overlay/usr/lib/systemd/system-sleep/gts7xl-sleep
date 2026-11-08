@@ -1,0 +1,27 @@
+#!/bin/sh
+# Deeper sleep for the Tab S7+.
+#  - Wi-Fi: with a device behind it the PCIe controller keeps its clocks (and
+#    the CXO) on through suspend. Removing the root port lets it power down;
+#    a rescan after wake brings Wi-Fi back and NetworkManager reconnects.
+#  - Sensors: the DSP streams wake the CPU many times a second.
+SENSORS="gts7xl-sensord-accel gts7xl-sensord-light gts7xl-sensord-motion@gyro gts7xl-sensord-motion@mag gts7xl-sensord-motion@compass"
+STATE=/run/gts7xl-sleep
+case "$1/$2" in
+pre/*)
+	mkdir -p $STATE
+	for s in $SENSORS; do
+		systemctl -q is-active "$s" && echo "$s"
+	done > $STATE/sensors
+	[ -s $STATE/sensors ] && systemctl stop $(cat $STATE/sensors)
+	if [ -e /sys/bus/pci/devices/0000:00:00.0/remove ]; then
+		echo 1 > /sys/bus/pci/devices/0000:00:00.0/remove && touch $STATE/pci
+	fi
+	;;
+post/*)
+	[ -e $STATE/pci ] && echo 1 > /sys/bus/pci/rescan
+	rm -f $STATE/pci
+	[ -s $STATE/sensors ] && systemctl start --no-block $(cat $STATE/sensors)
+	rm -f $STATE/sensors
+	;;
+esac
+exit 0

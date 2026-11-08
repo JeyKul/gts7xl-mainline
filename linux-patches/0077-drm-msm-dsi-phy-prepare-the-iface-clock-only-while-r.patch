@@ -1,0 +1,85 @@
+From 3f5625cd5369d485c80a7ab34a970965301ac4b7 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 22:26:46 +0100
+Subject: [PATCH 77/78] drm/msm/dsi/phy: prepare the iface clock only while
+ runtime active
+
+pm_clk prepares a clock at pm_clk_add() unless the clock itself is
+enabled-when-prepared, and keeps it prepared. The DSI PHY's AHB clock is
+a branch clock whose root is the RPMh CXO clock, which votes on prepare,
+so with the display off a CXO vote stayed in the sleep set. Handle the
+clock in the runtime PM callbacks instead.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy.c | 33 ++++++++++++++++++++-------
+ drivers/gpu/drm/msm/dsi/phy/dsi_phy.h |  1 +
+ 2 files changed, 26 insertions(+), 8 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
+index 1fb3899b8..05518b64f 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.c
+@@ -687,13 +687,15 @@ static int dsi_phy_driver_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		return ret;
+ 
+-	ret = devm_pm_clk_create(dev);
+-	if (ret)
+-		return ret;
+-
+-	ret = pm_clk_add(dev, "iface");
+-	if (ret < 0)
+-		return dev_err_probe(dev, ret, "Unable to get iface clk\n");
++	/*
++	 * Prepared only while runtime active: pm_clk kept it prepared for good,
++	 * and on SM8250 that holds a CXO vote in RPMh's sleep set (the AHB
++	 * clock's root is the RPMh XO clock, which votes on prepare), so the SoC
++	 * never reached AOSS sleep with the display off.
++	 */
++	phy->ahb_clk = devm_clk_get(dev, "iface");
++	if (IS_ERR(phy->ahb_clk))
++		return dev_err_probe(dev, PTR_ERR(phy->ahb_clk), "Unable to get iface clk\n");
+ 
+ 	if (phy->cfg->ops.pll_init) {
+ 		ret = phy->cfg->ops.pll_init(phy);
+@@ -711,8 +713,23 @@ static int dsi_phy_driver_probe(struct platform_device *pdev)
+ 	return 0;
+ }
+ 
++static int dsi_phy_runtime_suspend(struct device *dev)
++{
++	struct msm_dsi_phy *phy = dev_get_drvdata(dev);
++
++	clk_disable_unprepare(phy->ahb_clk);
++	return 0;
++}
++
++static int dsi_phy_runtime_resume(struct device *dev)
++{
++	struct msm_dsi_phy *phy = dev_get_drvdata(dev);
++
++	return clk_prepare_enable(phy->ahb_clk);
++}
++
+ static const struct dev_pm_ops dsi_phy_pm_ops = {
+-	SET_RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
++	SET_RUNTIME_PM_OPS(dsi_phy_runtime_suspend, dsi_phy_runtime_resume, NULL)
+ };
+ 
+ static struct platform_driver dsi_phy_platform_driver = {
+diff --git a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h
+index f5d3e806f..2e5657d72 100644
+--- a/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h
++++ b/drivers/gpu/drm/msm/dsi/phy/dsi_phy.h
+@@ -121,6 +121,7 @@ struct msm_dsi_phy {
+ 	bool pll_on;
+ 
+ 	struct clk_hw_onecell_data *provided_clocks;
++	struct clk *ahb_clk;
+ 
+ 	bool state_saved;
+ };
+-- 
+2.56.0
+

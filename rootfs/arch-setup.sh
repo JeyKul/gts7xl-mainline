@@ -81,7 +81,7 @@ systemctl mask alsa-restore alsa-state
 # /etc/resolv.conf points at systemd-resolved, and NetworkManager feeds it
 systemctl enable systemd-resolved
 systemctl enable NetworkManager "$DM" bluetooth systemd-timesyncd \
-  gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log gts7xl-spen gts7xl-webcam gts7xl-gnss gts7xl-power gts7xl-rtc-offset gts7xl-rtc-offset-save.path tuned tuned-ppd \
+  gts7xl-firstboot gts7xl-hw gts7xl-bt-addr gts7xl-charge-control gts7xl-charge-log gts7xl-early-log gts7xl-spen gts7xl-webcam gts7xl-gnss gts7xl-power gts7xl-cover-touch gts7xl-rtc-offset gts7xl-rtc-offset-save.path tuned tuned-ppd \
   $([ -e /etc/systemd/system/gts7xl-sensord-setup.service ] && echo gts7xl-sensord-setup)
 systemctl set-default graphical.target
 sed -i 's/^load-module module-suspend-on-idle/#&/' /etc/pulse/default.pa
@@ -90,4 +90,9 @@ mkdir -p /etc/udev/rules.d; ln -sf /dev/null /etc/udev/rules.d/90-alsa-restore.r
 cp -a /etc/skel/.local "/home/$NEW_USER/"
 chown -R "$NEW_USER:$NEW_USER" "/home/$NEW_USER"
 dconf update
-depmod -a 7.3.0-gts7xl
+if [ -f /tmp/linux-gts7xl.pkg.tar.gz ]; then
+	# Inside a chroot the hook leaves the boot partition alone (the running image is this build's)
+	GTS7XL_NO_BOOT_WRITE=1 pacman -U --noconfirm /tmp/linux-gts7xl.pkg.tar.gz
+	rm -f /tmp/linux-gts7xl.pkg.tar.gz
+fi
+for k in /usr/lib/modules/*/; do depmod -a "$(basename "$k")"; done

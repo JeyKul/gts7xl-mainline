@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build the Arch Linux ARM root filesystem for the Tab S7+ Wi-Fi.
 # Run as root on aarch64, or on x86_64 with qemu-user-static binfmt.
-# Usage: arch-install.sh <ArchLinuxARM-aarch64-latest.tar.gz> <modules.tar.gz> <output.tar.gz>
+# Usage: arch-install.sh <ArchLinuxARM-aarch64-latest.tar.gz> <linux-gts7xl-*.pkg.tar.gz | modules.tar.gz> <output.tar.gz>
 # PKG_CACHE=<dir>: reuse downloaded packages across builds (copied in and out, never mounted)
 set -euo pipefail
 
@@ -30,9 +30,13 @@ cp -a "$HERE/overlay/." "$A/"
 LFW=https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/qcom
 mkdir -p "$A/usr/lib/firmware/qcom"
 for f in a650_sqe.fw a650_gmu.bin; do curl -fsSL -o "$A/usr/lib/firmware/qcom/$f" "$LFW/$f"; done
-chmod 755 "$A"/usr/local/sbin/* "$A"/usr/local/bin/* "$A/usr/lib/systemd/system-sleep/gts7xl-bluetooth"
+chmod 755 "$A"/usr/local/sbin/* "$A"/usr/local/bin/* "$A"/usr/lib/systemd/system-sleep/*
 mkdir -p "$A/usr/lib/modules"
-tar -xzf "$MODULES" -C "$A/usr" --strip-components=0 lib/modules 2>/dev/null || tar -xzf "$MODULES" -C "$A"
+case "$MODULES" in
+# pacman owns the kernel then, so later updates replace it cleanly (arch-setup.sh installs it)
+*.pkg.tar.*) cp "$MODULES" "$A/tmp/linux-gts7xl.pkg.tar.gz" ;;
+*) tar -xzf "$MODULES" -C "$A/usr" --strip-components=0 lib/modules 2>/dev/null || tar -xzf "$MODULES" -C "$A" ;;
+esac
 install -m755 "$HERE/arch-setup.sh" "$A/tmp/arch-setup.sh"
 rm -rf "$A/tmp/gts7xl-sensord-src"; cp -a "$HERE/../sensord" "$A/tmp/gts7xl-sensord-src"
 printf "NEW_USER=user\nNEW_PASS=user\n" > "$A/tmp/gts7xl-user"

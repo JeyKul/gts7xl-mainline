@@ -1,0 +1,38 @@
+From 2892f6f9e34737dd9d87ef1ba6a1b7530de8534a Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 22:26:46 +0100
+Subject: [PATCH 76/78] scsi: ufs: qcom: don't enable the lane clocks twice
+
+On resume the lane clocks are enabled in setup_clocks (link in hibern8)
+and again in ufs_qcom_resume(), while disable is guarded by
+is_lane_clks_enabled. Each suspend cycle leaked one enable, so after the
+first resume the UFS clocks and the CXO under them stayed on in suspend.
+Return early when they are already on.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/ufs/host/ufs-qcom.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/ufs/host/ufs-qcom.c b/drivers/ufs/host/ufs-qcom.c
+index 954be9343..ebaa2a9d2 100644
+--- a/drivers/ufs/host/ufs-qcom.c
++++ b/drivers/ufs/host/ufs-qcom.c
+@@ -356,6 +356,14 @@ static int ufs_qcom_enable_lane_clks(struct ufs_qcom_host *host)
+ {
+ 	int err;
+ 
++	/*
++	 * Resume enables them in setup_clocks (link in hibern8) and again in
++	 * ufs_qcom_resume(); disable is guarded by the same flag, so each
++	 * suspend cycle leaked one enable and the clocks (and CXO) stayed on.
++	 */
++	if (host->is_lane_clks_enabled)
++		return 0;
++
+ 	err = clk_bulk_prepare_enable(host->num_clks, host->clks);
+ 	if (err)
+ 		return err;
+-- 
+2.56.0
+

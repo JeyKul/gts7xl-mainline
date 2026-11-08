@@ -91,8 +91,21 @@ cp -a /gts7xl/overlay/. $A/
 (cd /gts7xl/overlay && find . -type d -print0) | (cd $A && xargs -0 chmod go-w)
 mkdir -p $A/usr/lib/firmware
 cp -a /gts7xl/firmware/. $A/usr/lib/firmware/
-chmod 755 $A/usr/local/sbin/* $A/usr/local/bin/* $A/usr/lib/systemd/system-sleep/gts7xl-bluetooth
-tar -xzf /gts7xl/modules.tar.gz -C $A/usr
+chmod 755 $A/usr/local/sbin/* $A/usr/local/bin/* $A/usr/lib/systemd/system-sleep/*
+# The kernel as a package, so pacman updates it later (arch-setup.sh installs it).
+# CI kernels are 7.3.0-gts7xl-<run>, packaged as linux-gts7xl 7.3.0.<run>-1.
+K=$(uname -r)
+case "$K" in
+*-gts7xl-*) KV="${K%%-*}.${K##*-}-1" ;;
+*) KV= ;;
+esac
+if [ -n "$KV" ] && curl -fsSL -o $A/tmp/linux-gts7xl.pkg.tar.gz \
+	"https://github.com/JeyKul/gts7xl-mainline/releases/download/modules/linux-gts7xl-$KV-aarch64.pkg.tar.gz"; then
+	echo "kernel package linux-gts7xl $KV"
+else
+	rm -f $A/tmp/linux-gts7xl.pkg.tar.gz
+	tar -xzf /gts7xl/modules.tar.gz -C $A/usr
+fi
 sed -i 's/^CheckSpace/#CheckSpace/' $A/etc/pacman.conf
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' $A/etc/pacman.conf
 grep -q '^DisableSandbox' $A/etc/pacman.conf || sed -i '/^\[options\]/a DisableSandbox' $A/etc/pacman.conf
