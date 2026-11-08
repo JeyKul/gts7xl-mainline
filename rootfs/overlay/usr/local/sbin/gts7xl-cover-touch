@@ -1,0 +1,61 @@
+#!/usr/bin/python3
+# SPDX-License-Identifier: MIT
+"""Switch the touchscreen off while the Book Cover is closed.
+
+The closed cover's keys press on the glass and registered as touches. The lid
+switch comes from the cover over pogo ("Samsung Book Cover Tablet Mode Switch",
+SW_LID). Inhibiting the touchscreen's input device makes the kernel close it,
+which powers the controller down (fts5cu56a open/close).
+"""
+import fcntl, glob, os, struct, sys, time
+
+COVER = "Samsung Book Cover Tablet Mode Switch"
+TOUCH = "STM FTS Touchscreen"
+EV_SW, SW_LID = 0x05, 0x00
+EVIOCGSW = 0x8000451b | (8 << 16)   # _IOR('E', 0x1b, 8 bytes)
+
+
+def find(name):
+    for n in glob.glob("/sys/class/input/input*/name"):
+        with open(n) as f:
+            if f.read().strip() == name:
+                d = os.path.dirname(n)
+                ev = [e for e in os.listdir(d) if e.startswith("event")]
+                return d, ("/dev/input/" + ev[0]) if ev else None
+    return None, None
+
+
+def set_touch(closed):
+    d, _ = find(TOUCH)
+    if not d:
+        return
+    with open(d + "/inhibited", "w") as f:
+        f.write("1" if closed else "0")
+    print("cover", "closed: touchscreen off" if closed else "open: touchscreen on", flush=True)
+
+
+def main():
+    while True:
+        _, dev = find(COVER)
+        if not dev:
+            time.sleep(5)       # cover not attached
+            continue
+        try:
+            with open(dev, "rb") as f:
+                bits = fcntl.ioctl(f, EVIOCGSW, bytes(8))
+                state = bool(bits[0] & (1 << SW_LID))
+                set_touch(state)
+                while True:
+                    _, _, typ, code, value = struct.unpack("qqHHi", f.read(24))
+                    if typ == EV_SW and code == SW_LID and bool(value) != state:
+                        state = bool(value)
+                        set_touch(state)
+        except OSError as e:
+            # The cover went away (detached keyboard): touch back on, wait for it
+            print("cover:", e, flush=True)
+            set_touch(False)
+            time.sleep(2)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

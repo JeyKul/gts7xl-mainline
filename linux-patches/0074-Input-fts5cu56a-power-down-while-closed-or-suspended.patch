@@ -1,0 +1,194 @@
+From 54855d515c9781b2390698b8403d70d9a9b2f0cc Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 8 Nov 2026 20:15:22 +0100
+Subject: [PATCH] Input: fts5cu56a: power down while closed or suspended
+
+The controller stayed powered and its interrupt live all the time: a
+closed book cover's keys registered as touches, and during s2idle the
+touch interrupt kept waking the SoC (about 150 per minute).
+
+Power it on in open and off in close, so inhibiting the input device
+switches it off, and do the same across system sleep. The interrupt is
+requested disabled and follows the open state; fingers still down are
+released when it powers off.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/input/touchscreen/fts5cu56a.c | 113 ++++++++++++++++++++++++--
+ 1 file changed, 107 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/input/touchscreen/fts5cu56a.c b/drivers/input/touchscreen/fts5cu56a.c
+index 5abbf3471..f1e4effce 100644
+--- a/drivers/input/touchscreen/fts5cu56a.c
++++ b/drivers/input/touchscreen/fts5cu56a.c
+@@ -51,6 +51,7 @@ struct fts5_data {
+ 	struct input_dev *input;
+ 	struct regulator_bulk_data supplies[2];
+ 	struct touchscreen_properties prop;
++	bool powered;
+ };
+ 
+ static int fts5_write(struct fts5_data *ts, const u8 *buf, int len)
+@@ -211,6 +212,96 @@ static int fts5_hw_init(struct fts5_data *ts)
+ 	return 0;
+ }
+ 
++/*
++ * Off while nobody listens (input closed or inhibited, e.g. by a closed book
++ * cover, whose keys otherwise register as touches) and during system sleep,
++ * where its interrupts kept waking the SoC.
++ */
++static int fts5_power_on(struct fts5_data *ts)
++{
++	int ret;
++
++	if (ts->powered)
++		return 0;
++	ret = regulator_bulk_enable(ARRAY_SIZE(ts->supplies), ts->supplies);
++	if (ret)
++		return ret;
++	/* power-on to firmware-ready is a few hundred ms */
++	msleep(300);
++	ret = fts5_hw_init(ts);
++	if (ret) {
++		regulator_bulk_disable(ARRAY_SIZE(ts->supplies), ts->supplies);
++		return ret;
++	}
++	ts->powered = true;
++	return 0;
++}
++
++static void fts5_power_off(struct fts5_data *ts)
++{
++	int i;
++
++	if (!ts->powered)
++		return;
++	regulator_bulk_disable(ARRAY_SIZE(ts->supplies), ts->supplies);
++	ts->powered = false;
++	/* Lift any finger still down, or it stays pressed until the next touch */
++	for (i = 0; i < FTS_FINGER_MAX; i++) {
++		input_mt_slot(ts->input, i);
++		input_mt_report_slot_inactive(ts->input);
++	}
++	input_mt_sync_frame(ts->input);
++	input_sync(ts->input);
++}
++
++static int fts5_start(struct fts5_data *ts)
++{
++	int ret = fts5_power_on(ts);
++
++	if (ret)
++		return ret;
++	enable_irq(ts->client->irq);
++	return 0;
++}
++
++static void fts5_stop(struct fts5_data *ts)
++{
++	disable_irq(ts->client->irq);
++	fts5_power_off(ts);
++}
++
++static int fts5_open(struct input_dev *input)
++{
++	return fts5_start(input_get_drvdata(input));
++}
++
++static void fts5_close(struct input_dev *input)
++{
++	fts5_stop(input_get_drvdata(input));
++}
++
++static int fts5_suspend(struct device *dev)
++{
++	struct fts5_data *ts = i2c_get_clientdata(to_i2c_client(dev));
++
++	guard(mutex)(&ts->input->mutex);
++	if (input_device_enabled(ts->input))
++		fts5_stop(ts);
++	return 0;
++}
++
++static int fts5_resume(struct device *dev)
++{
++	struct fts5_data *ts = i2c_get_clientdata(to_i2c_client(dev));
++
++	guard(mutex)(&ts->input->mutex);
++	if (input_device_enabled(ts->input))
++		return fts5_start(ts);
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(fts5_pm_ops, fts5_suspend, fts5_resume);
++
+ static int fts5_probe(struct i2c_client *client)
+ {
+ 	struct fts5_data *ts;
+@@ -239,6 +330,7 @@ static int fts5_probe(struct i2c_client *client)
+ 	ret = fts5_hw_init(ts);
+ 	if (ret)
+ 		goto err_disable;
++	ts->powered = true;
+ 
+ 	ts->input = devm_input_allocate_device(&client->dev);
+ 	if (!ts->input) {
+@@ -248,6 +340,10 @@ static int fts5_probe(struct i2c_client *client)
+ 
+ 	ts->input->name = "STM FTS Touchscreen";
+ 	ts->input->id.bustype = BUS_I2C;
++	ts->input->open = fts5_open;
++	ts->input->close = fts5_close;
++	input_set_drvdata(ts->input, ts);
++	i2c_set_clientdata(client, ts);
+ 
+ 	input_set_abs_params(ts->input, ABS_MT_POSITION_X, 0,
+ 			     FTS_MAX_COORD, 0, 0);
+@@ -264,17 +360,17 @@ static int fts5_probe(struct i2c_client *client)
+ 	if (ret)
+ 		goto err_disable;
+ 
+-	ret = input_register_device(ts->input);
++	/* Enabled by open, which can come as soon as the device is registered */
++	ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
++					fts5_irq_handler,
++					IRQF_ONESHOT | IRQF_NO_AUTOEN, "fts5cu56a", ts);
+ 	if (ret)
+ 		goto err_disable;
+ 
+-	ret = devm_request_threaded_irq(&client->dev, client->irq, NULL,
+-					fts5_irq_handler,
+-					IRQF_ONESHOT, "fts5cu56a", ts);
++	ret = input_register_device(ts->input);
+ 	if (ret)
+ 		goto err_disable;
+ 
+-	i2c_set_clientdata(client, ts);
+ 	return 0;
+ 
+ err_disable:
+@@ -286,7 +382,11 @@ static void fts5_remove(struct i2c_client *client)
+ {
+ 	struct fts5_data *ts = i2c_get_clientdata(client);
+ 
+-	regulator_bulk_disable(ARRAY_SIZE(ts->supplies), ts->supplies);
++	/* The input device goes after this; its close then finds the power off */
++	if (ts->powered) {
++		regulator_bulk_disable(ARRAY_SIZE(ts->supplies), ts->supplies);
++		ts->powered = false;
++	}
+ }
+ 
+ static const struct of_device_id fts5_of_match[] = {
+@@ -306,6 +406,7 @@ static struct i2c_driver fts5_driver = {
+ 	.driver = {
+ 		.name = "fts5cu56a",
+ 		.of_match_table = fts5_of_match,
++		.pm = pm_sleep_ptr(&fts5_pm_ops),
+ 	},
+ 	.probe = fts5_probe,
+ 	.remove = fts5_remove,
+-- 
+2.56.0
+
