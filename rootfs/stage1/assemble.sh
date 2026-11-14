@@ -72,9 +72,11 @@ for r,_,fs in os.walk('.'):
     for f in fs:
         if f.endswith('.ko'): idx[f[:-3].replace('-','_')]=os.path.join(r,f)
 seen=[]
+# Built-in drivers (display and its DP chain since 0080) need no insmod
+builtin={os.path.basename(l.strip())[:-3].replace('-','_') for l in open('modules.builtin')}
 def add(n):
     n=n.replace('-','_')
-    if n in seen: return
+    if n in seen or n in builtin: return
     if n not in idx: raise SystemExit('missing module '+n)
     o=subprocess.run(['modinfo','-F','depends',idx[n]],capture_output=True,text=True,check=True).stdout.strip()
     for d in filter(None,o.split(',')): add(d)
