@@ -158,6 +158,21 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 
 Trackpad use makes the connection line (gpio43) drop about once a second, after about 30 reports at most. The stock kernel in TWRP does the same, One UI does not, and the cause is unknown. Starting the sensor DSP and `hexagonrpcd` did not fix it, though `hexagonrpcd` stops at the missing `sns_registry` interface, so the sensor stack may not be fully up. The MCU firmware reads its own detect pin and watches a second I2C bus towards the sensor DSP. This project never writes firmware to the keyboard.
 
+## Credits
+
+This port stands on other people's work:
+
+- **[Linux](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git)** and its Qualcomm (SM8250, msm, interconnect, remoteproc, audio) maintainers and contributors: the base of everything here.
+- **[aaronsb/sm-x800-linux](https://github.com/aaronsb/sm-x800-linux)**: the Galaxy Tab S8+ mainline port. Our `max77705_usbc` Type-C/PD driver started from its MAX77705 driver.
+- **Samsung's GPL kernel source for the SM-T970** ([shezik/samsung-kernel-T970XXS7DXH1](https://github.com/shezik/samsung-kernel-T970XXS7DXH1)) and **[LineageOS android_kernel_samsung_sm8250](https://github.com/LineageOS/android_kernel_samsung_sm8250)**: device trees, voltages, panel sequences and the protocols behind the touchscreen, S Pen, pogo keyboard, amplifier and USB-C drivers.
+- **[agcarbajo/postmarketos-galaxy-tab-s9-ultra](https://github.com/agcarbajo/postmarketos-galaxy-tab-s9-ultra)**: the Tab S9 Ultra port; its built-in display stack showed the way to a clean boot handoff.
+- **[portare-ch/portareos](https://github.com/portare-ch/portareos)** (with Armada's SM8550 sleep fixes): their suspend investigation guides our deep-sleep work.
+- **[v4l2loopback](https://github.com/v4l2loopback/v4l2loopback)**: the webcam device behind `gts7xl-webcam`.
+- **[linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git)**: GPU and Wi-Fi firmware. All other firmware comes from the tablet's own partitions and is never redistributed.
+- **[Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium)**: base of the early UEFI attempt in `uefi/`.
+- **[Arch Linux ARM](https://archlinuxarm.org)** and **[Alpine Linux](https://alpinelinux.org)**: the installed system and the installer.
+- **Claudius** (claudiusthebot): the RTC offset, thermal zones and throttling, and the gyroscope, magnetometer and compass bridge.
+
 ## License and credit
 
 Free to use, change and share; just mention [JeyKul](https://github.com/JeyKul). See [LICENSE](LICENSE) (MIT).
