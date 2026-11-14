@@ -1,0 +1,170 @@
+From d6e73806c560b2851757f0b172d7fb1263712375 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sat, 14 Nov 2026 21:28:04 +0100
+Subject: [PATCH] drm/panel: s6tuum3: blank the panel over the firmware link
+ before msm probes
+
+The DSI PHY probe stops the bootloader's link mid-frame, so the panel
+smeared the logo until the first prepare. With the driver built in, an
+early initcall stops the INTF_1 auto refresh the bootloader left running,
+waits for the frame in flight, then sends display off and sleep in.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 123 ++++++++++++++++++
+ 1 file changed, 123 insertions(+)
+
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+index 70a464e49..20e3dbdf9 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+@@ -6,9 +6,14 @@
+ 
+ #include <linux/backlight.h>
+ #include <linux/delay.h>
++#include <linux/dma-mapping.h>
+ #include <linux/gpio/consumer.h>
++#include <linux/io.h>
++#include <linux/iopoll.h>
+ #include <linux/module.h>
+ #include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/platform_device.h>
+ #include <linux/regulator/consumer.h>
+ #include <linux/workqueue.h>
+ 
+@@ -21,6 +26,8 @@
+ #include <drm/drm_modes.h>
+ #include <drm/drm_panel.h>
+ 
++#include <video/mipi_display.h>
++
+ /* Top of the stock normal range: 51h takes 11 bits, 420 cd */
+ #define S6TUUM3_MAX_BRIGHTNESS	2047
+ 
+@@ -437,6 +444,122 @@ static const struct of_device_id s6tuum3_of_match[] = {
+ };
+ MODULE_DEVICE_TABLE(of, s6tuum3_of_match);
+ 
++#ifndef MODULE
++/*
++ * The DSI PHY probe stops the bootloader's link mid-frame, and the panel then
++ * shows a half-written line until the first prepare. Blank it over the still
++ * running link before msm probes: one DCS display off through the command DMA,
++ * the way the bootloader set it up.
++ */
++#define FW_DSI_CTRL		0x004
++#define FW_DSI_DMA_BASE		0x048
++#define FW_DSI_DMA_LEN		0x04c
++#define FW_DSI_TRIG_DMA		0x090
++#define FW_DSI_INTR_CTRL	0x110
++#define FW_DSI_INTR_DMA_DONE	BIT(0)
++#define FW_DSI_CTRL_RUNNING	0x1f5
++/* SM8250 DPU: INTF_1 (DSI0) tear block auto refresh, relative to the "mdp" range */
++#define FW_INTF1_AUTOREFRESH	(0x6a800 + 0x2b4)
++
++static int __init s6tuum3_fw_dcs(void __iomem *dsi, u8 *buf, dma_addr_t buf_dma,
++				 u8 cmd)
++{
++	u32 status;
++	int ret;
++
++	/* Long DCS write, last packet, padded to a word */
++	buf[0] = 1;
++	buf[1] = 0;
++	buf[2] = 0x39;
++	buf[3] = BIT(7) | BIT(6);
++	buf[4] = cmd;
++	memset(buf + 5, 0xff, 3);
++	dma_wmb();
++
++	writel(readl(dsi + FW_DSI_INTR_CTRL), dsi + FW_DSI_INTR_CTRL);
++	writel(lower_32_bits(buf_dma), dsi + FW_DSI_DMA_BASE);
++	writel(8, dsi + FW_DSI_DMA_LEN);
++	writel(1, dsi + FW_DSI_TRIG_DMA);
++	ret = readl_poll_timeout(dsi + FW_DSI_INTR_CTRL, status,
++				 status & FW_DSI_INTR_DMA_DONE, 100, 100000);
++	writel(status, dsi + FW_DSI_INTR_CTRL);
++
++	return ret;
++}
++
++static int __init s6tuum3_early_off(void)
++{
++	struct platform_device *pdev;
++	struct device_node *np, *host;
++	void __iomem *dsi, *mdp;
++	dma_addr_t buf_dma;
++	u32 val, intf_ar;
++	int off, sleep;
++	u8 *buf;
++
++	if (!clean_handoff)
++		return 0;
++
++	np = of_find_compatible_node(NULL, NULL, "samsung,s6tuum3");
++	if (!of_device_is_available(np)) {
++		of_node_put(np);
++		return 0;
++	}
++	host = of_get_parent(np);
++	of_node_put(np);
++	dsi = of_iomap(host, 0);
++	of_node_put(host);
++	if (!dsi)
++		return 0;
++	np = of_find_compatible_node(NULL, NULL, "qcom,sm8250-dpu");
++	mdp = of_iomap(np, 0);
++	of_node_put(np);
++	if (!mdp)
++		goto unmap_dsi;
++
++	val = readl(dsi + FW_DSI_CTRL);
++	if (val != FW_DSI_CTRL_RUNNING) {
++		pr_info("s6tuum3: early off: no firmware link (0x%x)\n", val);
++		goto unmap;
++	}
++
++	pdev = platform_device_register_simple("s6tuum3-early-off", -1, NULL, 0);
++	if (IS_ERR(pdev))
++		goto unmap;
++	if (dma_coerce_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(32)))
++		goto unreg;
++	buf = dma_alloc_coherent(&pdev->dev, 8, &buf_dma, GFP_KERNEL);
++	if (!buf)
++		goto unreg;
++
++	/*
++	 * Stop the bootloader's auto refresh and let the frame in flight finish,
++	 * so the commands below never land in the middle of a frame.
++	 */
++	intf_ar = readl(mdp + FW_INTF1_AUTOREFRESH);
++	if (intf_ar & BIT(31))
++		writel(intf_ar & ~BIT(31), mdp + FW_INTF1_AUTOREFRESH);
++	msleep(50);
++
++	off = s6tuum3_fw_dcs(dsi, buf, buf_dma, MIPI_DCS_SET_DISPLAY_OFF);
++	msleep(20);
++	sleep = s6tuum3_fw_dcs(dsi, buf, buf_dma, MIPI_DCS_ENTER_SLEEP_MODE);
++	msleep(100);
++	pr_info("s6tuum3: early off over the firmware link: autorefresh 0x%x, off %d, sleep %d\n",
++		intf_ar, off, sleep);
++
++	dma_free_coherent(&pdev->dev, 8, buf, buf_dma);
++unreg:
++	platform_device_unregister(pdev);
++unmap:
++	iounmap(mdp);
++unmap_dsi:
++	iounmap(dsi);
++	return 0;
++}
++subsys_initcall_sync(s6tuum3_early_off);
++#endif
++
+ static struct mipi_dsi_driver s6tuum3_driver = {
+ 	.probe = s6tuum3_probe,
+ 	.remove = s6tuum3_remove,
+-- 
+2.56.0
+

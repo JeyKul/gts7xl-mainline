@@ -112,3 +112,12 @@ The PPS is byte identical to the stock dtsi, and all values mainline calculates 
 - Stock sends display on after the first frame; this driver sends it in `enable`, before the first frame.
 - PHY timings are computed by mainline; stock's table is `00 31 0D 0D 2B 27 0D 0D 09 02 04 00 27 1C`. Not compared yet.
 - No run has shown a correct picture yet.
+
+## Clean boot handoff (2026-11-14, patch 0080)
+
+No glitch from logo to console, confirmed by the user over several boots. Two causes:
+
+1. With `msm` as a module (loaded at about 4.9 s), `clk: Disabling unused clocks` and the genpd cleanup at 1.6 s switched the bootloader's pipeline off first. `msm`, the panel and the DP chain (`max77705_usbc`, `ps5169`, `gpio-sbu-mux`, QMP combo PHY, aux bridges) are now built in, so `msm` binds at about 1.4 s, before the cleanup. Its module parameters moved to `CONFIG_CMDLINE`.
+2. The DSI PHY probe stops the bootloader's link mid-frame, and the panel smeared the logo. A `subsys_initcall_sync` in `panel-samsung-s6tuum3` stops the bootloader's auto refresh (DPU `mdp` + INTF_1 0x6a800 + 0x2b4, reads `0x80000002`), waits 50 ms for the frame in flight, then sends 28h and 10h through the command DMA. Costs about 0.17 s.
+
+DPU catalog offsets are relative to the `mdp` range at `0xae01000`, not to MDSS at `0xae00000`: reading 0x1000 too low hangs the bus and resets the tablet with no log.

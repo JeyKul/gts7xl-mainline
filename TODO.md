@@ -150,3 +150,10 @@ Decision: Linux or Android, not both. An installer in the boot image starts when
 ## Restoring Android
 
 Restore `boot`, `dtbo` and `cache` from `backup/partitions`, then format `userdata`.
+
+## System and updates (user, 2026-11-14)
+
+- [ ] btrfs as the default root filesystem
+- [ ] Snapshots (e.g. before each upgrade); rescue mode can roll back or boot another snapshot
+- [ ] Updates through a clean `pacman -Syu` (kernel and boot image as packages), no reinstalls
+- [ ] Encryption: password plus hardware-backed key; the user's login password can unlock it; unlock from a login-style screen at boot
