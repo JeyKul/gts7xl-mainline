@@ -172,6 +172,7 @@ This port stands on other people's work:
 - **[Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium)**: base of the early UEFI attempt in `uefi/`.
 - **[Arch Linux ARM](https://archlinuxarm.org)** and **[Alpine Linux](https://alpinelinux.org)**: the installed system and the installer.
 - **Claudius** (claudiusthebot): the RTC offset, thermal zones and throttling, and the gyroscope, magnetometer and compass bridge.
+- **AI assistance**: much of the reverse engineering, driver code and documentation was written together with AI coding assistants (Claude by Anthropic); those commits carry a `Co-Authored-By: Claude` line.
 
 ## License and credit
 
