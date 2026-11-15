@@ -1,8 +1,11 @@
 #!/bin/bash
 # Build a TWRP recovery image that can open the Linux install (LUKS2 + btrfs).
-# Usage: [AVB_KEY=testkey_rsa4096.pem] build.sh <stock TWRP recovery.img> <Image.gz with BTRFS_FS=y> <stage 1 Alpine root> <out.img>
-# Keeps TWRP's ramdisk, dtb and recovery dtbo; swaps the kernel and appends a
-# second cpio with cryptsetup, btrfs (Alpine, musl libraries included) and linux-data.
+# Usage: [AVB_KEY=testkey_rsa4096.pem] [MAINLINE_DTB=board.dtb] build.sh <stock TWRP recovery.img> <Image.gz> <stage 1 Alpine root> <out.img>
+# Keeps TWRP's ramdisk and appends a second cpio with cryptsetup, btrfs (Alpine,
+# musl libraries included) and linux-data.
+# Without MAINLINE_DTB: a 4.19 kernel with btrfs, TWRP's dtb and recovery dtbo kept.
+# With MAINLINE_DTB: this project's mainline kernel (built with the recovery config,
+# cmdline built in), packed like its boot image: v1 header, DTB appended, no dtbo.
 set -euo pipefail
 IN=$(realpath "$1"); K=$(realpath "$2"); R=$(realpath "$3"); OUT=$(realpath -m "$4")
 HERE=$(dirname "$(realpath "$0")")
@@ -50,16 +53,33 @@ shutil.copy(res('/lib/ld-musl-aarch64.so.1'),T+'/lib/ld-musl-aarch64.so.1')
 P
 mkdir -p "$O/system/bin"
 install -m755 "$HERE"/system/bin/* "$O/system/bin/"
+if [ -n "${MAINLINE_DTB:-}" ]; then
+	# The USB data switch, set the same way stage 1 does it
+	install -m755 "${USBROUTE:-$HERE/../../initramfs/bin/usbroute}" "$O/system/bin/usbroute"
+	# Recovery init only reads init.recovery.<hardware>.rc: TWRP's, plus an import of ours
+	mkdir -p "$T/rd"
+	(cd "$T/rd" && gzip -dc "$T/ramdisk" | cpio -i --quiet init.recovery.qcom.rc)
+	{ cat "$T/rd/init.recovery.qcom.rc"; echo; echo "import /init.recovery.gts7xl.rc"; } > "$O/init.recovery.qcom.rc"
+	install -m644 "$HERE/init.recovery.gts7xl.rc" "$O/init.recovery.gts7xl.rc"
+fi
 (cd "$O" && find . | sort | cpio -o -H newc -R 0:0 --quiet) | gzip -9 > "$T/extra"
 # The kernel unpacks concatenated archives in order: TWRP's, then ours
 cat "$T/ramdisk" "$T/extra" > "$T/ramdisk-all"
 read -r OSV OSP < "$T/args"
 OSV=$(printf '%d.%d.%d' $((OSV >> 14)) $(((OSV >> 7) & 0x7f)) $((OSV & 0x7f)))
 OSP=$(printf '%04d-%02d' $(((OSP >> 4) + 2000)) $((OSP & 0xf)))
+if [ -n "${MAINLINE_DTB:-}" ]; then
+	cat "$K" "$(realpath "$MAINLINE_DTB")" > "$T/kernel-dtb"
+	mkbootimg --header_version 1 --pagesize 2048 --base 0x10000000 --kernel_offset 0x00008000 \
+		--ramdisk_offset 0x01000000 --tags_offset 0x00000100 \
+		--os_version "$OSV" --os_patch_level "$OSP" \
+		--kernel "$T/kernel-dtb" --ramdisk "$T/ramdisk-all" -o "$OUT"
+else
 mkbootimg --header_version 2 --pagesize 4096 --base 0x00000000 --kernel_offset 0x00008000 \
 	--ramdisk_offset 0x02000000 --tags_offset 0x01e00000 --dtb_offset 0x01f00000 \
 	--os_version "$OSV" --os_patch_level "$OSP" --cmdline "$(cat "$T/cmdline")" \
 	--kernel "$K" --ramdisk "$T/ramdisk-all" --recovery_dtbo "$T/dtbo" --dtb "$T/dtb" -o "$OUT"
+fi
 # Same AVB footer as the input: TWRP builds sign with AOSP's public test key
 # (testkey_rsa4096.pem from external/avb, pass it as AVB_KEY)
 if avbtool info_image --image "$IN" >/dev/null 2>&1; then

@@ -1,0 +1,11 @@
+# Mainline kernel only
+on early-init
+    # No ashmem since Linux 5.18: libcutils then needs to be told to use memfd,
+    # or the UI's code cache aborts the recovery
+    setprop sys.use_memfd true
+    # Route the USB data lines to the SoC before adbd starts
+    exec -- /system/bin/usbroute
+
+on fs
+    # TWRP's rc links platform/soc/<bootdevice>; mainline calls the bus soc@0
+    symlink /dev/block/platform/soc@0/1d84000.ufshc /dev/block/bootdevice
