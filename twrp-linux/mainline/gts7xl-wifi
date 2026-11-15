@@ -32,6 +32,7 @@ status_entry() {
 	s=$(cli status 2>/dev/null | sed -n 's/^ssid=//p')
 	a=$(bb ip -4 -o addr show wlan0 2>/dev/null | bb awk '{print $4}')
 	[ -n "$s" ] && [ -n "$a" ] && : > "$N/nets/(connected) $(printf %s "$s" | tr / _) $a"
+	return 0
 }
 
 case "$1" in

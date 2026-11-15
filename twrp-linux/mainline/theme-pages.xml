@@ -35,10 +35,7 @@
 			</button>
 
 			<action>
-				<conditions>
-					<condition var1="tw_gts7xl_ssid" op="modified"/>
-					<condition var1="tw_gts7xl_ssid" op="!=" var2=""/>
-				</conditions>
+				<condition var1="tw_gts7xl_ssid" op="modified"/>
 				<actions>
 					<action function="set">tw_gts7xl_pw=</action>
 					<action function="page">gts7xl_wifi_pw</action>
