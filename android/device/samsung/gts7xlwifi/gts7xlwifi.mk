@@ -7,7 +7,7 @@ $(call inherit-product, frameworks/native/build/tablet-10in-xhdpi-2048-dalvik-he
 # Display through DRM/KMS, GPU through Mesa freedreno, buffers through minigbm:
 # the same open stack as AOSP's own Qualcomm boards on near-mainline kernels
 $(call inherit-product, device/linaro/dragonboard/shared/graphics/drm_hwcomposer/device.mk)
-$(call inherit-product, device/linaro/dragonboard/shared/graphics/mesa/device.mk)
+$(call inherit-product, device/samsung/gts7xlwifi/mesa.mk)
 $(call inherit-product, device/linaro/dragonboard/shared/graphics/minigbm_msm/device.mk)
 $(call inherit-product, device/samsung/gts7xlwifi/device.mk)
 
