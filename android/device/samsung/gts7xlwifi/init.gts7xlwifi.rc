@@ -1,6 +1,10 @@
 import /vendor/etc/init/hw/init.gts7xlwifi.usb.rc
 
 on early-init
+    # Bring-up: every boot's kernel log and logcat on /metadata (mounted in the
+    # first stage, ext4, which TWRP reads)
+    mkdir /metadata/gts7xl 0775 root system
+    start vendor.gts7xl-bootlog
     # The modules ueventd doesn't load by alias (vendor_dlkm's modules.load)
     exec u:r:vendor_modprobe:s0 -- /system/bin/modprobe -a -d /vendor/lib/modules hci_uart rtc-pm8xxx qcom-spmi-adc5 uinput
 
@@ -11,11 +15,8 @@ on init
 on fs
     # Everything but /data (cache, the firmware partition)
     mount_all /vendor/etc/fstab.gts7xlwifi --early
-    # Bring-up: every boot's kernel log and logcat on /cache, which TWRP reads
-    mkdir /cache/gts7xl 0775 root system
-    start vendor.gts7xl-bootlog
 
-service vendor.gts7xl-bootlog /vendor/bin/sh -c "dmesg -w > /cache/gts7xl/kmsg.txt 2>&1 & logcat -b all -v time > /cache/gts7xl/logcat.txt 2>&1"
+service vendor.gts7xl-bootlog /vendor/bin/sh -c "dmesg -w > /metadata/gts7xl/kmsg.txt 2>&1 & logcat -b all -v time > /metadata/gts7xl/logcat.txt 2>&1"
     user root
     group root log
     seclabel u:r:su:s0
