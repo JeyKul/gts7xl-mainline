@@ -1,4 +1,4 @@
-/vendor/firmware_mnt(/.*)?                 u:object_r:firmware_file:s0
+/vendor/firmware_mnt(/.*)?                 u:object_r:vendor_firmware_file:s0
 /vendor/bin/qrtr-ns                         u:object_r:vendor_qrtr_exec:s0
 /vendor/bin/pd-mapper                       u:object_r:vendor_qrtr_exec:s0
 /vendor/bin/tqftpserv                       u:object_r:vendor_qrtr_exec:s0
