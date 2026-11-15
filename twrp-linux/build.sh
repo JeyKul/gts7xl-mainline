@@ -84,6 +84,19 @@ s=open(sys.argv[1]).read(); items=open(sys.argv[2]).read(); pages=open(sys.argv[
 a=s.index('<listbox style="advanced_listbox">',s.index('<page name="advanced">')); a=s.index('/>',s.index('<placement',a))+3
 s=s[:a]+items+s[a:]
 z=s.rindex('</pages>'); s=s[:z]+pages+'\t'+s[z:]
+# Main first asks for the Linux password while the install is locked
+a=s.index('<page name="main">'); z=s.index('</page>',a)+len('</page>')
+s=s[:a]+'''<page name="main">
+			<action>
+				<actions>
+					<action function="set">tw_gts7xl_hint=Password of the Linux install</action>
+					<action function="set">tw_filecheck=/tmp/gts7xl-locked</action>
+					<action function="set">tw_existpage=gts7xl_linux_pw</action>
+					<action function="set">tw_notexistpage=gts7xl_main</action>
+					<action function="page">filecheck</action>
+				</actions>
+			</action>
+		</page>'''+s[z:]
 open(sys.argv[4],'w').write(s)
 PY
 	# Wi-Fi firmware, redistributable, from linux-firmware

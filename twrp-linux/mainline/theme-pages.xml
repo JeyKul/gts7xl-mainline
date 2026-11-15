@@ -103,12 +103,12 @@
 
 			<text style="text_l">
 				<placement x="%col1_x_header%" y="%row3_header_y%"/>
-				<text>Linux</text>
+				<text>{@decrypt_data_hdr=Decrypt Data}</text>
 			</text>
 
 			<text style="text_m">
 				<placement x="%col1_x_header%" y="%row4_header_y%"/>
-				<text>Password of the Linux install (empty if not encrypted)</text>
+				<text>%tw_gts7xl_hint%</text>
 			</text>
 
 			<input>
@@ -119,7 +119,10 @@
 				<actions>
 					<action function="cmd">echo "%tw_gts7xl_lpw%" | /system/bin/linux-data</action>
 					<action function="set">tw_gts7xl_lpw=</action>
-					<action function="page">advanced</action>
+					<action function="set">tw_filecheck=/tmp/gts7xl-locked</action>
+					<action function="set">tw_existpage=gts7xl_linux_wrong</action>
+					<action function="set">tw_notexistpage=main</action>
+					<action function="page">filecheck</action>
 				</actions>
 			</input>
 
@@ -130,13 +133,38 @@
 			<button style="main_button_half_width_low">
 				<placement x="%indent%" y="%row5_y%"/>
 				<text>{@cancel_btn=Cancel}</text>
-				<action function="page">advanced</action>
+				<actions>
+					<action function="cmd">rm -f /tmp/gts7xl-locked</action>
+					<action function="page">main</action>
+				</actions>
 			</button>
 
 			<template name="keyboardtemplate"/>
 
 			<action>
 				<touch key="back"/>
-				<action function="page">advanced</action>
+				<actions>
+					<action function="cmd">rm -f /tmp/gts7xl-locked</action>
+					<action function="page">main</action>
+				</actions>
+			</action>
+		</page>
+
+		<page name="gts7xl_linux_wrong">
+			<action>
+				<actions>
+					<action function="set">tw_gts7xl_hint=Wrong password, try again</action>
+					<action function="page">gts7xl_linux_pw</action>
+				</actions>
+			</action>
+		</page>
+
+		<!-- TWRP's own start, after the check for a locked Linux install -->
+		<page name="gts7xl_main">
+			<action>
+				<actions>
+					<action function="set">tw_clear_destination=main2</action>
+					<action function="page">clear_vars</action>
+				</actions>
 			</action>
 		</page>

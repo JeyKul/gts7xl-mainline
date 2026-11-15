@@ -9,6 +9,8 @@
 				<listitem name="Open Linux data">
 					<actions>
 						<action function="set">tw_gts7xl_lpw=</action>
+						<action function="set">tw_gts7xl_hint=Password of the Linux install</action>
+						<action function="cmd">touch /tmp/gts7xl-locked</action>
 						<action function="page">gts7xl_linux_pw</action>
 					</actions>
 				</listitem>

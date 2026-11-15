@@ -57,4 +57,5 @@ for r in /sys/class/rtc/rtc*; do
 	# never earlier than 2026-01-01
 	[ -n "$O" ] && [ $t -gt 1767225600 ] && date @$t >/dev/null && echo "clock set from Linux: $(date)"
 done
+rm -f /tmp/gts7xl-locked
 echo "mounted at $M:"; ls $M
