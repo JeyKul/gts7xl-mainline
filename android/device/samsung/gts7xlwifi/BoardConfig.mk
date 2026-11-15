@@ -24,6 +24,8 @@ BOARD_USERDATAIMAGE_FILE_SYSTEM_TYPE := f2fs
 BOARD_CACHEIMAGE_PARTITION_SIZE := 419430400
 BOARD_CACHEIMAGE_FILE_SYSTEM_TYPE := ext4
 BOARD_FLASH_BLOCK_SIZE := 262144
+# The system image's /metadata mount point (first stage moves the mount there)
+BOARD_USES_METADATA_PARTITION := true
 
 # super: the tablet's 10171187200 bytes, one slot, metadata from the start
 BOARD_SUPER_PARTITION_SIZE := 10171187200
