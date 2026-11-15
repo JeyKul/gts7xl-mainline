@@ -9,7 +9,7 @@ P=/dev/block/by-name/userdata
 M=/linux
 if [ "$1" = off ]; then
 	# linux-chroot's mounts first
-	for d in tmp home sys proc dev; do umount $M/@/$d 2>/dev/null; done
+	for d in tmp var/cache/pacman/pkg var/log .snapshots home sys proc dev; do umount $M/@/$d 2>/dev/null; done
 	umount $M 2>/dev/null
 	[ -e /dev/mapper/userdata ] && cryptsetup close userdata
 	exit 0

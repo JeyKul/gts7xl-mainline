@@ -1,0 +1,208 @@
+From 077f6aab19ebdcc4cfbdce7c8279245feb609b31 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 15 Nov 2026 14:16:02 +0100
+Subject: [PATCH] misc: timed_output vibrator on a regulator
+
+Android recoveries such as TWRP drive the motor through the old
+timed_output interface: writing N to /sys/class/timed_output/vibrator/enable
+runs it for N ms. This exposes that for a motor a regulator switches. The
+Tab S7+ recovery image points its vibrator node here; Linux keeps using
+regulator-haptic.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/misc/Kconfig          |   7 ++
+ drivers/misc/Makefile         |   1 +
+ drivers/misc/timed-vibrator.c | 155 ++++++++++++++++++++++++++++++++++
+ 3 files changed, 163 insertions(+)
+ create mode 100644 drivers/misc/timed-vibrator.c
+
+diff --git a/drivers/misc/Kconfig b/drivers/misc/Kconfig
+index 7364931da..602f4608d 100644
+--- a/drivers/misc/Kconfig
++++ b/drivers/misc/Kconfig
+@@ -586,4 +586,11 @@ source "drivers/misc/keba/Kconfig"
+ source "drivers/misc/amd-sbi/Kconfig"
+ source "drivers/misc/rp1/Kconfig"
+ source "drivers/misc/issei/Kconfig"
++config TIMED_VIBRATOR
++	tristate "Android timed_output vibrator on a regulator"
++	depends on REGULATOR
++	help
++	  /sys/class/timed_output/vibrator/enable for a motor that a regulator
++	  switches, the interface Android recoveries such as TWRP use.
++
+ endmenu
+diff --git a/drivers/misc/Makefile b/drivers/misc/Makefile
+index e8d8d5d88..80e6d5af0 100644
+--- a/drivers/misc/Makefile
++++ b/drivers/misc/Makefile
+@@ -71,3 +71,4 @@ obj-y				+= keba/
+ obj-y				+= amd-sbi/
+ obj-$(CONFIG_MISC_RP1)		+= rp1/
+ obj-$(CONFIG_INTEL_SSEI)	+= issei/
++obj-$(CONFIG_TIMED_VIBRATOR)	+= timed-vibrator.o
+diff --git a/drivers/misc/timed-vibrator.c b/drivers/misc/timed-vibrator.c
+new file mode 100644
+index 000000000..f005f50da
+--- /dev/null
++++ b/drivers/misc/timed-vibrator.c
+@@ -0,0 +1,155 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Android's old timed_output vibrator interface on a regulator-driven motor:
++ * writing N to /sys/class/timed_output/vibrator/enable runs it for N ms.
++ * Recovery images (TWRP) only know this interface; a desktop uses the
++ * force-feedback device from regulator-haptic on the same motor instead.
++ */
++#include <linux/device.h>
++#include <linux/hrtimer.h>
++#include <linux/module.h>
++#include <linux/mod_devicetable.h>
++#include <linux/mutex.h>
++#include <linux/platform_device.h>
++#include <linux/property.h>
++#include <linux/regulator/consumer.h>
++#include <linux/workqueue.h>
++
++#define MAX_MS 15000
++
++struct timed_vib {
++	struct regulator *supply;
++	struct hrtimer timer;
++	struct work_struct work;
++	struct mutex lock;
++	bool want, on;
++	ktime_t end;
++};
++
++static void timed_vib_work(struct work_struct *work)
++{
++	struct timed_vib *v = container_of(work, struct timed_vib, work);
++
++	mutex_lock(&v->lock);
++	if (v->want != v->on) {
++		if (v->want ? !regulator_enable(v->supply) : !regulator_disable(v->supply))
++			v->on = v->want;
++	}
++	mutex_unlock(&v->lock);
++}
++
++static enum hrtimer_restart timed_vib_timer(struct hrtimer *t)
++{
++	struct timed_vib *v = container_of(t, struct timed_vib, timer);
++
++	v->want = false;
++	schedule_work(&v->work);
++	return HRTIMER_NORESTART;
++}
++
++static ssize_t enable_show(struct device *dev, struct device_attribute *attr, char *buf)
++{
++	struct timed_vib *v = dev_get_drvdata(dev);
++	s64 left = hrtimer_active(&v->timer) ? ktime_ms_delta(v->end, ktime_get()) : 0;
++
++	return sysfs_emit(buf, "%lld\n", left > 0 ? left : 0);
++}
++
++static ssize_t enable_store(struct device *dev, struct device_attribute *attr,
++			    const char *buf, size_t count)
++{
++	struct timed_vib *v = dev_get_drvdata(dev);
++	int ms, ret;
++
++	ret = kstrtoint(buf, 0, &ms);
++	if (ret)
++		return ret;
++	hrtimer_cancel(&v->timer);
++	ms = clamp(ms, 0, MAX_MS);
++	v->want = ms > 0;
++	if (ms) {
++		v->end = ktime_add_ms(ktime_get(), ms);
++		hrtimer_start(&v->timer, ms_to_ktime(ms), HRTIMER_MODE_REL);
++	}
++	schedule_work(&v->work);
++	return count;
++}
++static DEVICE_ATTR_RW(enable);
++
++static struct attribute *timed_vib_attrs[] = {
++	&dev_attr_enable.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(timed_vib);
++
++static const struct class timed_output_class = {
++	.name = "timed_output",
++};
++
++static int timed_vib_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct timed_vib *v;
++	struct device *cdev;
++	u32 uv;
++	int ret;
++
++	v = devm_kzalloc(dev, sizeof(*v), GFP_KERNEL);
++	if (!v)
++		return -ENOMEM;
++	v->supply = devm_regulator_get(dev, "haptic");
++	if (IS_ERR(v->supply))
++		return dev_err_probe(dev, PTR_ERR(v->supply), "no haptic supply\n");
++	if (!device_property_read_u32(dev, "max-microvolt", &uv)) {
++		ret = regulator_set_voltage(v->supply, uv, uv);
++		if (ret)
++			return dev_err_probe(dev, ret, "cannot set %u uV\n", uv);
++	}
++	mutex_init(&v->lock);
++	INIT_WORK(&v->work, timed_vib_work);
++	hrtimer_setup(&v->timer, timed_vib_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
++
++	ret = class_register(&timed_output_class);
++	if (ret)
++		return ret;
++	cdev = device_create_with_groups(&timed_output_class, dev, MKDEV(0, 0), v,
++					 timed_vib_groups, "vibrator");
++	if (IS_ERR(cdev)) {
++		class_unregister(&timed_output_class);
++		return PTR_ERR(cdev);
++	}
++	platform_set_drvdata(pdev, cdev);
++	return 0;
++}
++
++static void timed_vib_remove(struct platform_device *pdev)
++{
++	struct device *cdev = platform_get_drvdata(pdev);
++	struct timed_vib *v = dev_get_drvdata(cdev);
++
++	device_unregister(cdev);
++	class_unregister(&timed_output_class);
++	hrtimer_cancel(&v->timer);
++	cancel_work_sync(&v->work);
++	if (v->on)
++		regulator_disable(v->supply);
++}
++
++static const struct of_device_id timed_vib_of_match[] = {
++	{ .compatible = "android,timed-vibrator" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, timed_vib_of_match);
++
++static struct platform_driver timed_vib_driver = {
++	.probe = timed_vib_probe,
++	.remove = timed_vib_remove,
++	.driver = {
++		.name = "timed-vibrator",
++		.of_match_table = timed_vib_of_match,
++	},
++};
++module_platform_driver(timed_vib_driver);
++
++MODULE_DESCRIPTION("timed_output vibrator on a regulator");
++MODULE_LICENSE("GPL");
+-- 
+2.56.0
+
