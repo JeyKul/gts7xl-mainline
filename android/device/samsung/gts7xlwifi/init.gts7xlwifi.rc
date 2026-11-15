@@ -16,7 +16,7 @@ on fs
     # Everything but /data (cache, the firmware partition)
     mount_all /vendor/etc/fstab.gts7xlwifi --early
 
-service vendor.gts7xl-bootlog /vendor/bin/sh -c "dmesg -w > /metadata/gts7xl/kmsg.txt 2>&1 & logcat -b all -v time > /metadata/gts7xl/logcat.txt 2>&1"
+service vendor.gts7xl-bootlog /vendor/bin/sh -c "/system/bin/dmesg -w > /metadata/gts7xl/kmsg.txt 2>&1 & /system/bin/logcat -b all -v time > /metadata/gts7xl/logcat.txt 2>&1"
     user root
     group root log
     seclabel u:r:su:s0
