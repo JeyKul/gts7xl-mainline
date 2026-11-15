@@ -24,13 +24,16 @@ PRODUCT_COPY_FILES += \
     $(LOCAL_PATH)/ueventd.gts7xlwifi.rc:$(TARGET_COPY_OUT_VENDOR)/etc/ueventd.rc \
     frameworks/base/data/keyboards/Generic.kl:$(TARGET_COPY_OUT_VENDOR)/usr/keylayout/gts7xlwifi.kl
 
-# No ashmem on mainline: memfd (found out with TWRP on this kernel)
+# No ashmem on mainline: memfd (found out with TWRP on this kernel).
+# drm_hwcomposer scans card0, card1, ... and stops at the first gap: the
+# display is card1 (card0 is the boot framebuffer's, gone once msm takes over)
 PRODUCT_VENDOR_PROPERTIES += \
     sys.use_memfd=true \
     ro.soc.manufacturer=Qualcomm \
     ro.soc.model=SM8250 \
     persist.sys.zram_enabled=1 \
-    ro.sf.lcd_density=320
+    ro.sf.lcd_density=320 \
+    vendor.hwc.drm.device=/dev/dri/card1
 
 # Security without TrustZone access
 PRODUCT_PACKAGES += \
