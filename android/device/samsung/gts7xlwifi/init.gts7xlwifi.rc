@@ -16,12 +16,22 @@ on fs
     # Everything but /data (cache, the firmware partition)
     mount_all /vendor/etc/fstab.gts7xlwifi --early
 
-service vendor.gts7xl-bootlog /vendor/bin/sh -c "/system/bin/dmesg -w > /metadata/gts7xl/kmsg.txt 2>&1 & /system/bin/logcat -b all -v time > /metadata/gts7xl/logcat.txt 2>&1"
+service vendor.gts7xl-bootlog /vendor/bin/sh -c "/system/bin/dmesg -w > /metadata/gts7xl/kmsg.txt 2>&1"
     user root
     group root log
     seclabel u:r:su:s0
     disabled
     oneshot
+
+# logcat once logd is up; it waits for logd on its own and is restarted if not
+service vendor.gts7xl-logcat /system/bin/logcat -b all -v time -f /metadata/gts7xl/logcat.txt
+    user root
+    group root log
+    seclabel u:r:su:s0
+    disabled
+
+on property:logd.ready=true
+    start vendor.gts7xl-logcat
 
 on late-fs
     # /data (latemount)
