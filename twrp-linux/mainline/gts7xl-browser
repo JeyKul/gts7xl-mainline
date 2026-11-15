@@ -1,0 +1,31 @@
+#!/system/bin/sh
+# NetSurf in the recovery: the menu entry asks init to start the gts7xl-browser
+# service ("run"), which unpacks the browser to RAM once, stops TWRP's UI for the
+# screen and starts it again when the browser quits (power button).
+# Downloads: the internal storage's Download folder when one is mounted, else
+# /tmp/Download; both show up in TWRP's Install.
+R=/tmp/gts7xl-browser
+if [ "$1" != run ]; then
+	start gts7xl-browser
+	exit 0
+fi
+bb() { /linux-tools/lib/ld-musl-aarch64.so.1 --library-path /linux-tools/lib /linux-tools/bin/busybox "$@"; }
+if [ ! -x $R/bin/netsurf-fb ]; then
+	mkdir -p $R
+	bb tar -xJf /linux-tools/netsurf.tar.xz -C $R || exit 1
+fi
+for d in dev proc sys; do grep -q " $R/$d " /proc/mounts || mount --bind /$d $R/$d; done
+cp /etc/resolv.conf $R/etc/resolv.conf 2>/dev/null
+mkdir -p /tmp/Download $R/tmp/Download
+grep -q " $R/tmp/Download " /proc/mounts || mount --bind /tmp/Download $R/tmp/Download
+DL=/tmp/Download
+if grep -q " /sdcard " /proc/mounts; then
+	mkdir -p /sdcard/Download
+	grep -q " $R/sdcard " /proc/mounts || mount --bind /sdcard $R/sdcard
+	DL=/sdcard/Download
+fi
+H=file:///usr/share/netsurf/gts7xl-start.html
+stop recovery
+sleep 1
+HOME=/root NETSURF_DOWNLOAD_DIR=$DL chroot $R /bin/netsurf-fb -f drm --scale=200 --homepage_url=$H $H > /tmp/browser.log 2>&1
+start recovery

@@ -17,11 +17,12 @@ up() {
 	while [ ! -e /sys/class/net/wlan0 ] && [ $i -lt 30 ]; do sleep 0.5; i=$((i + 1)); done
 	[ -e /sys/class/net/wlan0 ] || { echo "Wi-Fi: no wlan0 (firmware?)"; exit 1; }
 	bb ip link set wlan0 up
-	[ -f $N/run/wpa.pid ] && kill -0 "$(cat $N/run/wpa.pid)" 2>/dev/null && return 0
-	rm -f $N/run/ctrl/wlan0 $N/run/wpa.pid
+	# An init service of its own: when TWRP's UI is stopped for a full-screen
+	# app, init kills everything the UI started
+	[ "$(getprop init.svc.gts7xl-wpa)" = running ] && [ -S $N/run/ctrl/wlan0 ] && return 0
+	rm -f $N/run/ctrl/wlan0
 	printf 'ctrl_interface=%s\nupdate_config=0\n' $N/run/ctrl > $N/run/wpa.conf
-	m $T/bin/wpa_supplicant -B -i wlan0 -D nl80211 -c $N/run/wpa.conf -P $N/run/wpa.pid >/dev/null ||
-		{ echo "Wi-Fi: wpa_supplicant failed"; exit 1; }
+	start gts7xl-wpa
 	i=0
 	while [ ! -S $N/run/ctrl/wlan0 ] && [ $i -lt 20 ]; do sleep 0.2; i=$((i + 1)); done
 }
@@ -77,7 +78,7 @@ connect)
 	status_entry
 	;;
 off)
-	[ -f $N/run/wpa.pid ] && kill "$(cat $N/run/wpa.pid)" 2>/dev/null
+	stop gts7xl-wpa
 	bb pkill -f "udhcpc -i wlan0" 2>/dev/null
 	bb ip addr flush dev wlan0 2>/dev/null
 	bb ip link set wlan0 down 2>/dev/null

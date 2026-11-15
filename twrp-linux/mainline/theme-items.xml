@@ -6,6 +6,9 @@
 						<action function="page">gts7xl_wifi</action>
 					</actions>
 				</listitem>
+				<listitem name="Browser">
+					<action function="cmd">/system/bin/gts7xl-browser</action>
+				</listitem>
 				<listitem name="Open Linux data">
 					<actions>
 						<action function="set">tw_gts7xl_lpw=</action>
