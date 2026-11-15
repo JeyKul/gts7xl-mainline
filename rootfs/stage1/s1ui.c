@@ -1132,7 +1132,7 @@ static void rescue(void)
 		}
 		button(&binst, "Install again (erases everything)", WARN);
 		button(&bboot, "Reboot", BTN);
-		text(100, fbh - 120, "USB shell: serial gadget, logs in /s1/mnt/r/@log", 0xa8b8c4);
+		text(100, fbh - 120, "USB shell: serial gadget, boot logs in /s1/mnt/r/@/var/lib/gts7xl/early", 0xa8b8c4);
 		int x, y;
 		wait_tap(&x, &y, 0);
 		if (hit(&bboot, x, y)) {

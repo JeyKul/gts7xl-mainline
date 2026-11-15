@@ -1,0 +1,2 @@
+#!/system/bin/sh
+exec /linux-tools/lib/ld-musl-aarch64.so.1 --library-path /linux-tools/lib /linux-tools/bin/btrfs "$@"

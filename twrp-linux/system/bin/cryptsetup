@@ -1,0 +1,5 @@
+#!/system/bin/sh
+# Alpine's cryptsetup with its own musl libraries (see build.sh)
+export DM_DISABLE_UDEV=1
+mkdir -p /run/cryptsetup
+exec /linux-tools/lib/ld-musl-aarch64.so.1 --library-path /linux-tools/lib /linux-tools/bin/cryptsetup "$@"

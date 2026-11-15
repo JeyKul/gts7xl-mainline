@@ -1,0 +1,34 @@
+#!/system/bin/sh
+# Open the Linux install on userdata and mount its btrfs top level at /linux:
+# /linux/@ is the system, /linux/@home, /linux/@log (early boot logs in early/).
+# Encrypted data asks for the password, or reads it from stdin when piped.
+# Read-only by default: this 4.19 kernel can't replay a newer kernel's tree log
+# (after a forced power-off) and must not write to the filesystem it can't keep
+# up with. "linux-data rw" mounts it writable, "linux-data off" locks it again.
+P=/dev/block/by-name/userdata
+M=/linux
+if [ "$1" = off ]; then
+	umount $M 2>/dev/null
+	[ -e /dev/mapper/userdata ] && cryptsetup close userdata
+	exit 0
+fi
+D=$P
+if [ "$(head -c 4 $P)" = LUKS ]; then
+	if [ ! -e /dev/mapper/userdata ]; then
+		if [ -t 0 ]; then
+			stty -echo; printf 'Password: '; read -r pw; stty echo; echo
+		else
+			read -r pw
+		fi
+		printf %s "$pw" | cryptsetup open --allow-discards --key-file - $P userdata || { echo "wrong password?"; exit 1; }
+		pw=
+	fi
+	D=/dev/mapper/userdata
+fi
+mkdir -p $M
+# 4.19 knows no compression levels (zstd:1) and must not replay the log
+O=ro,nologreplay
+[ "$1" = rw ] && O=rw,noatime,compress=zstd
+grep -q " $M " /proc/mounts || mount -t btrfs -o $O,subvolid=5 $D $M || exit 1
+echo "early boot logs: $M/@/var/lib/gts7xl/early"
+echo "mounted at $M:"; ls $M
