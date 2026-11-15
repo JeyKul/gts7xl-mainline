@@ -16,5 +16,6 @@ scripts/config --file "$B/.config" --set-str INITRAMFS_SOURCE "" --set-str CMDLI
 	-e SECURITY_NETWORK -e SECURITY_SELINUX -e SECURITY_SELINUX_DEVELOP -e AUDIT -e DEFAULT_SECURITY_SELINUX \
 	--set-str LSM "landlock,lockdown,yama,loadpin,safesetid,selinux,ipe,bpf" \
 	-e ANDROID_BINDER_IPC -e ANDROID_BINDERFS --set-str ANDROID_BINDER_DEVICES "binder,hwbinder,vndbinder" \
-	-e FUSE_FS -e BTRFS_FS -e DM_CRYPT
+	-e FUSE_FS -e BTRFS_FS -e DM_CRYPT \
+	-e QCOM_SPMI_ADC5 -e TIMED_VIBRATOR
 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- make -s O="$B" olddefconfig

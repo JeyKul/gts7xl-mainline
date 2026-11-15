@@ -4,7 +4,10 @@
 R=/linux/@
 grep -q " /linux " /proc/mounts || linux-data >/dev/null || exit 1
 for d in dev proc sys; do grep -q " $R/$d " /proc/mounts || mount --bind /$d $R/$d; done
-grep -q " $R/home " /proc/mounts || mount --bind /linux/@home $R/home
+# The subvolumes the system's fstab mounts, so pacman and snapper work in here
+for m in @home:home @snapshots:.snapshots @log:var/log @pkg:var/cache/pacman/pkg; do
+	grep -q " $R/${m#*:} " /proc/mounts || mount --bind /linux/${m%%:*} $R/${m#*:}
+done
 grep -q " $R/tmp " /proc/mounts || mount -t tmpfs tmpfs $R/tmp
 [ $# -gt 0 ] || set -- /bin/bash -l
 exec chroot $R /usr/bin/env -i HOME=/root TERM=${TERM:-linux} PATH=/usr/local/sbin:/usr/local/bin:/usr/bin XDG_RUNTIME_DIR=/tmp "$@"

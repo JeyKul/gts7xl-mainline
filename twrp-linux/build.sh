@@ -68,7 +68,7 @@ if [ -n "${MAINLINE_DTB:-}" ]; then
 	mkdir -p "$O/system/etc"
 	sed -E '/ \/data /{s/,?(fileencryption|keydirectory|checkpoint)=[^, ]*//g; s/,inlinecrypt//g}' \
 		"$T/rd/system/etc/recovery.fstab" > "$O/system/etc/recovery.fstab"
-	install -m755 "$HERE/mainline/gts7xl-fw.sh" "$O/system/bin/gts7xl-fw.sh"
+	install -m755 "$HERE/mainline/gts7xl-setup.sh" "$O/system/bin/gts7xl-setup.sh"
 	install -m755 "$HERE/mainline/gts7xl-reboot.sh" "$O/system/bin/gts7xl-reboot.sh"
 	"${CC:-aarch64-linux-gnu-gcc}" -static -Os -o "$O/system/bin/gts7xl-reboot" "$HERE/mainline/gts7xl-reboot.c"
 	# GPU microcode, redistributable, from linux-firmware; the zap shader comes from apnhlos
@@ -100,6 +100,9 @@ PY
 )
 	[ -n "$TS" ] || { echo "no touchscreen node in the DTB"; exit 1; }
 	for p in touchscreen-swapped-x-y touchscreen-inverted-x touchscreen-inverted-y; do fdtput -d "$T/rec.dtb" "$TS" $p 2>/dev/null || true; done
+	# The motor as Android's timed_output vibrator, which is what TWRP drives
+	VIB=$(fdtget -l "$T/rec.dtb" / | grep -x vibrator || true)
+	[ -n "$VIB" ] && fdtput -t s "$T/rec.dtb" /vibrator compatible android,timed-vibrator
 	cat "$K" "$T/rec.dtb" > "$T/kernel-dtb"
 	mkbootimg --header_version 1 --pagesize 2048 --base 0x10000000 --kernel_offset 0x00008000 \
 		--ramdisk_offset 0x01000000 --tags_offset 0x00000100 \
