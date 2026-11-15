@@ -1,6 +1,6 @@
 # Tab S7+ port TODO
 
-Last updated 2026-11-02.
+Last updated 2026-11-15.
 
 ## Working
 
@@ -157,3 +157,31 @@ Restore `boot`, `dtbo` and `cache` from `backup/partitions`, then format `userda
 - [ ] Snapshots (e.g. before each upgrade); rescue mode can roll back or boot another snapshot
 - [ ] Updates through a clean `pacman -Syu` (kernel and boot image as packages), no reinstalls
 - [ ] Encryption: password plus hardware-backed key; the user's login password can unlock it; unlock from a login-style screen at boot
+
+## Missing internals (polish, not blocking)
+
+> [!NOTE]
+> **Nothing here blocks daily use.** The tablet already boots, displays, charges, does Wi-Fi/BT/audio/pen/cameras and sleeps.
+> These are the remaining internal pieces stock One UI runs and we don't yet, or that need reverse engineering to be *perfect*.
+> Mostly battery life and polish; none of them is a big, life-changing feature.
+>
+> **Subsystems stock runs that we don't** (main suspect for sleep at ~130 mA vs stock 15–30 mA):
+> - [ ] IPA (`ipa_fws` + `ipa_uc`): driver port for sm8250 in progress; TZ refuses the PAS load until the hardware is set up
+> - [ ] NPU: no mainline driver; needs npucc/GDSC power-up before TZ accepts the firmware
+> - [ ] CVP: firmware boots through a test loader, no driver yet
+> - [ ] SPSS (secure processor) and Venus (video codec): not started
+>
+> **Sleep**
+> - [ ] Display RSC mode 2 in runtime suspend: works, not committed yet
+> - [ ] `deep` suspend like stock (we use s2idle); CX/AOSS collapse still never reached
+> - [ ] Wi-Fi staying connected in sleep (stock keeps WoW)
+>
+> **Reverse engineering / tuning**
+> - [ ] Main mic through the TX macro (stock routing captured: DMIC3→DEC0, DMIC1→DEC1)
+> - [ ] PPS direct charging through the PCA9468 charge pump (stock sequence captured)
+> - [ ] Pogo trackpad stall (sensor DSP `sns_registry` lead)
+> - [ ] Fingerprint (TrustZone TA)
+> - [ ] Ultrawide camera tuning (colours/geometry a little off)
+> - [ ] HDMI on the second DP pin mapping
+> - [ ] Magnetometer calibration
+> - [ ] S Pen rotation actions and pairing flow
