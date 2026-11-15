@@ -30,10 +30,11 @@
 				<action function="cmd">/system/bin/gts7xl-wifi off</action>
 			</button>
 
-			<template name="console"/>
-
 			<action>
-				<condition var1="tw_gts7xl_ssid" op="modified"/>
+				<conditions>
+					<condition var1="tw_gts7xl_ssid" op="modified"/>
+					<condition var1="tw_gts7xl_ssid" op="!=" var2=""/>
+				</conditions>
 				<actions>
 					<action function="set">tw_gts7xl_pw=</action>
 					<action function="page">gts7xl_wifi_pw</action>
@@ -61,7 +62,7 @@
 
 			<text style="text_m">
 				<placement x="%col1_x_header%" y="%row4_header_y%"/>
-				<text>Password for %tw_gts7xl_ssid% (empty: open network)</text>
+				<text>Wi-Fi password (empty for an open network)</text>
 			</text>
 
 			<input>
@@ -72,6 +73,7 @@
 				<actions>
 					<action function="cmd">/system/bin/gts7xl-wifi connect "%tw_gts7xl_ssid%" "%tw_gts7xl_pw%"</action>
 					<action function="set">tw_gts7xl_pw=</action>
+					<action function="set">tw_gts7xl_ssid=</action>
 					<action function="page">gts7xl_wifi</action>
 				</actions>
 			</input>
