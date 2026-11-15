@@ -10,6 +10,7 @@ M=/linux
 if [ "$1" = off ]; then
 	# linux-chroot's mounts first
 	for d in tmp var/cache/pacman/pkg var/log .snapshots home sys proc dev; do umount $M/@/$d 2>/dev/null; done
+	grep -q "^[^ ]* /sdcard btrfs" /proc/mounts && umount /sdcard
 	grep -q "^[^ ]* /data btrfs" /proc/mounts && umount /data
 	umount $M 2>/dev/null
 	[ -e /dev/mapper/userdata ] && cryptsetup close userdata
@@ -39,7 +40,13 @@ grep -q " $M " /proc/mounts || mount -t btrfs -o $O,subvolid=5 $D $M || exit 1
 # Also at /data on a kernel that can write it, for TWRP's file manager
 case "$(uname -r)" in
 [0-4].*) ;;
-*) grep -q " /data " /proc/mounts || mount --bind $M /data ;;
+*)
+	grep -q " /data " /proc/mounts || mount --bind $M /data
+	# TWRP's internal storage (Install, Backup, file pickers) is /sdcard:
+	# the first user's home, so files downloaded in Linux are right there
+	H=$(ls -d $M/@home/*/ 2>/dev/null | head -n1)
+	[ -n "$H" ] && ! grep -q " /sdcard " /proc/mounts && mount --bind "$H" /sdcard && echo "internal storage: ${H#$M/@}"
+	;;
 esac
 echo "early boot logs: $M/@/var/lib/gts7xl/early"
 # The clock: Linux keeps wall time as the PMIC RTC counter plus an offset
