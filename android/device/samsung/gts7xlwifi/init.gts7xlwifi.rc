@@ -3,8 +3,6 @@ import /vendor/etc/init/hw/init.gts7xlwifi.usb.rc
 on early-init
     # The modules ueventd doesn't load by alias (vendor_dlkm's modules.load)
     exec u:r:vendor_modprobe:s0 -- /system/bin/modprobe -a -d /vendor/lib/modules hci_uart rtc-pm8xxx qcom-spmi-adc5 uinput
-    setprop ro.hardware.egl mesa
-    setprop ro.hardware.vulkan freedreno
 
 on init
     # Compressed swap
