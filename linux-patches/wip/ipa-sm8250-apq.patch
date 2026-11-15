@@ -1,0 +1,274 @@
+diff --git a/drivers/net/ipa/data/ipa_data-v4.5.c b/drivers/net/ipa/data/ipa_data-v4.5.c
+index 730d8c43a..82b65fb58 100644
+--- a/drivers/net/ipa/data/ipa_data-v4.5.c
++++ b/drivers/net/ipa/data/ipa_data-v4.5.c
+@@ -178,6 +178,99 @@ static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data[] = {
+ 	},
+ };
+ 
++/* Endpoint configuration for an APQ SoC (no modem) having IPA v4.5, such
++ * as SM8250.  The APQ GSI firmware uses a different pipe map; the AP<->modem
++ * endpoints are placeholders on otherwise unused AP pipes (never started).
++ */
++static const struct ipa_gsi_endpoint_data ipa_gsi_endpoint_data_apq[] = {
++	[IPA_ENDPOINT_AP_COMMAND_TX] = {
++		.ee_id		= GSI_EE_AP,
++		.channel_id	= 12,
++		.endpoint_id	= 7,
++		.toward_ipa	= true,
++		.channel = {
++			.tre_count	= 256,
++			.event_count	= 256,
++			.tlv_count	= 20,
++		},
++		.endpoint = {
++			.config = {
++				.resource_group	= IPA_RSRC_GROUP_SRC_UL_DL,
++				.dma_mode	= true,
++				.dma_endpoint	= IPA_ENDPOINT_AP_LAN_RX,
++				.tx = {
++					.seq_type = IPA_SEQ_DMA,
++				},
++			},
++		},
++	},
++	[IPA_ENDPOINT_AP_LAN_RX] = {
++		.ee_id		= GSI_EE_AP,
++		.channel_id	= 13,
++		.endpoint_id	= 13,
++		.toward_ipa	= false,
++		.channel = {
++			.tre_count	= 256,
++			.event_count	= 256,
++			.tlv_count	= 9,
++		},
++		.endpoint = {
++			.config = {
++				.resource_group	= IPA_RSRC_GROUP_DST_UL_DL_DPL,
++				.aggregation	= true,
++				.status_enable	= true,
++				.rx = {
++					.buffer_size	= 8192,
++					.pad_align	= ilog2(sizeof(u32)),
++					.aggr_time_limit = 500,
++				},
++			},
++		},
++	},
++	[IPA_ENDPOINT_AP_MODEM_TX] = {
++		.ee_id		= GSI_EE_AP,
++		.channel_id	= 4,
++		.endpoint_id	= 11,
++		.toward_ipa	= true,
++		.channel = {
++			.tre_count	= 256,
++			.event_count	= 256,
++			.tlv_count	= 8,
++		},
++		.endpoint = {
++			.filter_support	= true,
++			.config = {
++				.resource_group	= IPA_RSRC_GROUP_SRC_UL_DL,
++				.tx = {
++					.seq_type = IPA_SEQ_2_PASS_SKIP_LAST_UC,
++				},
++			},
++		},
++	},
++	[IPA_ENDPOINT_AP_MODEM_RX] = {
++		.ee_id		= GSI_EE_AP,
++		.channel_id	= 19,
++		.endpoint_id	= 21,
++		.toward_ipa	= false,
++		.channel = {
++			.tre_count	= 256,
++			.event_count	= 256,
++			.tlv_count	= 9,
++		},
++		.endpoint = {
++			.config = {
++				.resource_group	= IPA_RSRC_GROUP_DST_UL_DL_DPL,
++				.aggregation	= true,
++				.rx = {
++					.buffer_size	= 8192,
++					.aggr_time_limit = 500,
++					.aggr_close_eof	= true,
++				},
++			},
++		},
++	},
++};
++
+ /* Source resource configuration data for an SoC having IPA v4.5 */
+ static const struct ipa_resource ipa_resource_src[] = {
+ 	[IPA_RESOURCE_TYPE_SRC_PKT_CONTEXTS] = {
+@@ -460,3 +553,16 @@ const struct ipa_data ipa_data_v4_5 = {
+ 	.mem_data		= &ipa_mem_data,
+ 	.power_data		= &ipa_power_data,
+ };
++
++/* Configuration data for an APQ SoC (no modem) having IPA v4.5 */
++const struct ipa_data ipa_data_v4_5_apq = {
++	.version		= IPA_VERSION_4_5,
++	.qsb_count		= ARRAY_SIZE(ipa_qsb_data),
++	.qsb_data		= ipa_qsb_data,
++	.modem_route_count	= 8,
++	.endpoint_count		= ARRAY_SIZE(ipa_gsi_endpoint_data_apq),
++	.endpoint_data		= ipa_gsi_endpoint_data_apq,
++	.resource_data		= &ipa_resource_data,
++	.mem_data		= &ipa_mem_data,
++	.power_data		= &ipa_power_data,
++};
+diff --git a/drivers/net/ipa/ipa_data.h b/drivers/net/ipa/ipa_data.h
+index 3eb9dc2ce..199892213 100644
+--- a/drivers/net/ipa/ipa_data.h
++++ b/drivers/net/ipa/ipa_data.h
+@@ -249,6 +249,7 @@ extern const struct ipa_data ipa_data_v3_1;
+ extern const struct ipa_data ipa_data_v3_5_1;
+ extern const struct ipa_data ipa_data_v4_2;
+ extern const struct ipa_data ipa_data_v4_5;
++extern const struct ipa_data ipa_data_v4_5_apq;
+ extern const struct ipa_data ipa_data_v4_7;
+ extern const struct ipa_data ipa_data_v4_9;
+ extern const struct ipa_data ipa_data_v4_11;
+diff --git a/drivers/net/ipa/ipa_main.c b/drivers/net/ipa/ipa_main.c
+index 14ac2d2fa..081aee6db 100644
+--- a/drivers/net/ipa/ipa_main.c
++++ b/drivers/net/ipa/ipa_main.c
+@@ -583,6 +583,50 @@ static void ipa_deconfig(struct ipa *ipa)
+ 	ipa_hardware_deconfig(ipa);
+ }
+ 
++#define IPA_UC_PAS_ID		27
++
++/*
++ * Some SoCs (SM8250) ship the IPA microcontroller as a separate image that
++ * Trust Zone loads after the GSI firmware.  Optional: a "qcom,uc-firmware-name"
++ * property and a second "memory-region".
++ */
++static int ipa_uc_firmware_load(struct device *dev)
++{
++	const struct firmware *fw;
++	struct resource res;
++	const char *path;
++	void *virt;
++	int ret;
++
++	if (of_property_read_string(dev->of_node, "qcom,uc-firmware-name", &path))
++		return 0;
++
++	ret = of_reserved_mem_region_to_resource(dev->of_node, 1, &res);
++	if (ret)
++		return ret;
++
++	ret = request_firmware(&fw, path, dev);
++	if (ret)
++		return ret;
++
++	virt = memremap(res.start, resource_size(&res), MEMREMAP_WC);
++	if (!virt) {
++		ret = -ENOMEM;
++		goto out_release;
++	}
++
++	ret = qcom_mdt_load(dev, fw, path, IPA_UC_PAS_ID, virt, res.start,
++			    resource_size(&res), NULL);
++	if (!ret)
++		ret = qcom_pas_auth_and_reset(IPA_UC_PAS_ID);
++	memunmap(virt);
++out_release:
++	release_firmware(fw);
++	dev_info(dev, "uC firmware \"%s\": %d\n", path, ret);
++
++	return ret;
++}
++
+ static int ipa_firmware_load(struct device *dev)
+ {
+ 	const struct firmware *fw;
+@@ -656,6 +700,10 @@ static const struct of_device_id ipa_match[] = {
+ 		.compatible	= "qcom,sdx55-ipa",
+ 		.data		= &ipa_data_v4_5,
+ 	},
++	{
++		.compatible	= "qcom,sm8250-ipa",
++		.data		= &ipa_data_v4_5_apq,
++	},
+ 	{
+ 		.compatible	= "qcom,sm6350-ipa",
+ 		.data		= &ipa_data_v4_7,
+@@ -909,6 +957,12 @@ static int ipa_probe(struct platform_device *pdev)
+ 	ret = ipa_setup(ipa);
+ 	if (ret)
+ 		goto err_deconfig;
++
++	if (loader == IPA_LOADER_SELF && !ipa->smp2p) {
++		/* No modem to request it: take the uC proxy power ourselves */
++		ipa_uc_power(ipa);
++		(void)ipa_uc_firmware_load(dev);
++	}
+ done:
+ 	(void)pm_runtime_put_autosuspend(dev);
+ 
+diff --git a/drivers/net/ipa/ipa_smp2p.c b/drivers/net/ipa/ipa_smp2p.c
+index 331c00ad0..691bc4558 100644
+--- a/drivers/net/ipa/ipa_smp2p.c
++++ b/drivers/net/ipa/ipa_smp2p.c
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/interrupt.h>
++#include <linux/of.h>
+ #include <linux/notifier.h>
+ #include <linux/panic_notifier.h>
+ #include <linux/platform_device.h>
+@@ -209,7 +210,7 @@ static void ipa_smp2p_power_release(struct ipa *ipa)
+ {
+ 	struct device *dev = ipa->dev;
+ 
+-	if (!ipa->smp2p->power_on)
++	if (!ipa->smp2p || !ipa->smp2p->power_on)
+ 		return;
+ 
+ 	(void)pm_runtime_put_autosuspend(dev);
+@@ -228,6 +229,13 @@ ipa_smp2p_init(struct ipa *ipa, struct platform_device *pdev, bool modem_init)
+ 	u32 valid_bit;
+ 	int ret;
+ 
++	/* Without a modem (Wi-Fi only SM8250 boards) there is no SMP2P */
++	if (!modem_init && !of_property_present(dev->of_node, "qcom,smem-states")) {
++		dev_info(dev, "no modem SMP2P, continuing without it\n");
++		ipa->smp2p = NULL;
++		return 0;
++	}
++
+ 	valid_state = qcom_smem_state_get(dev, "ipa-clock-enabled-valid",
+ 					  &valid_bit);
+ 	if (IS_ERR(valid_state))
+@@ -309,6 +317,8 @@ void ipa_smp2p_exit(struct ipa *ipa)
+ {
+ 	struct ipa_smp2p *smp2p = ipa->smp2p;
+ 
++	if (!smp2p)
++		return;
+ 	if (smp2p->setup_ready_irq)
+ 		ipa_smp2p_irq_exit(smp2p, smp2p->setup_ready_irq);
+ 	ipa_smp2p_panic_notifier_unregister(smp2p);
+@@ -326,7 +336,7 @@ void ipa_smp2p_irq_disable_setup(struct ipa *ipa)
+ {
+ 	struct ipa_smp2p *smp2p = ipa->smp2p;
+ 
+-	if (!smp2p->setup_ready_irq)
++	if (!smp2p || !smp2p->setup_ready_irq)
+ 		return;
+ 
+ 	mutex_lock(&smp2p->mutex);
+@@ -345,7 +355,7 @@ void ipa_smp2p_notify_reset(struct ipa *ipa)
+ 	struct ipa_smp2p *smp2p = ipa->smp2p;
+ 	u32 mask;
+ 
+-	if (!smp2p->notified)
++	if (!smp2p || !smp2p->notified)
+ 		return;
+ 
+ 	ipa_smp2p_power_release(ipa);
