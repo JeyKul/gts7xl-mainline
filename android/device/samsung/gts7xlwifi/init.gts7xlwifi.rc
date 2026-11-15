@@ -41,6 +41,15 @@ on post-fs
     # e2fsck on it. noload: nothing is ever written
     mount ext4 /dev/block/by-name/efs /mnt/vendor/efs ro nosuid nodev noatime noload
     start vendor.gts7xl-btaddr
+    start vendor.gts7xl-dsp-up
+
+# ADSP/SLPI/CDSP start and the speaker mixer route
+service vendor.gts7xl-dsp-up /vendor/bin/gts7xl-dsp-up.sh
+    stdio_to_kmsg
+    user root
+    group audio
+    disabled
+    oneshot
 
 # Bluetooth address from efs: without it hci0 stays unconfigured
 service vendor.gts7xl-btaddr /vendor/bin/gts7xl-btaddr

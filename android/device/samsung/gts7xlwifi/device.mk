@@ -88,6 +88,7 @@ PRODUCT_PACKAGES += pd-mapper qrtr-ns qrtr-cfg qrtr-lookup tqftpserv
 # Firmware: links into the tablet's own apnhlos (nothing proprietary in the build)
 # plus redistributable linux-firmware files (prepare-kernel.sh fetches them)
 PRODUCT_PACKAGES += gts7xl-firmware-links gts7xl-btaddr
+PRODUCT_COPY_FILES += $(LOCAL_PATH)/gts7xl-dsp-up.sh:$(TARGET_COPY_OUT_VENDOR)/bin/gts7xl-dsp-up.sh
 # The mount point itself, under etc (the build only creates files there):
 # vendor is read only, and init can't create it later
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/apnhlos/README:$(TARGET_COPY_OUT_VENDOR)/etc/apnhlos/README
