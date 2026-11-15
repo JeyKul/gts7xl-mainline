@@ -24,8 +24,11 @@ if grep -q " /sdcard " /proc/mounts; then
 	grep -q " $R/sdcard " /proc/mounts || mount --bind /sdcard $R/sdcard
 	DL=/sdcard/Download
 fi
-H=file:///usr/share/netsurf/gts7xl-start.html
+# The reader proxy (gts7xl-reader): simple HTML from modern pages; it lives as
+# long as this service
+/system/bin/gts7xl-reader &
+H=http://127.0.0.1:8088/
 stop recovery
 sleep 1
-HOME=/root NETSURF_DOWNLOAD_DIR=$DL chroot $R /bin/netsurf-fb -f drm --scale=200 --homepage_url=$H $H > /tmp/browser.log 2>&1
+HOME=/root NETSURF_DOWNLOAD_DIR=$DL chroot $R /bin/netsurf-fb --scale=200 --homepage_url=$H --ca_bundle=/etc/ssl/certs/ca-certificates.crt --ca_path=/etc/ssl/certs -f drm $H > /tmp/browser.log 2>&1
 start recovery

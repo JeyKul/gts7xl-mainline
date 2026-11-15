@@ -1,0 +1,18 @@
+[package]
+name = "gts7xl-reader"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Reader-view proxy for the recovery's NetSurf: simple HTML from modern pages"
+
+[dependencies]
+ureq = "2.12"
+scraper = "0.20"
+url = "2.5"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
