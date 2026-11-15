@@ -53,7 +53,8 @@ BOARD_VENDOR_KERNEL_MODULES_LOAD := hci_uart.ko rtc-pm8xxx.ko qcom-spmi-adc5.ko 
 include device/linaro/dragonboard/shared/graphics/drm_hwcomposer/BoardConfig.mk
 TARGET_BUILD_MESA := true
 include device/linaro/dragonboard/shared/graphics/mesa/BoardConfig.mk
-BOARD_SEPOLICY_DIRS += device/linaro/dragonboard/shared/graphics/minigbm_msm/sepolicy
+# Linaro's minigbm policy, but labeling only the vendor copy of libdrm (Treble)
+BOARD_SEPOLICY_DIRS += device/samsung/gts7xlwifi/sepolicy/minigbm
 
 # Software KeyMint (no TrustZone access): FBE works, without hardware protection
 BOARD_SEPOLICY_DIRS += device/samsung/gts7xlwifi/sepolicy
