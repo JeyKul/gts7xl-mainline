@@ -27,7 +27,7 @@ ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- make O=build-android Image modules q
 repo/android/device/samsung/gts7xlwifi/prepare-kernel.sh src/linux src/linux/build-android
 # AOSP
 ln -s <repo>/android/device/samsung/gts7xlwifi <aosp>/device/samsung/gts7xlwifi
-source build/envsetup.sh && lunch gts7xlwifi-trunk_staging-userdebug && m
+source build/envsetup.sh && lunch gts7xlwifi-cp2a-userdebug && m
 ```
 
 Flashing (`boot`, `super`, formatting `userdata`) replaces One UI and the Linux install:
