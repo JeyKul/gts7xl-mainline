@@ -80,7 +80,8 @@ if [ -n "${MAINLINE_DTB:-}" ]; then
 	python3 -I - "$T/rd/twres/landscape.xml" "$HERE/mainline/theme-items.xml" "$HERE/mainline/theme-pages.xml" "$O/twres/landscape.xml" <<'PY'
 import sys
 s=open(sys.argv[1]).read(); items=open(sys.argv[2]).read(); pages=open(sys.argv[3]).read()
-a=s.index('<listbox style="advanced_listbox">'); a=s.index('/>',s.index('<placement',a))+3
+# The list on the Advanced page (other pages use the same listbox style)
+a=s.index('<listbox style="advanced_listbox">',s.index('<page name="advanced">')); a=s.index('/>',s.index('<placement',a))+3
 s=s[:a]+items+s[a:]
 z=s.rindex('</pages>'); s=s[:z]+pages+'\t'+s[z:]
 open(sys.argv[4],'w').write(s)
