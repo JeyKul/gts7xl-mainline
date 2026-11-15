@@ -1,0 +1,498 @@
+diff --git a/arch/arm64/boot/dts/qcom/sm8250.dtsi b/arch/arm64/boot/dts/qcom/sm8250.dtsi
+index 90f8b0916..cc94b24d3 100644
+--- a/arch/arm64/boot/dts/qcom/sm8250.dtsi
++++ b/arch/arm64/boot/dts/qcom/sm8250.dtsi
+@@ -12,6 +12,7 @@
+ #include <dt-bindings/dma/qcom-gpi.h>
+ #include <dt-bindings/firmware/qcom,scm.h>
+ #include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/interconnect/qcom,icc.h>
+ #include <dt-bindings/interconnect/qcom,osm-l3.h>
+ #include <dt-bindings/interconnect/qcom,sm8250.h>
+ #include <dt-bindings/mailbox/qcom-ipcc.h>
+@@ -108,7 +109,7 @@ cpu0: cpu@0 {
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 0>;
+ 			operating-points-v2 = <&cpu0_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_0: l2-cache {
+@@ -139,7 +140,7 @@ cpu1: cpu@100 {
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 0>;
+ 			operating-points-v2 = <&cpu0_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_100: l2-cache {
+@@ -164,7 +165,7 @@ cpu2: cpu@200 {
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 0>;
+ 			operating-points-v2 = <&cpu0_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_200: l2-cache {
+@@ -189,7 +190,7 @@ cpu3: cpu@300 {
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 0>;
+ 			operating-points-v2 = <&cpu0_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_300: l2-cache {
+@@ -214,7 +215,7 @@ cpu4: cpu@400 {
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 1>;
+ 			operating-points-v2 = <&cpu4_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_400: l2-cache {
+@@ -239,7 +240,7 @@ cpu5: cpu@500 {
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 1>;
+ 			operating-points-v2 = <&cpu4_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_500: l2-cache {
+@@ -264,7 +265,7 @@ cpu6: cpu@600 {
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 1>;
+ 			operating-points-v2 = <&cpu4_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_600: l2-cache {
+@@ -289,7 +290,7 @@ cpu7: cpu@700 {
+ 			power-domain-names = "psci";
+ 			qcom,freq-domain = <&cpufreq_hw 2>;
+ 			operating-points-v2 = <&cpu7_opp_table>;
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 0 &mc_virt SLAVE_EBI_CH0 0>,
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>,
+ 					<&epss_l3 MASTER_OSM_L3_APPS &epss_l3 SLAVE_OSM_L3>;
+ 			#cooling-cells = <2>;
+ 			l2_700: l2-cache {
+@@ -4043,7 +4044,7 @@ pmu@9091000 {
+ 
+ 			interrupts = <GIC_SPI 81 IRQ_TYPE_LEVEL_HIGH>;
+ 
+-			interconnects = <&mc_virt MASTER_LLCC 3 &mc_virt SLAVE_EBI_CH0 3>;
++			interconnects = <&mc_virt MASTER_LLCC QCOM_ICC_TAG_ACTIVE_ONLY &mc_virt SLAVE_EBI_CH0 QCOM_ICC_TAG_ACTIVE_ONLY>;
+ 
+ 			operating-points-v2 = <&llcc_bwmon_opp_table>;
+ 
+@@ -4105,7 +4106,7 @@ pmu@90b6400 {
+ 
+ 			interrupts = <GIC_SPI 581 IRQ_TYPE_LEVEL_HIGH>;
+ 
+-			interconnects = <&gem_noc MASTER_AMPSS_M0 3 &gem_noc SLAVE_LLCC 3>;
++			interconnects = <&gem_noc MASTER_AMPSS_M0 QCOM_ICC_TAG_ACTIVE_ONLY &gem_noc SLAVE_LLCC QCOM_ICC_TAG_ACTIVE_ONLY>;
+ 			operating-points-v2 = <&cpu_bwmon_opp_table>;
+ 
+ 			cpu_bwmon_opp_table: opp-table {
+diff --git a/drivers/gpu/drm/msm/msm_mdss.c b/drivers/gpu/drm/msm/msm_mdss.c
+index 9087c4b29..81695700b 100644
+--- a/drivers/gpu/drm/msm/msm_mdss.c
++++ b/drivers/gpu/drm/msm/msm_mdss.c
+@@ -426,12 +426,18 @@ static struct msm_mdss *msm_mdss_init(struct platform_device *pdev, bool is_mdp5
+ 	return msm_mdss;
+ }
+ 
++int gts7xl_rsc_mode2(bool enter);
++
+ static int __maybe_unused mdss_runtime_suspend(struct device *dev)
+ {
+ 	struct msm_mdss *mdss = dev_get_drvdata(dev);
+ 
+ 	DBG("");
+ 
++	/* gts7xl test: hand the display RSC to mode 2 while MDSS is still up */
++	if (of_machine_is_compatible("samsung,gts7xlwifi"))
++		gts7xl_rsc_mode2(true);
++
+ 	return msm_mdss_disable(mdss);
+ }
+ 
+@@ -441,6 +447,9 @@ static int __maybe_unused mdss_runtime_resume(struct device *dev)
+ 
+ 	DBG("");
+ 
++	if (of_machine_is_compatible("samsung,gts7xlwifi"))
++		gts7xl_rsc_mode2(false);
++
+ 	return msm_mdss_enable(mdss);
+ }
+ 
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+index 20e3dbdf9..001b43a47 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+@@ -5,7 +5,10 @@
+  */
+ 
+ #include <linux/backlight.h>
++#include <linux/clk.h>
++#include <linux/debugfs.h>
+ #include <linux/delay.h>
++#include <linux/seq_file.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/gpio/consumer.h>
+ #include <linux/io.h>
+@@ -560,6 +563,234 @@ static int __init s6tuum3_early_off(void)
+ subsys_initcall_sync(s6tuum3_early_off);
+ #endif
+ 
++/* gts7xl debug: display RSC state (drv 0xaf20000, wrapper 0xaf30000) */
++static struct clk *gts7xl_rsc_clk(int id)
++{
++	struct of_phandle_args args = { .args_count = 1, .args = { id } };
++	struct clk *c;
++
++	args.np = of_find_compatible_node(NULL, NULL, "qcom,sm8250-dispcc");
++	c = of_clk_get_from_provider(&args);
++	of_node_put(args.np);
++	return c;
++}
++
++static int gts7xl_rsc_show(struct seq_file *s, void *unused)
++{
++	static const u32 drv_regs[] = { 0x0, 0x4, 0x8, 0xc, 0x20, 0x24, 0x28, 0x2c, 0xd0,
++		0x400, 0x404, 0x408, 0x410, 0x414, 0xc04, 0xc08, 0xc0c, 0xc14, 0xc18, 0xc1c,
++		0xc20, 0xc24, 0xc28, 0xc2c, 0x1c00, 0x1c14 };
++	static const u32 wr_regs[] = { 0x0, 0x4, 0x8, 0xc, 0x10, 0x18, 0x1c, 0x20, 0x24,
++		0x40, 0x44, 0x48, 0x50 };
++	struct clk *ahb = gts7xl_rsc_clk(42), *vs = gts7xl_rsc_clk(43);
++	void __iomem *drv, *wr;
++	int i;
++
++	if (IS_ERR(ahb) || IS_ERR(vs))
++		return -ENODEV;
++	if (clk_prepare_enable(ahb) || clk_prepare_enable(vs))
++		return -EIO;
++	drv = ioremap(0x0af20000, 0x3c50);
++	wr = ioremap(0x0af30000, 0x3fd4);
++	for (i = 0; drv && i < ARRAY_SIZE(drv_regs); i++)
++		seq_printf(s, "drv+0x%04x %08x\n", drv_regs[i], readl(drv + drv_regs[i]));
++	for (i = 0; wr && i < ARRAY_SIZE(wr_regs); i++)
++		seq_printf(s, "wr +0x%04x %08x\n", wr_regs[i], readl(wr + wr_regs[i]));
++	if (drv)
++		iounmap(drv);
++	if (wr)
++		iounmap(wr);
++	clk_disable_unprepare(vs);
++	clk_disable_unprepare(ahb);
++	clk_put(vs);
++	clk_put(ahb);
++	return 0;
++}
++DEFINE_SHOW_ATTRIBUTE(gts7xl_rsc);
++
++/*
++ * gts7xl test: drive the display RSC into mode 2 across system sleep, as the
++ * stock sde_rsc (v3) does once the display is off. Mainline leaves it in
++ * mode 0 (display active), which keeps the display DRV awake for AOSS.
++ */
++#define RSC_W(off, v)	writel(v, wr + (off))
++#define RSC_D(off, v)	writel(v, drv + (off))
++static bool gts7xl_rsc_inited, gts7xl_rsc_in_mode2;
++static bool gts7xl_rsc_enable;
++module_param_named(rsc_mode2, gts7xl_rsc_enable, bool, 0644);
++
++static void gts7xl_rsc_init(void __iomem *drv, void __iomem *wr)
++{
++	/* qtimer */
++	RSC_W(0x1fe0, 0xffffffff); RSC_W(0x1ff0, 0xffffffff);
++	RSC_W(0x1040, 1); RSC_W(0x1044, 1);
++	RSC_W(0x2020, 0xffffffff); RSC_W(0x2024, 0xffffffff);
++	RSC_W(0x3020, 0xffffffff); RSC_W(0x3024, 0xffffffff);
++	RSC_W(0x202c, 1); RSC_W(0x302c, 1);
++	/* wrapper */
++	RSC_W(0x008, 298299); RSC_W(0x00c, 20463); RSC_W(0x004, BIT(8)); RSC_W(0x044, 64);
++	/* sequencer memory: mode 0, 1, 2, tcs sleep and wake */
++	RSC_D(0x600, 0xff399ebe); RSC_D(0x604, 0x20209ebe); RSC_D(0x608, 0x20202020);
++	RSC_D(0x60c, 0xe0389ebe); RSC_D(0x610, 0x9ebeff39); RSC_D(0x614, 0x20202020);
++	RSC_D(0x618, 0xbdf9b9a0); RSC_D(0x61c, 0xa13899fe); RSC_D(0x620, 0xe0ac81e1);
++	RSC_D(0x624, 0x3982e2a2); RSC_D(0x628, 0x208cfd9d); RSC_D(0x62c, 0x20202020);
++	RSC_D(0x630, 0x20202020);
++	RSC_D(0x634, 0x01a6fcbc); RSC_D(0x638, 0x20209ce6); RSC_D(0x63c, 0x01a7fcbc);
++	RSC_D(0x640, 0x00209ce7);
++	RSC_D(0x410, 0x34); RSC_D(0x414, 0x3c);
++	RSC_D(0xc14, 0x0); RSC_D(0xc30, 0x0); RSC_D(0xc4c, 0xc); RSC_D(0xc68, 0x18);
++	/* solver */
++	RSC_D(0xc04, 0xffffffff); RSC_D(0xc08, 0xffffffff); RSC_D(0xc0c, 0xefffffff);
++	RSC_D(0x1000, 0); RSC_D(0x1004, 20463); RSC_D(0x1008, 320512); RSC_D(0x100c, 0xffffffff);
++	RSC_D(0xc20, 0x7);
++	RSC_D(0x1080, 0); RSC_D(0x1100, 1); RSC_D(0x110c, 1); RSC_D(0x1180, 2); RSC_D(0x118c, 2);
++	RSC_D(0xc18, 0); RSC_D(0xc00, 1); RSC_D(0xc1c, 0x01000010);
++	RSC_D(0xc34, 0x80000000); RSC_D(0xc38, 1); RSC_D(0xc40, 20);
++	RSC_D(0xc50, 0x80000000); RSC_D(0xc54, 2); RSC_D(0xc5c, 20);
++	RSC_D(0xc6c, 0x80000000); RSC_D(0xc70, 0); RSC_D(0xc78, 20);
++	/* pdc */
++	RSC_D(0x020, 0x4520); RSC_D(0x024, 0x4510); RSC_D(0x028, 0x4514); RSC_D(0x02c, 1);
++
++	/*
++	 * Sleep TCS (TCS0 at 0x1c00): zero every vote the display DRV may hold,
++	 * as stock's rpmh_flush on disp_rsc does (its bus votes are active only).
++	 */
++	{
++		static const u32 addr[] = {
++			0x30000, 0x30010, 0x30080, 0x300a0, 0x30020, 0x30070,	/* cx mx mmcx xo ebi ddr */
++			0x50000, 0x50004, 0x5009c, 0x500a0, 0x50094, 0x50098,	/* MC0 SH0 MM0-3 */
++			0x5007c, 0x50028, 0x50044, 0x50074,			/* ACV SN0 SN7 CN0 */
++		};
++		void __iomem *t = drv + 0x1c00;
++		int i;
++
++		for (i = 0; i < ARRAY_SIZE(addr); i++) {
++			writel(BIT(16) | 8, t + 0x30 + i * 0x14);
++			writel(addr[i], t + 0x34 + i * 0x14);
++			writel(addr[i] >= 0x50000 ? BIT(30) : 0, t + 0x38 + i * 0x14);
++		}
++		writel(0, t + 0x20);
++		writel(GENMASK(ARRAY_SIZE(addr) - 1, 0), t + 0x2c);
++	}
++	wmb();
++}
++
++int gts7xl_rsc_mode2(bool enter);
++int gts7xl_rsc_mode2(bool enter)
++{
++	struct clk *ahb = gts7xl_rsc_clk(42), *vs = gts7xl_rsc_clk(43), *ng = gts7xl_rsc_clk(35);
++	void __iomem *drv, *wr;
++	int i, try, ret = -EBUSY;
++	u32 v;
++
++	if (!gts7xl_rsc_enable || (!enter && !gts7xl_rsc_in_mode2))
++		return 0;
++	if (IS_ERR(ahb) || IS_ERR(vs) || IS_ERR(ng))
++		return -ENODEV;
++	clk_prepare_enable(ng);
++	clk_prepare_enable(ahb);
++	clk_prepare_enable(vs);
++	drv = ioremap(0x0af20000, 0x3c50);
++	wr = ioremap(0x0af30000, 0x3fd4);
++
++	if (enter) {
++		if (!gts7xl_rsc_inited) {
++			gts7xl_rsc_init(drv, wr);
++			gts7xl_rsc_inited = true;
++		}
++		/* stock CLK state (samsung,rsc_4_frame_idle panels): vsync off, solver off then double buffer */
++		v = readl(wr + 0x040) & ~(BIT(0) | BIT(1) | BIT(2));
++		RSC_W(0x040, v);
++		v = readl(wr + 0x004) & ~(BIT(0) | BIT(8));
++		RSC_W(0x004, v);
++		wmb();
++		RSC_W(0x004, readl(wr + 0x004) | BIT(8));
++		wmb();
++		for (try = 0; try < 3 && ret; try++) {
++			RSC_D(0xc20, 0x7);
++			/* sde_rsc_mode2_entry_trigger, CLK state */
++			RSC_W(0x2024, 0xffffffff);
++			RSC_W(0x2020, 0xffffffff);
++			RSC_W(0x000, readl(wr + 0x000) | BIT(3) | BIT(0));
++			RSC_W(0x040, readl(wr + 0x040) & ~BIT(3));
++			wmb();
++			RSC_W(0x004, BIT(0) | BIT(1));	/* force busy */
++			wmb();
++			RSC_W(0x004, BIT(0) | BIT(9));	/* then idle */
++			wmb();
++			for (i = 0; i < 500; i++) {
++				if (readl(wr + 0x024) & BIT(12)) {
++					ret = 0;
++					break;
++				}
++				udelay(100);
++			}
++			if (ret && readl(drv + 0x404) && readl(drv + 0xc2c) <= 1) {
++				/* sde_rsc_reset_mode_0_1: unstick the qtimers */
++				RSC_W(0x3024, 0xffffff); RSC_W(0x3020, 0xffffffff); wmb();
++				RSC_W(0x3024, 0); RSC_W(0x3020, 0); wmb();
++				RSC_W(0x2024, 0xffffff); RSC_W(0x2020, 0xffffffff); wmb();
++				RSC_W(0x2024, 0); RSC_W(0x2020, 0); wmb();
++			}
++		}
++		if (!ret) {
++			RSC_W(0x004, BIT(0) | BIT(8));
++			wmb();
++		}
++		gts7xl_rsc_in_mode2 = !ret;
++	} else {
++		RSC_W(0x004, readl(wr + 0x004) & ~(BIT(8) | BIT(0)));
++		RSC_W(0x3020, 0); RSC_W(0x3024, 0);
++		v = readl(wr + 0x000) & ~BIT(3);
++		RSC_W(0x000, v);
++		wmb();
++		for (i = 0; i < 500; i++) {
++			if (!(readl(wr + 0x024) & BIT(12))) {
++				ret = 0;
++				break;
++			}
++			udelay(50);
++		}
++		RSC_D(0xc20, 0x3);
++		v = readl(wr + 0x004) & ~(BIT(0) | BIT(8));
++		RSC_W(0x004, v);
++		wmb();
++		RSC_W(0x004, v | BIT(0) | BIT(8));
++		wmb();
++		gts7xl_rsc_in_mode2 = false;
++	}
++	pr_info("gts7xl rsc: mode2 %s: %d, pwr_ctrl 0x%x, solver mode %u\n",
++		enter ? "entry" : "exit", ret, readl(wr + 0x024), readl(drv + 0xc2c));
++	pr_info("gts7xl rsc: wr ctrl %x ovr %x ovr2 %x dbg %x | seq busy %x pc %x | solver st %x %x %x ovr %x | err %x amc %x\n",
++		readl(wr + 0x0), readl(wr + 0x4), readl(wr + 0x40), readl(wr + 0x10),
++		readl(drv + 0x404), readl(drv + 0x408), readl(drv + 0xc24), readl(drv + 0xc28),
++		readl(drv + 0xc2c), readl(drv + 0xc14), readl(drv + 0xd0), readl(drv + 0x1c00));
++	pr_info("gts7xl rsc: seq %x %x %x br %x %x | qtmr sel %x acr %x f0 %x/%x ctl %x f1 %x/%x ctl %x | modes %x tc %x\n",
++		readl(drv + 0x600), readl(drv + 0x618), readl(drv + 0x634), readl(drv + 0x410),
++		readl(drv + 0x414), readl(wr + 0x1fe0), readl(wr + 0x1040), readl(wr + 0x2024),
++		readl(wr + 0x2020), readl(wr + 0x202c), readl(wr + 0x3024), readl(wr + 0x3020),
++		readl(wr + 0x302c), readl(drv + 0xc20), readl(drv + 0xc00));
++
++	iounmap(wr);
++	iounmap(drv);
++	clk_disable_unprepare(vs);
++	clk_disable_unprepare(ahb);
++	clk_disable_unprepare(ng);
++	clk_put(vs);
++	clk_put(ahb);
++	clk_put(ng);
++	return ret;
++}
++
++
++
++static int __init gts7xl_rsc_debugfs(void)
++{
++	debugfs_create_file("gts7xl_rsc", 0400, NULL, NULL, &gts7xl_rsc_fops);
++	return 0;
++}
++late_initcall(gts7xl_rsc_debugfs);
++
+ static struct mipi_dsi_driver s6tuum3_driver = {
+ 	.probe = s6tuum3_probe,
+ 	.remove = s6tuum3_remove,
+diff --git a/drivers/pinctrl/qcom/pinctrl-sm8250-lpass-lpi.c b/drivers/pinctrl/qcom/pinctrl-sm8250-lpass-lpi.c
+index 454de788b..17affefce 100644
+--- a/drivers/pinctrl/qcom/pinctrl-sm8250-lpass-lpi.c
++++ b/drivers/pinctrl/qcom/pinctrl-sm8250-lpass-lpi.c
+@@ -137,6 +137,7 @@ static const struct of_device_id lpi_pinctrl_of_match[] = {
+ MODULE_DEVICE_TABLE(of, lpi_pinctrl_of_match);
+ 
+ static const struct dev_pm_ops lpi_pinctrl_pm_ops = {
++	SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+ 	RUNTIME_PM_OPS(pm_clk_suspend, pm_clk_resume, NULL)
+ };
+ 
+diff --git a/drivers/soc/qcom/qcom_aoss.c b/drivers/soc/qcom/qcom_aoss.c
+index 259c41f0c..78c3c5c98 100644
+--- a/drivers/soc/qcom/qcom_aoss.c
++++ b/drivers/soc/qcom/qcom_aoss.c
+@@ -556,12 +556,36 @@ static const struct file_operations qmp_debugfs_fops = {
+ 	.write = qmp_debugfs_write,
+ };
+ 
++/* gts7xl debug: send any QMP message written here */
++static ssize_t gts7xl_raw_write(struct file *file, const char __user *ubuf,
++				size_t count, loff_t *pos)
++{
++	struct qmp *qmp = file->private_data;
++	char buf[QMP_MSG_LEN] = { 0 };
++	int ret;
++
++	if (count >= sizeof(buf))
++		return -EINVAL;
++	if (copy_from_user(buf, ubuf, count))
++		return -EFAULT;
++	strim(buf);
++	ret = qmp_send(qmp, "%s", buf);
++	dev_info(qmp->dev, "raw qmp '%s': %d\n", buf, ret);
++	return ret ? ret : count;
++}
++
++static const struct file_operations gts7xl_raw_fops = {
++	.open = simple_open,
++	.write = gts7xl_raw_write,
++};
++
+ static void qmp_debugfs_create(struct qmp *qmp)
+ {
+ 	const struct qmp_debugfs_entry *entry;
+ 	int i;
+ 
+ 	qmp->debugfs_root = debugfs_create_dir("qcom_aoss", NULL);
++	debugfs_create_file("gts7xl_raw", 0200, qmp->debugfs_root, qmp, &gts7xl_raw_fops);
+ 
+ 	for (i = 0; i < ARRAY_SIZE(qmp->debugfs_files); i++) {
+ 		entry = &qmp_debugfs_entries[i];
+diff --git a/drivers/soundwire/qcom.c b/drivers/soundwire/qcom.c
+index 55678a30c..832bf2528 100644
+--- a/drivers/soundwire/qcom.c
++++ b/drivers/soundwire/qcom.c
+@@ -1826,6 +1826,7 @@ static int __maybe_unused swrm_runtime_suspend(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops swrm_dev_pm_ops = {
++	SET_SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+ 	SET_RUNTIME_PM_OPS(swrm_runtime_suspend, swrm_runtime_resume, NULL)
+ };
+ 
+diff --git a/sound/soc/codecs/lpass-rx-macro.c b/sound/soc/codecs/lpass-rx-macro.c
+index 282a6aaa9..8e8382442 100644
+--- a/sound/soc/codecs/lpass-rx-macro.c
++++ b/sound/soc/codecs/lpass-rx-macro.c
+@@ -3997,6 +3997,7 @@ static int rx_macro_runtime_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops rx_macro_pm_ops = {
++	SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+ 	RUNTIME_PM_OPS(rx_macro_runtime_suspend, rx_macro_runtime_resume, NULL)
+ };
+ 
+diff --git a/sound/soc/codecs/lpass-tx-macro.c b/sound/soc/codecs/lpass-tx-macro.c
+index a8e83eb60..d40ac1c40 100644
+--- a/sound/soc/codecs/lpass-tx-macro.c
++++ b/sound/soc/codecs/lpass-tx-macro.c
+@@ -2435,6 +2435,7 @@ static int tx_macro_runtime_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops tx_macro_pm_ops = {
++	SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+ 	RUNTIME_PM_OPS(tx_macro_runtime_suspend, tx_macro_runtime_resume, NULL)
+ };
+ 
+diff --git a/sound/soc/codecs/lpass-va-macro.c b/sound/soc/codecs/lpass-va-macro.c
+index dbc5795b9..0ed9f9472 100644
+--- a/sound/soc/codecs/lpass-va-macro.c
++++ b/sound/soc/codecs/lpass-va-macro.c
+@@ -1765,6 +1765,7 @@ static int va_macro_runtime_resume(struct device *dev)
+ 
+ 
+ static const struct dev_pm_ops va_macro_pm_ops = {
++	SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+ 	RUNTIME_PM_OPS(va_macro_runtime_suspend, va_macro_runtime_resume, NULL)
+ };
+ 
+diff --git a/sound/soc/codecs/lpass-wsa-macro.c b/sound/soc/codecs/lpass-wsa-macro.c
+index 38e37908b..b42ce5770 100644
+--- a/sound/soc/codecs/lpass-wsa-macro.c
++++ b/sound/soc/codecs/lpass-wsa-macro.c
+@@ -2881,6 +2881,7 @@ static int wsa_macro_runtime_resume(struct device *dev)
+ }
+ 
+ static const struct dev_pm_ops wsa_macro_pm_ops = {
++	SYSTEM_SLEEP_PM_OPS(pm_runtime_force_suspend, pm_runtime_force_resume)
+ 	RUNTIME_PM_OPS(wsa_macro_runtime_suspend, wsa_macro_runtime_resume, NULL)
+ };
+ 

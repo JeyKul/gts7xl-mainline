@@ -50,3 +50,40 @@ echo "woke on irq: $(cat /sys/power/pm_wakeup_irq)"
 for s in aosd cxsd ddr; do echo $s; cat $Q/$s; done
 diff /tmp/irq.before /proc/interrupts
 ```
+
+## 2026-11-15: subsystem bring-up and the TWRP baseline
+
+Measured with the fuel gauge `charge_counter` over a 600 s `systemctl suspend` (unplugged), plus `qcom_stats`.
+
+**Stock reference (One UI + Magisk):** suspends `deep` at about 15–30 mA, Wi-Fi up. Screen-off but awake: 130–155 mA, which is our suspended level. One UI boots ipa_fws, ipa_uc, npu, adsp, cdsp, venus, spss, cvpss, slpi and a650_zap.
+
+**TWRP baseline (Samsung 4.19 kernel, no subsystems loaded):** a forced `deep` suspend for 150 s by RTC alarm sleeps the apps side the whole time (`rpmh_stats/master_stats` APSS count 1, 150 s). `system_sleep` aosd/cxsd/ddr stay **0**. So Samsung's own kernel does not collapse CX either when the subsystems are not running. The blocker is a subsystem that is not booted, or booted but awake. It is not a mainline kernel bug. (TWRP suspend aborts with USB attached: `msm-dwc3 USB is outside LPM`.)
+
+**Brought up on mainline for the first time** (WIP in `linux-patches/wip/`, loader in `tools/pas-loader/`):
+- IPA v4.5 + uC (`ipa-sm8250-apq.patch`, DT node `ipa-node.dts`):
+  - **Firmware:** use the `apnhlos` copies of ipa_fws/ipa_uc. The vendor partition copies are signed differently, and TZ rejects them with raw status `0xffcfffbb`.
+  - **Pipe map:** sm8250 is an APQ platform, so the GSI firmware uses the APQ map from stock `ipa_utils.c` `IPA_4_5_APQ`. Command TX is endpoint 7 / channel 12 and LAN RX is endpoint 13 / channel 13. Mainline's SDX55 map (9/10) hangs in `ipa_mem_setup`.
+  - **Interconnects:** the DT needs the `imem` path (aggre2 MASTER_IPA → system_noc SLAVE_OCIMEM).
+  - **Memory regions:** ipa_fws goes into the 0x90310000 carveout and ipa_uc into 0x90300000.
+  - **uC power:** with no modem, the driver takes the uC proxy power itself, so INIT_COMPLETED ends in `ipa_pc 1` to AOP.
+- CVP: PAS 26, carveout 0x8de00000 / 0x500000.
+- SPSS: PAS 14, `spss2p.mdt` from apnhlos, carveout 0x8d300000 / 0x100000.
+- Venus: iris boots its firmware on the first open of the decoder node.
+
+**Results (aosd/cxsd/ddr Count 0 in every run):**
+
+| Setup | Drain |
+|---|---|
+| IPA + uC | — |
+| IPA + CVP + Venus | — |
+| IPA + QMP `load_state spss off` | — |
+| All of the above + RSC mode 2 + ADSP/CDSP/SLPI **stopped** + BT off + PCIe removed | ~157 mA |
+| IPA + SPSS + CVP + Venus + RSC mode 2, DSPs **running** | ~200 mA |
+
+**Lead:** in the last run, CDSP slept almost the whole time, SLPI 4.7 s, and **ADSP only 46 ms**. PulseAudio and PipeWire were both running. Speaker `pcm0p` and mic `pcm1c` stay RUNNING permanently (~170 ipcc IRQ/s), and the streams continue through s2idle. Next:
+1. Run one audio server that closes idle PCMs.
+2. Confirm `qcom_stats adsp` accumulates while asleep, then repeat the drain test.
+3. Do the same for SLPI (sensor streams).
+4. Still missing after that: NPU, whose PAS 23 init TZ rejects until the NPU domain is powered.
+
+**Do not use** `wip/pcie-gdsc-off-DO-NOT-USE.patch` (PCIe GDSCs `PWRSTS_OFF_ON`). With it, the PCIe rescan after resume hits a powered-off GDSC and the SoC resets on wake; with plain rtcwake, ath11k fails to resume (-110).
