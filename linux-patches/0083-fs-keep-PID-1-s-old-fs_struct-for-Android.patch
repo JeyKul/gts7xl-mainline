@@ -1,0 +1,42 @@
+From 542eba8be5fb9e982e66b3adf307a6279ab8b5cc Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Sun, 15 Nov 2026 22:02:02 +0100
+Subject: [PATCH] fs: keep PID 1's old fs_struct for Android
+
+Since 7.x, PID 1 unsharing its fs_struct reverts the old one to nullfs.
+Android's init does that in SetupMountNamespaces, while its property
+service thread and kworkers (firmware loading) keep using the old state:
+selinuxfs lookups fail with ENOENT, every property permission check is
+denied, ueventd can't set ro.cold_boot_done and init waits forever;
+firmware loads return -ENOENT. With binder built in (Android kernels)
+keep the stale state, as older kernels did.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ fs/fs_struct.c | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
+
+diff --git a/fs/fs_struct.c b/fs/fs_struct.c
+index 34699f3b6..1f1202ebb 100644
+--- a/fs/fs_struct.c
++++ b/fs/fs_struct.c
+@@ -193,6 +193,16 @@ static inline void validate_fs_switch(struct fs_struct *old_fs)
+ 	if (old_fs != userspace_init_fs)
+ 		return;
+ 	pr_warn("VFS: Pid 1 stopped sharing filesystem state\n");
++	/*
++	 * Android's init does exactly this (unshare(CLONE_NEWNS) in
++	 * SetupMountNamespaces) while its property service thread and the
++	 * kernel's firmware loader keep using the old state. Reverting that to
++	 * nullfs leaves them without a root: every property permission check
++	 * and every firmware load fails. Keep the stale state, as older
++	 * kernels did.
++	 */
++	if (IS_ENABLED(CONFIG_ANDROID_BINDER_IPC))
++		return;
+ 	set_fs_root(userspace_init_fs, &init_fs.root);
+ 	set_fs_pwd(userspace_init_fs, &init_fs.root);
+ }
+-- 
+2.56.0
+
