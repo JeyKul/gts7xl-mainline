@@ -34,9 +34,41 @@ else
 		fi
 	done
 	[ -n "$D" ] && [ -b "$D" ] || fail "userdata partition not found"
-	# TWRP's older kernel can't write to orphan_file, which recovery fixes would need
-	mkfs.ext4 -F -q -L userdata -O ^orphan_file "$D"
-	mount -t ext4 -o rw,noatime "$D" $A
+	# Rescue mode may still hold the old system open
+	for m in /target/var/cache/pacman/pkg /target/var/log /target/.snapshots /target/home /target /target-top; do
+		umount $m 2>/dev/null || true
+	done
+	[ -e /dev/mapper/userdata ] && { cryptsetup close userdata || fail "old encrypted data still in use"; }
+	if [ "${ENCRYPT:-0}" = 1 ]; then
+		step "Encrypting data"
+		# AES-XTS runs on the CPU's crypto extensions. Argon2id capped at 512 MB so
+		# stage 1 unlocks in a few seconds. The login password opens it.
+		printf %s "$NEW_PASS" | cryptsetup luksFormat -q --type luks2 --label userdata \
+			--subsystem "kbd=${KBD_ID:-us}" --cipher aes-xts-plain64 --key-size 512 \
+			--pbkdf argon2id --pbkdf-memory 524288 --iter-time 2000 --key-file - "$D" ||
+			fail "could not encrypt data"
+		printf %s "$NEW_PASS" | cryptsetup open --allow-discards --key-file - "$D" userdata ||
+			fail "could not open encrypted data"
+		D=/dev/mapper/userdata
+	fi
+	step "Formatting data"
+	# Default features only: no-holes and free-space-tree, which older kernels read too
+	mkfs.btrfs -f -q -L userdata "$D" || fail "could not format data"
+	# Root, home, snapshots, logs and the package cache apart, so a rollback keeps
+	# home and logs, and snapshots skip downloads
+	T=/target-top
+	mkdir -p $T
+	# Options count for the whole filesystem and the first mount sets them
+	O=rw,noatime,compress=zstd:1,discard=async
+	mount -t btrfs -o $O "$D" $T
+	for s in @ @home @snapshots @log @pkg; do btrfs -q subvolume create $T/$s; done
+	mount -t btrfs -o $O,subvol=@ "$D" $A
+	mkdir -p $A/home $A/.snapshots $A/var/log $A/var/cache/pacman/pkg
+	mount -t btrfs -o $O,subvol=@home "$D" $A/home
+	mount -t btrfs -o $O,subvol=@snapshots "$D" $A/.snapshots
+	mount -t btrfs -o $O,subvol=@log "$D" $A/var/log
+	mount -t btrfs -o $O,subvol=@pkg "$D" $A/var/cache/pacman/pkg
+	chmod 750 $A/.snapshots
 fi
 
 U=http://os.archlinuxarm.org/os
@@ -106,6 +138,19 @@ else
 	rm -f $A/tmp/linux-gts7xl.pkg.tar.gz
 	tar -xzf /gts7xl/modules.tar.gz -C $A/usr
 fi
+if [ ! -e /dry ]; then
+	# The initramfs mounts / itself; systemd mounts the rest by this table
+	# busybox blkid has no -s/-o; PARTUUID never matches the leading space
+	ID=$(blkid "$D" | sed -n 's/.* UUID="\([^"]*\)".*/\1/p')
+	[ -n "$ID" ] || fail "no filesystem UUID"
+	{
+		echo "# <device> <dir> <type> <options> <dump> <fsck>"
+		for m in "@ /" "@home /home" "@snapshots /.snapshots" "@log /var/log" "@pkg /var/cache/pacman/pkg"; do
+			set -- $m
+			echo "UUID=$ID $2 btrfs $O,subvol=$1 0 0"
+		done
+	} > $A/etc/fstab
+fi
 sed -i 's/^CheckSpace/#CheckSpace/' $A/etc/pacman.conf
 sed -i 's/^#\?ParallelDownloads.*/ParallelDownloads = 12/' $A/etc/pacman.conf
 grep -q '^DisableSandbox' $A/etc/pacman.conf || sed -i '/^\[options\]/a DisableSandbox' $A/etc/pacman.conf
@@ -145,6 +190,9 @@ chroot $A /bin/bash /tmp/arch-setup.sh >> /tmp/install.log 2>&1 || { kill $W 2>/
 kill $W 2>/dev/null || true
 pct 98
 rm -f $A/tmp/arch-setup.sh $A/var/cache/pacman/pkg/* 2>/dev/null || true
+# The state rescue mode can always return to
+[ -e /dry ] || chroot $A /usr/bin/snapper --no-dbus -c root create -c number -d "Fresh install" --userdata important=yes ||
+	echo "no first snapshot"
 rm -f $A/etc/resolv.conf
 ln -s ../run/systemd/resolve/stub-resolv.conf $A/etc/resolv.conf
 
@@ -182,7 +230,13 @@ sleep 1
 for d in dev sys proc; do umount $A/$d || umount -l $A/$d; done
 sync
 [ -e /dry ] && { du -sh $A > /tmp/dry-size; umount $A; }
-[ -e /dry ] || umount $A
+if [ ! -e /dry ]; then
+	# busybox umount has no -R: innermost first
+	for m in var/cache/pacman/pkg var/log .snapshots home; do umount $A/$m; done
+	umount $A
+	umount $T
+	[ -e /dev/mapper/userdata ] && cryptsetup close userdata
+fi
 trap - EXIT
 echo done > /tmp/step-done
 pct 100

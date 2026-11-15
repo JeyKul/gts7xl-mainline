@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 /*
- * Stage 1 of the Tab S7+ installer: choose a Wi-Fi network by touch.
+ * Stage 1 of the Tab S7+ installer: choose a Wi-Fi network by touch. Also the
+ * power-on password screen for encrypted data and the rescue menu.
  * Draws on the firmware framebuffer, reads the touchscreen, drives wpa_supplicant.
  */
 #include <dirent.h>
@@ -389,6 +390,23 @@ static int wait_input(int *sx, int *sy, int *key)
 /* Is volume up held right now? Used at boot to open the installer on request */
 static int volup_held(void)
 {
+	/* The keys driver can probe after the disk: wait up to 3 s for a volume key */
+	for (int t = 0, found = 0; t < 30 && !found; t++) {
+		for (int i = 0; i < 32 && !found; i++) {
+			char p[40];
+			unsigned char bits[KEY_MAX / 8 + 1] = { 0 };
+			snprintf(p, sizeof(p), "/dev/input/event%d", i);
+			int fd = open(p, O_RDONLY | O_CLOEXEC);
+			if (fd < 0)
+				continue;
+			if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(bits)), bits) >= 0 &&
+			    (bits[KEY_VOLUMEUP / 8] & (1 << (KEY_VOLUMEUP % 8))))
+				found = 1;
+			close(fd);
+		}
+		if (!found)
+			usleep(100000);
+	}
 	for (int i = 0; i < 32; i++) {
 		char p[40];
 		unsigned char keys[KEY_MAX / 8 + 1] = { 0 };
@@ -928,6 +946,9 @@ static int stage2(void)
 		ask("The passwords did not match.", NULL, NULL, "Try again", NULL, ACC);
 	}
 	memset(p2, 0, sizeof(p2));
+	/* The login password also unlocks the data at power on */
+	const int encrypt = ask("Encrypt this tablet's data?", "Your password is asked at every start, then you are logged in.",
+				"Without the password nothing on it can be read. It cannot be recovered.", "Encrypt", "Don't encrypt", ACC);
 	if (access("/dry", F_OK)) {
 		snprintf(line, sizeof(line), "User: %s", user);
 		if (!ask("THIS ERASES EVERYTHING ON THIS TABLET'S DATA PARTITION.", "Android apps, photos and files on it will be gone.", line,
@@ -940,8 +961,8 @@ static int stage2(void)
 	if (!f)
 		return 3;
 	chmod("/tmp/choices", 0600);
-	fprintf(f, "DESKTOP=%s\nLOCALE=%s\nXKB=%s\nKEYMAP=%s\nNEW_USER=%s\nNEW_PASS='", desktop,
-		languages[language].locale, keyboards[kbd].xkb, keyboards[kbd].console, user);
+	fprintf(f, "DESKTOP=%s\nLOCALE=%s\nXKB=%s\nKEYMAP=%s\nENCRYPT=%d\nKBD_ID=%s\nNEW_USER=%s\nNEW_PASS='", desktop,
+		languages[language].locale, keyboards[kbd].xkb, keyboards[kbd].console, encrypt, keyboards[kbd].installer, user);
 	for (const char *c = p1; *c; c++) {
 		if (*c == '\'')
 			fputs("'\\''", f);
@@ -1006,6 +1027,163 @@ static int stage2(void)
 	return 0;
 }
 
+/* Open the encrypted data as /dev/mapper/userdata. 0 when open, 1 if skipped (rescue only) */
+static int unlock(const char *dev, int can_skip)
+{
+	static char pw[128], dump[4096];
+	char *dumpcmd[] = { "cryptsetup", "luksDump", (char *)dev, NULL };
+	char *open_cmd[] = { "cryptsetup", "open", "--allow-discards", "--key-file", "-", (char *)dev, "userdata", NULL };
+
+	setenv("DM_DISABLE_UDEV", "1", 1);
+	open_fb();
+	open_touch();
+	/* The installer stored the keyboard layout in the header, it is not secret */
+	if (capture(dumpcmd, dump, sizeof(dump)) > 0) {
+		const char *k = strstr(dump, "kbd=");
+		for (int i = 0; k && i < (int)(sizeof(kbd_layouts) / sizeof(kbd_layouts[0])); i++)
+			if (!strncmp(k + 4, kbd_layouts[i].id, strlen(kbd_layouts[i].id)))
+				kbd_layout = i;
+	}
+	const char *title = "Enter your password to start";
+	for (;;) {
+		if (!keyboard(title, "Unlock", 0, pw, sizeof(pw))) {
+			if (can_skip)
+				return 1;
+			continue;
+		}
+		header("Unlocking...");
+		present();
+		int fd[2];
+		if (pipe(fd))
+			return 2;
+		pid_t p = fork();
+		if (!p) {
+			int n = open("/dev/null", O_RDWR);
+			dup2(fd[0], 0); dup2(n, 1); dup2(n, 2);
+			close(fd[0]); close(fd[1]);
+			execvp(open_cmd[0], open_cmd);
+			_exit(127);
+		}
+		close(fd[0]);
+		if (write(fd[1], pw, strlen(pw)) < 0)
+			title = "Could not pass the password, try again";
+		close(fd[1]);
+		memset(pw, 0, sizeof(pw));
+		int st = 0;
+		waitpid(p, &st, 0);
+		if (WIFEXITED(st) && !WEXITSTATUS(st)) {
+			rect(0, 0, fbw, fbh, 0);
+			present();
+			close_screen();
+			return 0;
+		}
+		title = "Wrong password, try again";
+	}
+}
+
+/* Snapshots as "number|date|type|description", newest first */
+#define MAXSNAP 10
+static int rescue_list(char lines[MAXSNAP][120])
+{
+	static char out[8192];
+	char *cmd[] = { "sh", "/rescue.sh", "list", NULL };
+	int n = 0;
+
+	capture(cmd, out, sizeof(out));
+	for (char *l = strtok(out, "\n"); l && n < MAXSNAP; l = strtok(NULL, "\n"))
+		snprintf(lines[n++], 120, "%s", l);
+	return n;
+}
+
+static void rescue_result(char *const cmd[], const char *ok)
+{
+	header("Working...");
+	present();
+	if (!run(cmd))
+		ask(ok, "Reboot to start it.", NULL, "Reboot", NULL, ACC);
+	else
+		ask("That did not work.", "Nothing was changed if it failed early.", "Details: /tmp/rescue.log in the USB shell.", "Reboot", NULL, WARN);
+	sync();
+	run((char *const *)REBOOT);
+}
+
+/* Vol Up at power on with a system on btrfs: roll back, or go on to the installer */
+static void rescue(void)
+{
+	static char snaps[MAXSNAP][120];
+	char kind[16] = "";
+	FILE *f = fopen("/tmp/rescue", "r");
+	if (!f)
+		return;
+	if (!fgets(kind, sizeof(kind), f))
+		kind[0] = 0;
+	fclose(f);
+	const int btrfs = !strncmp(kind, "btrfs", 5);
+	const struct btn bsnap = { 100, 220, fbw - 200, 160 }, bundo = { 100, 410, fbw - 200, 160 };
+	const struct btn binst = { 100, 600, fbw - 200, 160 }, bboot = { 100, 790, fbw - 200, 160 };
+
+	for (;;) {
+		header("Rescue");
+		if (btrfs) {
+			button(&bsnap, "Go back to a snapshot", ACC);
+			button(&bundo, "Undo the last go-back", BTN);
+		} else {
+			text(100, 260, "Data is locked or not btrfs: snapshots are not available.", FG);
+		}
+		button(&binst, "Install again (erases everything)", WARN);
+		button(&bboot, "Reboot", BTN);
+		text(100, fbh - 120, "USB shell: serial gadget, logs in /s1/mnt/r/@log", 0xa8b8c4);
+		int x, y;
+		wait_tap(&x, &y, 0);
+		if (hit(&bboot, x, y)) {
+			sync();
+			run((char *const *)REBOOT);
+		}
+		if (hit(&binst, x, y)) {
+			char *close_cmd[] = { "sh", "/rescue.sh", "close", NULL };
+			run(close_cmd);
+			return;
+		}
+		if (btrfs && hit(&bundo, x, y) &&
+		    ask("Return to the system as it was before the last go-back?", "Home folders are not touched.", NULL, "Undo", "Back", ACC)) {
+			char *cmd[] = { "sh", "/rescue.sh", "undo", NULL };
+			rescue_result(cmd, "The system is back as it was.");
+		}
+		if (!btrfs || !hit(&bsnap, x, y))
+			continue;
+		int n = rescue_list(snaps);
+		struct btn b[MAXSNAP];
+		const struct btn bback = { 100, fbh - 200, 500, 150 };
+		header("Choose a snapshot");
+		if (!n)
+			text(100, 220, "No snapshots yet.", FG);
+		for (int i = 0; i < n; i++) {
+			char l[120], *num = strtok(snaps[i], "|"), *date = strtok(NULL, "|"), *type = strtok(NULL, "|"), *desc = strtok(NULL, "|");
+			snprintf(l, sizeof(l), "%4s  %.19s  %-6.6s %.50s", num ? num : "", date ? date : "", type ? type : "", desc ? desc : "");
+			b[i] = (struct btn){ 100, 170 + i * 120, fbw - 200, 105 };
+			button(&b[i], l, BTN);
+		}
+		button(&bback, "Back", BTN);
+		for (int done = 0; !done;) {
+			wait_tap(&x, &y, 0);
+			if (hit(&bback, x, y))
+				break;
+			for (int i = 0; i < n; i++) {
+				if (!hit(&b[i], x, y))
+					continue;
+				char line[80];
+				snprintf(line, sizeof(line), "Snapshot %s. Home folders are not touched.", snaps[i]);
+				if (ask("Go back to this snapshot?", line, "The current system is kept, Undo returns to it.", "Go back", "Back", ACC)) {
+					char *cmd[] = { "sh", "/rescue.sh", "rollback", snaps[i], NULL };
+					rescue_result(cmd, "Done: the system is back at that snapshot.");
+				}
+				done = 1;
+				break;
+			}
+		}
+	}
+}
+
 /* Join a network from the list, remember it, then fetch the installer */
 static void join(int i, const char *pw)
 {
@@ -1048,6 +1226,8 @@ int main(int argc, char **argv)
 		return stage2();
 	if (argc > 1 && !strcmp(argv[1], "--volup"))
 		return volup_held() ? 0 : 1;
+	if (argc > 2 && !strcmp(argv[1], "--unlock"))
+		return unlock(argv[2], argc > 3);
 	static char pw[64];
 	static char *rb[] = { "reboot", "-f", NULL };
 
@@ -1062,6 +1242,9 @@ int main(int argc, char **argv)
 		sleep(600);
 		return 2;
 	}
+	rescue();
+	rect(0, 0, fbw, fbh, BG);
+	text(100, 60, "Galaxy Tab S7+ Linux installer", FG);
 	text(100, 160, "Starting Wi-Fi...", FG);
 	present();
 	wifi_start();

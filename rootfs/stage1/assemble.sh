@@ -39,7 +39,7 @@ def add(n):
     seen.append(n)
     for d in pk[n].get('D','').split():
         if not d.startswith('!'): add(re.split('[=<>~]',d)[0])
-for w in ('wpa_supplicant','iw','ca-certificates-bundle'): add(w)
+for w in ('wpa_supplicant','iw','ca-certificates-bundle','btrfs-progs','cryptsetup'): add(w)
 for n in seen: print(f"{n}-{pk[n]['V']}.apk")
 P
 while read -r p; do
@@ -53,6 +53,7 @@ install -m755 "$HERE/fetch.sh" "$ROOT/s1/fetch.sh"
 # The clock never starts earlier than this, so HTTPS works before NTP answers
 date +%s > "$ROOT/s1/build.time"
 install -m755 "$HERE/s2start.sh" "$ROOT/s1/s2start.sh"
+install -m755 "$HERE/rescue.sh" "$ROOT/s1/rescue.sh"
 
 # Touch program
 "$CC" -static -Os -o "$ROOT/s1/s1ui" "$HERE/s1ui.c"
