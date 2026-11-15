@@ -21,7 +21,11 @@
 			<button style="main_button_half_width_low">
 				<placement x="%col_button_right%" y="%row1a_y%"/>
 				<text>Scan again</text>
-				<action function="cmd">/system/bin/gts7xl-wifi scan</action>
+				<actions>
+					<action function="cmd">/system/bin/gts7xl-wifi scan</action>
+					<action function="set">tw_gts7xl_wifi_dir=/tmp/gts7xl-wifi/nets</action>
+					<action function="page">gts7xl_wifi</action>
+				</actions>
 			</button>
 
 			<button style="main_button_half_width_low">
@@ -74,6 +78,7 @@
 					<action function="cmd">/system/bin/gts7xl-wifi connect "%tw_gts7xl_ssid%" "%tw_gts7xl_pw%"</action>
 					<action function="set">tw_gts7xl_pw=</action>
 					<action function="set">tw_gts7xl_ssid=</action>
+					<action function="set">tw_gts7xl_wifi_dir=/tmp/gts7xl-wifi/nets</action>
 					<action function="page">gts7xl_wifi</action>
 				</actions>
 			</input>

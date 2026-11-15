@@ -9,21 +9,21 @@ N=/tmp/gts7xl-wifi
 T=/linux-tools
 m() { /linux-tools/lib/ld-musl-aarch64.so.1 --library-path $T/lib "$@"; }
 bb() { m $T/bin/busybox "$@"; }
-cli() { m $T/bin/wpa_cli -p $N/ctrl -i wlan0 "$@"; }
+cli() { m $T/bin/wpa_cli -p $N/run/ctrl -i wlan0 "$@"; }
 
 up() {
-	mkdir -p $N/ctrl
+	mkdir -p $N/run/ctrl
 	i=0
 	while [ ! -e /sys/class/net/wlan0 ] && [ $i -lt 30 ]; do sleep 0.5; i=$((i + 1)); done
 	[ -e /sys/class/net/wlan0 ] || { echo "Wi-Fi: no wlan0 (firmware?)"; exit 1; }
 	bb ip link set wlan0 up
-	[ -f $N/wpa.pid ] && kill -0 "$(cat $N/wpa.pid)" 2>/dev/null && return 0
-	rm -f $N/ctrl/wlan0 $N/wpa.pid
-	printf 'ctrl_interface=%s\nupdate_config=0\n' $N/ctrl > $N/wpa.conf
-	m $T/bin/wpa_supplicant -B -i wlan0 -D nl80211 -c $N/wpa.conf -P $N/wpa.pid >/dev/null ||
+	[ -f $N/run/wpa.pid ] && kill -0 "$(cat $N/run/wpa.pid)" 2>/dev/null && return 0
+	rm -f $N/run/ctrl/wlan0 $N/run/wpa.pid
+	printf 'ctrl_interface=%s\nupdate_config=0\n' $N/run/ctrl > $N/run/wpa.conf
+	m $T/bin/wpa_supplicant -B -i wlan0 -D nl80211 -c $N/run/wpa.conf -P $N/run/wpa.pid >/dev/null ||
 		{ echo "Wi-Fi: wpa_supplicant failed"; exit 1; }
 	i=0
-	while [ ! -S $N/ctrl/wlan0 ] && [ $i -lt 20 ]; do sleep 0.2; i=$((i + 1)); done
+	while [ ! -S $N/run/ctrl/wlan0 ] && [ $i -lt 20 ]; do sleep 0.2; i=$((i + 1)); done
 }
 
 # TWRP's list shows file names: the connection goes on top, "(" sorts first
@@ -76,16 +76,16 @@ connect)
 	status_entry
 	;;
 off)
-	[ -f $N/wpa.pid ] && kill "$(cat $N/wpa.pid)" 2>/dev/null
+	[ -f $N/run/wpa.pid ] && kill "$(cat $N/run/wpa.pid)" 2>/dev/null
 	bb pkill -f "udhcpc -i wlan0" 2>/dev/null
 	bb ip addr flush dev wlan0 2>/dev/null
 	bb ip link set wlan0 down 2>/dev/null
-	rm -rf $N/ctrl $N/wpa.pid
+	rm -rf $N/run
 	rm -f "$N/nets/("*
 	echo "Wi-Fi: off"
 	;;
 status)
-	[ -S $N/ctrl/wlan0 ] || { echo "Wi-Fi: off"; exit 0; }
+	[ -S $N/run/ctrl/wlan0 ] || { echo "Wi-Fi: off"; exit 0; }
 	cli status | grep -E '^(ssid|wpa_state|ip_address)='
 	;;
 *)
