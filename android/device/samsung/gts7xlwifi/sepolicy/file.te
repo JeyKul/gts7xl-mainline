@@ -1,0 +1,2 @@
+# Firmware: /vendor/firmware and the tablet's apnhlos mounted under it
+type vendor_firmware_file, vendor_file_type, file_type;

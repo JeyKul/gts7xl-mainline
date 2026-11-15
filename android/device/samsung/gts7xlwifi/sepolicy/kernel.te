@@ -1,0 +1,3 @@
+# The kernel loads firmware from /vendor/firmware and the apnhlos links
+allow kernel vendor_firmware_file:system firmware_load;
+r_dir_file(kernel, vendor_firmware_file)
