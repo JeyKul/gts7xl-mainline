@@ -30,7 +30,7 @@ up() {
 status_entry() {
 	rm -f "$N/nets/("*
 	s=$(cli status 2>/dev/null | sed -n 's/^ssid=//p')
-	a=$(bb ip -4 -o addr show wlan0 2>/dev/null | bb awk '{print $4}')
+	a=$(bb ip -4 -o addr show wlan0 2>/dev/null | bb awk '{split($4, x, "/"); print x[1]}')
 	[ -n "$s" ] && [ -n "$a" ] && : > "$N/nets/(connected) $(printf %s "$s" | tr / _) $a"
 	return 0
 }
