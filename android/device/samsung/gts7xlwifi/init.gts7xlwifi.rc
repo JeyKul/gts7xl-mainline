@@ -9,6 +9,21 @@ on init
     write /sys/block/zram0/comp_algorithm lz4
 
 on fs
+    # Everything but /data (cache, the firmware partition)
+    mount_all /vendor/etc/fstab.gts7xlwifi --early
+    # Bring-up: every boot's kernel log and logcat on /cache, which TWRP reads
+    mkdir /cache/gts7xl 0775 root system
+    start vendor.gts7xl-bootlog
+
+service vendor.gts7xl-bootlog /vendor/bin/sh -c "dmesg -w > /cache/gts7xl/kmsg.txt 2>&1 & logcat -b all -v time > /cache/gts7xl/logcat.txt 2>&1"
+    user root
+    group root log
+    seclabel u:r:su:s0
+    disabled
+    oneshot
+
+on late-fs
+    # /data (latemount)
     mount_all /vendor/etc/fstab.gts7xlwifi --late
 
 on post-fs-data
