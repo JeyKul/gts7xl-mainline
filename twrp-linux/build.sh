@@ -46,7 +46,9 @@ def deps(p):
         if '(NEEDED)' in l:
             n=l.split('[')[1].split(']')[0]
             if n not in seen and not n.startswith('libc.musl'): seen.add(n); deps(find(n))
-for b in ('/sbin/cryptsetup','/sbin/btrfs'):
+import os as _o
+extra=('/sbin/wpa_supplicant','/sbin/wpa_cli','/usr/sbin/iw','/bin/busybox') if _o.environ.get('MAINLINE_DTB') else ()
+for b in ('/sbin/cryptsetup','/sbin/btrfs')+extra:
     shutil.copy(res(b),T+'/bin/'+os.path.basename(b)); deps(res(b))
 for n in seen: shutil.copy(find(n),T+'/lib/'+n)
 shutil.copy(res('/lib/ld-musl-aarch64.so.1'),T+'/lib/ld-musl-aarch64.so.1')
@@ -70,6 +72,23 @@ if [ -n "${MAINLINE_DTB:-}" ]; then
 		"$T/rd/system/etc/recovery.fstab" > "$O/system/etc/recovery.fstab"
 	install -m755 "$HERE/mainline/gts7xl-setup.sh" "$O/system/bin/gts7xl-setup.sh"
 	install -m755 "$HERE/mainline/gts7xl-reboot.sh" "$O/system/bin/gts7xl-reboot.sh"
+	for f in gts7xl-wifi gts7xl-udhcpc gts7xl-doom; do install -m755 "$HERE/mainline/$f" "$O/system/bin/$f"; done
+	"${CC:-aarch64-linux-gnu-gcc}" -static -Os -o "$O/system/bin/gts7xl-pad2mouse" "$HERE/mainline/gts7xl-pad2mouse.c"
+	# Advanced > Wi-Fi and Linux entries in TWRP's theme
+	mkdir -p "$O/twres"
+	(cd "$T/rd" && gzip -dc "$T/ramdisk" | cpio -id --quiet twres/landscape.xml)
+	python3 -I - "$T/rd/twres/landscape.xml" "$HERE/mainline/theme-items.xml" "$HERE/mainline/theme-pages.xml" "$O/twres/landscape.xml" <<'PY'
+import sys
+s=open(sys.argv[1]).read(); items=open(sys.argv[2]).read(); pages=open(sys.argv[3]).read()
+a=s.index('<listbox style="advanced_listbox">'); a=s.index('/>',s.index('<placement',a))+3
+s=s[:a]+items+s[a:]
+z=s.rindex('</pages>'); s=s[:z]+pages+'\t'+s[z:]
+open(sys.argv[4],'w').write(s)
+PY
+	# Wi-Fi firmware, redistributable, from linux-firmware
+	AFW=https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/ath11k/QCA6390/hw2.0
+	mkdir -p "$O/linux-tools/firmware/ath11k/QCA6390/hw2.0"
+	for f in amss.bin board-2.bin m3.bin; do curl -fsSL -o "$O/linux-tools/firmware/ath11k/QCA6390/hw2.0/$f" "$AFW/$f"; done
 	"${CC:-aarch64-linux-gnu-gcc}" -static -Os -o "$O/system/bin/gts7xl-reboot" "$HERE/mainline/gts7xl-reboot.c"
 	# GPU microcode, redistributable, from linux-firmware; the zap shader comes from apnhlos
 	LFW=https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/qcom

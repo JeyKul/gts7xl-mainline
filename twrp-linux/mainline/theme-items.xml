@@ -1,0 +1,18 @@
+				<listitem name="Wi-Fi">
+					<actions>
+						<action function="cmd">/system/bin/gts7xl-wifi scan</action>
+						<action function="page">gts7xl_wifi</action>
+					</actions>
+				</listitem>
+				<listitem name="Open Linux data">
+					<actions>
+						<action function="set">tw_gts7xl_lpw=</action>
+						<action function="page">gts7xl_linux_pw</action>
+					</actions>
+				</listitem>
+				<listitem name="Lock Linux data">
+					<action function="cmd">/system/bin/linux-data off</action>
+				</listitem>
+				<listitem name="Doom (needs Linux data)">
+					<action function="cmd">/system/bin/gts7xl-doom</action>
+				</listitem>

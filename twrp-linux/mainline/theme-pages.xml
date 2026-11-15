@@ -1,0 +1,138 @@
+		<page name="gts7xl_wifi">
+			<template name="page"/>
+
+			<text style="text_l">
+				<placement x="%col1_x_header%" y="%row3_header_y%"/>
+				<text>Wi-Fi</text>
+			</text>
+
+			<text style="text_m">
+				<placement x="%col1_x_header%" y="%row4_header_y%"/>
+				<text>Tap a network to join it</text>
+			</text>
+
+			<fileselector>
+				<placement x="%col1_x_left%" y="%row1a_y%" w="%content_half_width%" h="%fileselector_install_height%"/>
+				<filter folders="0" files="1"/>
+				<path name="tw_gts7xl_wifi_dir" default="/tmp/gts7xl-wifi/nets"/>
+				<data name="tw_gts7xl_ssid"/>
+			</fileselector>
+
+			<button style="main_button_half_width_low">
+				<placement x="%col_button_right%" y="%row1a_y%"/>
+				<text>Scan again</text>
+				<action function="cmd">/system/bin/gts7xl-wifi scan</action>
+			</button>
+
+			<button style="main_button_half_width_low">
+				<placement x="%col_button_right%" y="%row4_y%"/>
+				<text>Turn Wi-Fi off</text>
+				<action function="cmd">/system/bin/gts7xl-wifi off</action>
+			</button>
+
+			<template name="console"/>
+
+			<action>
+				<condition var1="tw_gts7xl_ssid" op="modified"/>
+				<actions>
+					<action function="set">tw_gts7xl_pw=</action>
+					<action function="page">gts7xl_wifi_pw</action>
+				</actions>
+			</action>
+
+			<action>
+				<touch key="home"/>
+				<action function="page">main</action>
+			</action>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">advanced</action>
+			</action>
+		</page>
+
+		<page name="gts7xl_wifi_pw">
+			<template name="page"/>
+
+			<text style="text_l">
+				<placement x="%col1_x_header%" y="%row3_header_y%"/>
+				<text>Wi-Fi</text>
+			</text>
+
+			<text style="text_m">
+				<placement x="%col1_x_header%" y="%row4_header_y%"/>
+				<text>Password for %tw_gts7xl_ssid% (empty: open network)</text>
+			</text>
+
+			<input>
+				<placement x="%col1_x_left%" y="%row2_input_y%" w="%content_width%" h="%input_height%"/>
+				<text>%tw_gts7xl_pw_display%</text>
+				<data name="tw_gts7xl_pw" mask="*" maskvariable="tw_gts7xl_pw_display"/>
+				<restrict minlen="0" maxlen="63"/>
+				<actions>
+					<action function="cmd">/system/bin/gts7xl-wifi connect "%tw_gts7xl_ssid%" "%tw_gts7xl_pw%"</action>
+					<action function="set">tw_gts7xl_pw=</action>
+					<action function="page">gts7xl_wifi</action>
+				</actions>
+			</input>
+
+			<fill color="%accent_color%">
+				<placement x="%col1_x_left%" y="row4_y" w="%content_width%" h="input_line_width" placement="1"/>
+			</fill>
+
+			<button style="main_button_half_width_low">
+				<placement x="%indent%" y="%row5_y%"/>
+				<text>{@cancel_btn=Cancel}</text>
+				<action function="page">gts7xl_wifi</action>
+			</button>
+
+			<template name="keyboardtemplate"/>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">gts7xl_wifi</action>
+			</action>
+		</page>
+
+		<page name="gts7xl_linux_pw">
+			<template name="page"/>
+
+			<text style="text_l">
+				<placement x="%col1_x_header%" y="%row3_header_y%"/>
+				<text>Linux</text>
+			</text>
+
+			<text style="text_m">
+				<placement x="%col1_x_header%" y="%row4_header_y%"/>
+				<text>Password of the Linux install (empty if not encrypted)</text>
+			</text>
+
+			<input>
+				<placement x="%col1_x_left%" y="%row2_input_y%" w="%content_width%" h="%input_height%"/>
+				<text>%tw_gts7xl_lpw_display%</text>
+				<data name="tw_gts7xl_lpw" mask="*" maskvariable="tw_gts7xl_lpw_display"/>
+				<restrict minlen="0" maxlen="127"/>
+				<actions>
+					<action function="cmd">echo "%tw_gts7xl_lpw%" | /system/bin/linux-data</action>
+					<action function="set">tw_gts7xl_lpw=</action>
+					<action function="page">advanced</action>
+				</actions>
+			</input>
+
+			<fill color="%accent_color%">
+				<placement x="%col1_x_left%" y="row4_y" w="%content_width%" h="input_line_width" placement="1"/>
+			</fill>
+
+			<button style="main_button_half_width_low">
+				<placement x="%indent%" y="%row5_y%"/>
+				<text>{@cancel_btn=Cancel}</text>
+				<action function="page">advanced</action>
+			</button>
+
+			<template name="keyboardtemplate"/>
+
+			<action>
+				<touch key="back"/>
+				<action function="page">advanced</action>
+			</action>
+		</page>
