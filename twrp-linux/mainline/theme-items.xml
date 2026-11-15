@@ -1,6 +1,8 @@
 				<listitem name="Wi-Fi">
 					<actions>
 						<action function="cmd">/system/bin/gts7xl-wifi scan</action>
+						<action function="set">tw_gts7xl_wifi_dir=/tmp/gts7xl-wifi/nets</action>
+						<action function="set">tw_gts7xl_ssid=</action>
 						<action function="page">gts7xl_wifi</action>
 					</actions>
 				</listitem>
