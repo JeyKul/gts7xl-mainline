@@ -1,0 +1,3 @@
+#!/bin/sh
+# gts7xl: system meson with mako for Mesa's generators (AOSP clears PYTHONPATH)
+PYTHONPATH=/mnt/builddrive/pydeps exec /usr/bin/meson "$@"
