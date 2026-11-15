@@ -1,5 +1,5 @@
 // Galaxy Tab S7+: firmware links into the tablet's own apnhlos partition,
-// mounted at /vendor/firmware_mnt; the kernel loads through /vendor/firmware.
+// mounted at /vendor/etc/apnhlos; the kernel loads through /vendor/firmware.
 // Generated from the partition's file list (names only, no firmware here).
 
 soong_namespace {}
@@ -7,511 +7,511 @@ soong_namespace {}
 install_symlink {
     name: "gts7xl-fw-a650_zap-b00",
     installed_location: "firmware/qcom/sm8250/a650_zap.b00",
-    symlink_target: "/vendor/firmware_mnt/image/a650_zap.b00",
+    symlink_target: "/vendor/etc/apnhlos/image/a650_zap.b00",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-a650_zap-b01",
     installed_location: "firmware/qcom/sm8250/a650_zap.b01",
-    symlink_target: "/vendor/firmware_mnt/image/a650_zap.b01",
+    symlink_target: "/vendor/etc/apnhlos/image/a650_zap.b01",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-a650_zap-b02",
     installed_location: "firmware/qcom/sm8250/a650_zap.b02",
-    symlink_target: "/vendor/firmware_mnt/image/a650_zap.b02",
+    symlink_target: "/vendor/etc/apnhlos/image/a650_zap.b02",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-a650_zap-mdt",
     installed_location: "firmware/qcom/sm8250/a650_zap.mbn",
-    symlink_target: "/vendor/firmware_mnt/image/a650_zap.mdt",
+    symlink_target: "/vendor/etc/apnhlos/image/a650_zap.mdt",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b00",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b00",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b00",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b00",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b01",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b01",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b01",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b01",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b02",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b02",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b02",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b02",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b03",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b03",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b03",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b03",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b04",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b04",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b04",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b04",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b05",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b05",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b05",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b05",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b06",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b06",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b06",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b06",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b07",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b07",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b07",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b07",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b08",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b08",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b08",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b08",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b09",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b09",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b09",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b09",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b10",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b10",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b10",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b10",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b11",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b11",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b11",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b11",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b12",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b12",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b12",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b12",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b13",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b13",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b13",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b13",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b14",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b14",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b14",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b14",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b15",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b15",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b15",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b15",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b16",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b16",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b16",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b16",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b17",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b17",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b17",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b17",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b18",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b18",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b18",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b18",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b19",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b19",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b19",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b19",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-b20",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.b20",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.b20",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.b20",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-adsp-mdt",
     installed_location: "firmware/qcom/sm8250/gts7xl/adsp.mbn",
-    symlink_target: "/vendor/firmware_mnt/image/adsp.mdt",
+    symlink_target: "/vendor/etc/apnhlos/image/adsp.mdt",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b00",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b00",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b00",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b00",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b01",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b01",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b01",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b01",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b02",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b02",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b02",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b02",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b03",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b03",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b03",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b03",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b04",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b04",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b04",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b04",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b05",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b05",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b05",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b05",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b06",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b06",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b06",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b06",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b08",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b08",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b08",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b08",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b09",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b09",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b09",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b09",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b10",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b10",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b10",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b10",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-b11",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.b11",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.b11",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.b11",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-cdsp-mdt",
     installed_location: "firmware/qcom/sm8250/gts7xl/cdsp.mbn",
-    symlink_target: "/vendor/firmware_mnt/image/cdsp.mdt",
+    symlink_target: "/vendor/etc/apnhlos/image/cdsp.mdt",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b00",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b00",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b00",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b00",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b01",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b01",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b01",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b01",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b02",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b02",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b02",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b02",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b03",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b03",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b03",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b03",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b04",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b04",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b04",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b04",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b05",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b05",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b05",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b05",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b06",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b06",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b06",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b06",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b07",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b07",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b07",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b07",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b08",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b08",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b08",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b08",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b09",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b09",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b09",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b09",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b10",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b10",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b10",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b10",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b11",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b11",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b11",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b11",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b12",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b12",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b12",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b12",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b13",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b13",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b13",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b13",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b14",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b14",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b14",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b14",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b15",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b15",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b15",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b15",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b16",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b16",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b16",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b16",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b17",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b17",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b17",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b17",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b18",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b18",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b18",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b18",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b19",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b19",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b19",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b19",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-b20",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.b20",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.b20",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.b20",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-slpi-mdt",
     installed_location: "firmware/qcom/sm8250/gts7xl/slpi.mbn",
-    symlink_target: "/vendor/firmware_mnt/image/slpi.mdt",
+    symlink_target: "/vendor/etc/apnhlos/image/slpi.mdt",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b00",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b00",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b00",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b00",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b01",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b01",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b01",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b01",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b02",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b02",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b02",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b02",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b03",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b03",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b03",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b03",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b04",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b04",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b04",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b04",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b05",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b05",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b05",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b05",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b06",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b06",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b06",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b06",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b07",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b07",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b07",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b07",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b08",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b08",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b08",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b08",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b09",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b09",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b09",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b09",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b10",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b10",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b10",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b10",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-b19",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.b19",
-    symlink_target: "/vendor/firmware_mnt/image/venus.b19",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.b19",
     vendor: true,
 }
 
 install_symlink {
     name: "gts7xl-fw-venus-mdt",
     installed_location: "firmware/qcom/sm8250/gts7xl/venus.mbn",
-    symlink_target: "/vendor/firmware_mnt/image/venus.mdt",
+    symlink_target: "/vendor/etc/apnhlos/image/venus.mdt",
     vendor: true,
 }
 
