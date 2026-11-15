@@ -30,8 +30,7 @@ PRODUCT_VENDOR_PROPERTIES += \
     ro.soc.manufacturer=Qualcomm \
     ro.soc.model=SM8250 \
     persist.sys.zram_enabled=1 \
-    ro.sf.lcd_density=320 \
-    vendor.hwc.drm.device=/dev/dri/card0
+    ro.sf.lcd_density=320
 
 # Security without TrustZone access
 PRODUCT_PACKAGES += \
