@@ -158,6 +158,10 @@ Press Power + Vol Up + Vol Down together, release all: reboots to recovery.
 
 Trackpad use makes the connection line (gpio43) drop about once a second, after about 30 reports at most. The stock kernel in TWRP does the same, One UI does not, and the cause is unknown. Starting the sensor DSP and `hexagonrpcd` did not fix it, though `hexagonrpcd` stops at the missing `sns_registry` interface, so the sensor stack may not be fully up. The MCU firmware reads its own detect pin and watches a second I2C bus towards the sensor DSP. This project never writes firmware to the keyboard.
 
+## Help wanted
+
+Problems we could not solve yet, with what was ruled out: [HELP.md](HELP.md). Ideas and PRs welcome.
+
 ## Credits
 
 This port stands on other people's work:

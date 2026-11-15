@@ -161,7 +161,7 @@ Restore `boot`, `dtbo` and `cache` from `backup/partitions`, then format `userda
 ## Missing internals (polish, not blocking)
 
 > [!NOTE]
-> **Nothing here blocks daily use.** The tablet already boots, displays, charges, does Wi-Fi/BT/audio/pen/cameras and sleeps.
+> **Nothing here blocks daily use.** Stuck items with details: [HELP.md](HELP.md). The tablet already boots, displays, charges, does Wi-Fi/BT/audio/pen/cameras and sleeps.
 > These are the remaining internal pieces stock One UI runs and we don't yet, or that need reverse engineering to be *perfect*.
 > Mostly battery life and polish; none of them is a big, life-changing feature.
 >
