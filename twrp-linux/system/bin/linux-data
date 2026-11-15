@@ -2,9 +2,9 @@
 # Open the Linux install on userdata and mount its btrfs top level at /linux:
 # /linux/@ is the system, /linux/@home, /linux/@log (early boot logs in early/).
 # Encrypted data asks for the password, or reads it from stdin when piped.
-# Read-only by default: this 4.19 kernel can't replay a newer kernel's tree log
-# (after a forced power-off) and must not write to the filesystem it can't keep
-# up with. "linux-data rw" mounts it writable, "linux-data off" locks it again.
+# On a 4.19 kernel read-only by default: it can't replay a newer kernel's tree
+# log (after a forced power-off) and must not write to a filesystem it can't keep
+# up with; "linux-data rw" overrides. "linux-data off" locks it again.
 P=/dev/block/by-name/userdata
 M=/linux
 if [ "$1" = off ]; then
@@ -26,9 +26,12 @@ if [ "$(head -c 4 $P)" = LUKS ]; then
 	D=/dev/mapper/userdata
 fi
 mkdir -p $M
-# 4.19 knows no compression levels (zstd:1) and must not replay the log
-O=ro,nologreplay
-[ "$1" = rw ] && O=rw,noatime,compress=zstd
+# A 4.19 kernel knows no compression levels (zstd:1) and must not replay the log:
+# read-only there unless asked. Newer kernels mount it like the system does.
+case "$(uname -r)" in
+[0-4].*) O=ro,nologreplay; [ "$1" = rw ] && O=rw,noatime,compress=zstd ;;
+*) O=rw,noatime,compress=zstd:1,discard=async ;;
+esac
 grep -q " $M " /proc/mounts || mount -t btrfs -o $O,subvolid=5 $D $M || exit 1
 echo "early boot logs: $M/@/var/lib/gts7xl/early"
 echo "mounted at $M:"; ls $M
