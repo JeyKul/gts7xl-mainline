@@ -87,6 +87,9 @@ PRODUCT_PACKAGES += pd-mapper qrtr-ns qrtr-cfg qrtr-lookup tqftpserv
 # Firmware: links into the tablet's own apnhlos (nothing proprietary in the build)
 # plus redistributable linux-firmware files (prepare-kernel.sh fetches them)
 PRODUCT_PACKAGES += gts7xl-firmware-links
+# The mount point itself, under etc (the build only creates files there):
+# vendor is read only, and init can't create it later
+PRODUCT_COPY_FILES += $(LOCAL_PATH)/apnhlos/README:$(TARGET_COPY_OUT_VENDOR)/etc/apnhlos/README
 PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/prebuilt/firmware,$(TARGET_COPY_OUT_VENDOR)/firmware)
 

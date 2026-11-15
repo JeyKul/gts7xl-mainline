@@ -1,4 +1,4 @@
-firmware_directories /vendor/firmware/ /vendor/firmware_mnt/image/
+firmware_directories /vendor/firmware/ /vendor/etc/apnhlos/image/
 # Load kernel modules by device alias, like udev
 modalias_handling enabled
 /dev/dri/*                0666   system     graphics
