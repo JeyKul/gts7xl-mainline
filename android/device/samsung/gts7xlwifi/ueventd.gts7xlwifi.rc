@@ -9,3 +9,4 @@ modalias_handling enabled
 /dev/video*               0660   system     camera
 /dev/media*               0660   system     camera
 /dev/uhid                 0660   uhid       uhid
+/dev/rfkill               0660   root       bluetooth

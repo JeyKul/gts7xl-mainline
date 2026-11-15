@@ -1,0 +1,5 @@
+cc_binary {
+    name: "gts7xl-btaddr",
+    srcs: ["gts7xl-btaddr.c"],
+    vendor: true,
+}

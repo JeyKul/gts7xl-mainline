@@ -41,12 +41,13 @@ PRODUCT_PACKAGES += \
     com.android.hardware.gatekeeper.nonsecure
 
 # Wi-Fi (ath11k over nl80211), as on AOSP's Qualcomm dev boards
-PRODUCT_PACKAGES += hostapd libwpa_client wpa_supplicant wpa_supplicant.conf wificond
+PRODUCT_PACKAGES += hostapd libwpa_client wpa_supplicant wificond
 PRODUCT_PROPERTY_OVERRIDES += wifi.interface=wlan0 wifi.supplicant_scan_interval=15
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.wifi.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.wifi.xml \
     device/linaro/dragonboard/wpa_supplicant_overlay.conf:$(TARGET_COPY_OUT_VENDOR)/etc/wifi/wpa_supplicant_overlay.conf \
-    device/linaro/dragonboard/p2p_supplicant_overlay.conf:$(TARGET_COPY_OUT_VENDOR)/etc/wifi/p2p_supplicant_overlay.conf
+    device/linaro/dragonboard/p2p_supplicant_overlay.conf:$(TARGET_COPY_OUT_VENDOR)/etc/wifi/p2p_supplicant_overlay.conf \
+    $(LOCAL_PATH)/wpa_supplicant.conf:$(TARGET_COPY_OUT_VENDOR)/etc/wifi/wpa_supplicant.conf
 
 # Bluetooth (QCA6390 on a UART, HCI through the kernel)
 PRODUCT_PACKAGES += android.hardware.bluetooth-service.default
@@ -86,7 +87,7 @@ PRODUCT_PACKAGES += pd-mapper qrtr-ns qrtr-cfg qrtr-lookup tqftpserv
 
 # Firmware: links into the tablet's own apnhlos (nothing proprietary in the build)
 # plus redistributable linux-firmware files (prepare-kernel.sh fetches them)
-PRODUCT_PACKAGES += gts7xl-firmware-links
+PRODUCT_PACKAGES += gts7xl-firmware-links gts7xl-btaddr
 # The mount point itself, under etc (the build only creates files there):
 # vendor is read only, and init can't create it later
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/apnhlos/README:$(TARGET_COPY_OUT_VENDOR)/etc/apnhlos/README
