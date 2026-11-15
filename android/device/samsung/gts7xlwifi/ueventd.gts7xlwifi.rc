@@ -1,0 +1,9 @@
+firmware_directories /vendor/firmware/ /vendor/firmware_mnt/image/
+/dev/dri/*                0666   system     graphics
+/dev/kgsl-3d0             0666   system     system
+/dev/ttyMSM0              0660   bluetooth  bluetooth
+/dev/rtc0                 0640   system     system
+/dev/iio:device*          0660   system     system
+/dev/video*               0660   system     camera
+/dev/media*               0660   system     camera
+/dev/uhid                 0660   uhid       uhid

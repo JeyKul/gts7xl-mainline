@@ -1,0 +1,6 @@
+# Qualcomm IPC router helpers (qrtr-ns, pd-mapper, tqftpserv). SELinux is
+# permissive while the port comes up; these get proper rules later.
+type vendor_qrtr, domain;
+type vendor_qrtr_exec, exec_type, vendor_file_type, file_type;
+init_daemon_domain(vendor_qrtr)
+permissive vendor_qrtr;
