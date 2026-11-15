@@ -17,6 +17,14 @@ service gts7xl-pad2mouse /system/bin/gts7xl-pad2mouse
     seclabel u:r:recovery:s0
     disabled
 
+# Doom: its own service, as stopping recovery kills what the UI started
+service gts7xl-doom /system/bin/gts7xl-doom run
+    user root
+    group root input graphics
+    seclabel u:r:recovery:s0
+    disabled
+    oneshot
+
 # Recovery init never starts class core
 on boot
     start gts7xl-pad2mouse

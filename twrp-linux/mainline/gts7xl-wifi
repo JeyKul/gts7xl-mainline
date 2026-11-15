@@ -17,12 +17,21 @@ up() {
 	while [ ! -e /sys/class/net/wlan0 ] && [ $i -lt 30 ]; do sleep 0.5; i=$((i + 1)); done
 	[ -e /sys/class/net/wlan0 ] || { echo "Wi-Fi: no wlan0 (firmware?)"; exit 1; }
 	bb ip link set wlan0 up
-	[ -S $N/ctrl/wlan0 ] && return 0
+	[ -f $N/wpa.pid ] && kill -0 "$(cat $N/wpa.pid)" 2>/dev/null && return 0
+	rm -f $N/ctrl/wlan0 $N/wpa.pid
 	printf 'ctrl_interface=%s\nupdate_config=0\n' $N/ctrl > $N/wpa.conf
 	m $T/bin/wpa_supplicant -B -i wlan0 -D nl80211 -c $N/wpa.conf -P $N/wpa.pid >/dev/null ||
 		{ echo "Wi-Fi: wpa_supplicant failed"; exit 1; }
 	i=0
 	while [ ! -S $N/ctrl/wlan0 ] && [ $i -lt 20 ]; do sleep 0.2; i=$((i + 1)); done
+}
+
+# TWRP's list shows file names: the connection goes on top, "(" sorts first
+status_entry() {
+	rm -f "$N/nets/("*
+	s=$(cli status 2>/dev/null | sed -n 's/^ssid=//p')
+	a=$(bb ip -4 -o addr show wlan0 2>/dev/null | bb awk '{print $4}')
+	[ -n "$s" ] && [ -n "$a" ] && : > "$N/nets/(connected) $(printf %s "$s" | tr / _) $a"
 }
 
 case "$1" in
@@ -37,9 +46,13 @@ scan)
 		: > "$N/nets/$(printf %s "$s" | tr / _)"
 	done
 	echo "Wi-Fi: $(ls $N/nets | wc -l) networks"
+	status_entry
 	;;
 connect)
 	[ -n "$2" ] || { echo "usage: gts7xl-wifi connect SSID [PASSWORD]"; exit 1; }
+	# TWRP's list passes the full path of the entry
+	set -- "$1" "${2##*/}" "$3"
+	case "$2" in "("*) exit 0 ;; esac
 	up
 	cli remove_network all >/dev/null
 	id=$(cli add_network)
@@ -60,6 +73,7 @@ connect)
 	# The clock starts in 1970 here
 	bb ntpd -n -q -p pool.ntp.org >/dev/null 2>&1 &
 	echo "Wi-Fi: $2, $(bb ip -4 -o addr show wlan0 | bb awk '{print $4}')"
+	status_entry
 	;;
 off)
 	[ -f $N/wpa.pid ] && kill "$(cat $N/wpa.pid)" 2>/dev/null
@@ -67,6 +81,7 @@ off)
 	bb ip addr flush dev wlan0 2>/dev/null
 	bb ip link set wlan0 down 2>/dev/null
 	rm -rf $N/ctrl $N/wpa.pid
+	rm -f "$N/nets/("*
 	echo "Wi-Fi: off"
 	;;
 status)

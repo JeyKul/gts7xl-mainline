@@ -10,6 +10,7 @@ M=/linux
 if [ "$1" = off ]; then
 	# linux-chroot's mounts first
 	for d in tmp var/cache/pacman/pkg var/log .snapshots home sys proc dev; do umount $M/@/$d 2>/dev/null; done
+	grep -q "^[^ ]* /data btrfs" /proc/mounts && umount /data
 	umount $M 2>/dev/null
 	[ -e /dev/mapper/userdata ] && cryptsetup close userdata
 	exit 0
@@ -35,6 +36,11 @@ case "$(uname -r)" in
 *) O=rw,noatime,compress=zstd:1,discard=async ;;
 esac
 grep -q " $M " /proc/mounts || mount -t btrfs -o $O,subvolid=5 $D $M || exit 1
+# Also at /data on a kernel that can write it, for TWRP's file manager
+case "$(uname -r)" in
+[0-4].*) ;;
+*) grep -q " /data " /proc/mounts || mount --bind $M /data ;;
+esac
 echo "early boot logs: $M/@/var/lib/gts7xl/early"
 # The clock: Linux keeps wall time as the PMIC RTC counter plus an offset
 O=$(cat $M/@/var/lib/gts7xl-rtc/offset 2>/dev/null)
