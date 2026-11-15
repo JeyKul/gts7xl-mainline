@@ -43,9 +43,11 @@ TARGET_COPY_OUT_PRODUCT := product
 TARGET_COPY_OUT_VENDOR := vendor
 TARGET_COPY_OUT_VENDOR_DLKM := vendor_dlkm
 
-# Kernel modules from the mainline build, loaded at boot (init.gts7xlwifi.rc)
+# Kernel modules from the mainline build, all in vendor_dlkm. ueventd loads them
+# by device alias as they appear (like udev on Linux); these few are loaded at
+# boot, as Linux's modules-load.d does
 BOARD_VENDOR_KERNEL_MODULES := $(wildcard device/samsung/gts7xlwifi/prebuilt/modules/*.ko)
-BOARD_VENDOR_KERNEL_MODULES_LOAD := $(notdir $(BOARD_VENDOR_KERNEL_MODULES))
+BOARD_VENDOR_KERNEL_MODULES_LOAD := hci_uart.ko rtc-pm8xxx.ko qcom-spmi-adc5.ko uinput.ko
 
 # Graphics
 include device/linaro/dragonboard/shared/graphics/drm_hwcomposer/BoardConfig.mk

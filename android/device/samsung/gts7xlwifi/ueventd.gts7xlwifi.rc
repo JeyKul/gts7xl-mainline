@@ -1,4 +1,6 @@
 firmware_directories /vendor/firmware/ /vendor/firmware_mnt/image/
+# Load kernel modules by device alias, like udev
+modalias_handling enabled
 /dev/dri/*                0666   system     graphics
 /dev/kgsl-3d0             0666   system     system
 /dev/ttyMSM0              0660   bluetooth  bluetooth

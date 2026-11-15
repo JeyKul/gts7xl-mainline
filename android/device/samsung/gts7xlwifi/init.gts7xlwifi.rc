@@ -1,8 +1,8 @@
 import /vendor/etc/init/hw/init.gts7xlwifi.usb.rc
 
 on early-init
-    # Modules from the mainline build (vendor_dlkm), in modules.load order
-    exec u:r:vendor_modprobe:s0 -- /vendor/bin/modprobe -a -d /vendor_dlkm/lib/modules --all=/vendor_dlkm/lib/modules/modules.load
+    # The modules ueventd doesn't load by alias (vendor_dlkm's modules.load)
+    exec u:r:vendor_modprobe:s0 -- /system/bin/modprobe -a -d /vendor/lib/modules hci_uart rtc-pm8xxx qcom-spmi-adc5 uinput
     setprop ro.hardware.egl mesa
     setprop ro.hardware.vulkan freedreno
 
