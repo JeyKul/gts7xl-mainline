@@ -32,7 +32,7 @@
         <xi:include href="r_submix_audio_policy_configuration.xml"/>
 
         <!-- Usb Audio HAL -->
-        <xi:include href="usbv2_audio_policy_configuration.xml"/>
+        <xi:include href="usb_audio_policy_configuration.xml"/>
     </modules>
     <!-- End of Modules section -->
 
