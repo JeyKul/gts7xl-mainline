@@ -143,7 +143,7 @@ Decision: Linux or Android, not both. An installer in the boot image starts when
 ## Cleanup
 
 - [ ] Remove `.noswitch`
-- [ ] Remove or keep `gts7xl-early-log`, which writes the kernel log to `/var/log/early`
+- [ ] Remove or keep `gts7xl-early-log`, which writes the kernel log to `/var/lib/gts7xl/early`
 - [ ] Decide `i2c9` speed (100kHz test value still set)
 - [ ] Package the Krita `lcms2` link properly
 
@@ -155,7 +155,8 @@ Restore `boot`, `dtbo` and `cache` from `backup/partitions`, then format `userda
 
 - [ ] btrfs as the default root filesystem (written, untested: subvolumes @ @home @snapshots @log @pkg, zstd:1)
 - [ ] Snapshots (e.g. before each upgrade); rescue mode can roll back or boot another snapshot (written, untested: snapper + snap-pac, Vol Up rescue menu, rollback/undo, boot image follows the snapshot)
-- [ ] TWRP that reads btrfs + LUKS: rebuild its 4.19 kernel with BTRFS_FS/DM_CRYPT, add static btrfs/cryptsetup (writing `recovery` needs the user's OK)
+- [x] TWRP that reads btrfs + LUKS: `twrp-linux/` (lineage 4.19.325 kernel + btrfs, cryptsetup/btrfs from Alpine, `linux-data`), read-only
+- [ ] Recovery on a new kernel (mainline 7.x + stage 1, or TWRP on 6.x): writable btrfs, log replay; 4.19 stays read-only
 - [ ] Updates through a clean `pacman -Syu` (kernel and boot image as packages), no reinstalls
 - [ ] Encryption: password plus hardware-backed key; the user's login password can unlock it; unlock from a login-style screen at boot (written, untested: LUKS2 aes-xts + argon2id, optional in the installer, stage 1 password screen, then autologin)
 - [ ] Keep the LUKS password in step when the login password changes (PAM hook)
