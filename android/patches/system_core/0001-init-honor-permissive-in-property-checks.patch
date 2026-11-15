@@ -1,0 +1,20 @@
+diff --git a/init/property_service.cpp b/init/property_service.cpp
+index e6fffc4da..d156b627b 100644
+--- a/init/property_service.cpp
++++ b/init/property_service.cpp
+@@ -171,8 +171,13 @@ static bool CheckMacPerms(const std::string& name, const char* target_context,
+     audit_data.cr = &cr;
+ 
+     auto lock = std::lock_guard{selinux_check_access_lock};
+-    return selinux_check_access(source_context, target_context, "property_service", "set",
+-                                &audit_data) == 0;
++    if (selinux_check_access(source_context, target_context, "property_service", "set",
++                             &audit_data) == 0) {
++        return true;
++    }
++    // gts7xl (mainline 7.x kernel): libselinux's userspace AVC denies here even
++    // with the kernel in permissive mode; honor permissive, as it intends.
++    return security_getenforce() == 0;
+ }
+ 
+ void NotifyPropertyChange(const std::string& name, const std::string& value) {
