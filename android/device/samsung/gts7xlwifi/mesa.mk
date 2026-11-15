@@ -1,10 +1,6 @@
-# Mesa freedreno for the Adreno 650, as device/linaro/dragonboard/shared/graphics/mesa
-# but without its dev-board properties (density 160 for monitors, rotation lock)
-PRODUCT_PACKAGES += \
-    libGLES_mesa libEGL_mesa libGLESv1_CM_mesa libGLESv2_mesa libgallium_dri libglapi \
-    vulkan.freedreno
-TARGET_BUILD_MESA := true
-PRODUCT_SOONG_NAMESPACES += external/mesa3d
+# Mesa freedreno for the Adreno 650 (GL and Vulkan), from external/mesa
+# external/mesa's Android.mk builds everything as one package
+PRODUCT_PACKAGES += mesa3d
 PRODUCT_PROPERTY_OVERRIDES += \
     ro.hardware.egl=mesa \
     ro.opengles.version=196608

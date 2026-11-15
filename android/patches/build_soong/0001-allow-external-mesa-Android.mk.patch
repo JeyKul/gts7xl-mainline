@@ -1,0 +1,13 @@
+diff --git a/ui/build/androidmk_denylist.go b/ui/build/androidmk_denylist.go
+index 3cccfcaef..673850b7e 100644
+--- a/ui/build/androidmk_denylist.go
++++ b/ui/build/androidmk_denylist.go
+@@ -60,6 +60,8 @@ var androidmk_denylist []string = []string{
+ }
+ 
+ var androidmk_allowlist []string = []string{
++	// gts7xl: Mesa freedreno through upstream Mesa's Android/meson glue
++	"external/mesa/android/Android.mk",
+ 	"bootable/deprecated-ota/updater/Android.mk",
+ }
+ 

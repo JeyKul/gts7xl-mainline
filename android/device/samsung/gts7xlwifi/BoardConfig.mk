@@ -53,8 +53,13 @@ BOARD_VENDOR_KERNEL_MODULES_LOAD := hci_uart.ko rtc-pm8xxx.ko qcom-spmi-adc5.ko 
 
 # Graphics
 include device/linaro/dragonboard/shared/graphics/drm_hwcomposer/BoardConfig.mk
-TARGET_BUILD_MESA := true
-include device/linaro/dragonboard/shared/graphics/mesa/BoardConfig.mk
+# Mesa from external/mesa (LineageOS's, upstream with Android's meson glue):
+# AOSP 17's external/mesa3d only builds the emulator drivers
+BOARD_MESA3D_USES_MESON_BUILD := true
+BOARD_MESA3D_GALLIUM_DRIVERS := freedreno
+BOARD_MESA3D_VULKAN_DRIVERS := freedreno
+# freedreno needs no OpenCL compiler (mesa-clc auto), and no SPIRV-Tools
+BOARD_MESA3D_MESON_ARGS += -Dspirv-tools=disabled
 # Linaro's minigbm policy, but labeling only the vendor copy of libdrm (Treble)
 BOARD_SEPOLICY_DIRS += device/samsung/gts7xlwifi/sepolicy/minigbm
 
