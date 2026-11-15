@@ -1,0 +1,50 @@
+--- a/libnsfb/src/surface/Makefile	2023-12-28 01:57:22.315338000 +0100
++++ b/libnsfb/src/surface/Makefile	2026-11-15 15:00:44.377323660 +0100
+@@ -1,7 +1,7 @@
+ # Sources
+ 
+ # Common surface code and heap based surface handler
+-SURFACE_HANDLER_yes := surface.c ram.c
++SURFACE_HANDLER_yes := surface.c ram.c drm.c
+ 
+ # optional surface handlers
+ SURFACE_HANDLER_$(NSFB_SDL_AVAILABLE) += sdl.c
+--- a/netsurf/frontends/framebuffer/Makefile	2023-12-28 01:57:22.987320000 +0100
++++ b/netsurf/frontends/framebuffer/Makefile	2026-11-15 15:14:50.502965879 +0100
+@@ -173,7 +173,7 @@
+ 
+ # S_FRONTEND are sources purely for the framebuffer build
+ S_FRONTEND := gui.c framebuffer.c schedule.c bitmap.c fetch.c	\
+-	findfile.c corewindow.c local_history.c clipboard.c
++	findfile.c corewindow.c local_history.c clipboard.c download.c
+ 
+ # toolkit sources
+ S_FRAMEBUFFER_FBTK := fbtk.c event.c fill.c bitmap.c user.c window.c 	\
+--- a/netsurf/frontends/framebuffer/gui.c	2023-12-28 01:57:22.991320000 +0100
++++ b/netsurf/frontends/framebuffer/gui.c	2026-11-15 15:15:09.392290733 +0100
+@@ -55,6 +55,7 @@
+ #include "framebuffer/fetch.h"
+ #include "framebuffer/bitmap.h"
+ #include "framebuffer/local_history.h"
++#include "framebuffer/download.h"
+ 
+ 
+ #define NSFB_TOOLBAR_DEFAULT_LAYOUT "blfsrutc"
+@@ -1951,7 +1952,8 @@
+ 			fbtk_get_height(gw->browser), 100);
+ }
+ 
+-static void
++/* also used by the download code */
++void
+ gui_window_set_status(struct gui_window *g, const char *text)
+ {
+ 	fbtk_set_text(g->status, text);
+@@ -2193,6 +2195,7 @@
+ 		.utf8 = framebuffer_utf8_table,
+ 		.bitmap = framebuffer_bitmap_table,
+ 		.layout = framebuffer_layout_table,
++		.download = framebuffer_download_table,
+ 	};
+ 
+         ret = netsurf_register(&framebuffer_table);

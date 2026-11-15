@@ -72,7 +72,10 @@ if [ -n "${MAINLINE_DTB:-}" ]; then
 		"$T/rd/system/etc/recovery.fstab" > "$O/system/etc/recovery.fstab"
 	install -m755 "$HERE/mainline/gts7xl-setup.sh" "$O/system/bin/gts7xl-setup.sh"
 	install -m755 "$HERE/mainline/gts7xl-reboot.sh" "$O/system/bin/gts7xl-reboot.sh"
-	for f in gts7xl-wifi gts7xl-udhcpc gts7xl-doom; do install -m755 "$HERE/mainline/$f" "$O/system/bin/$f"; done
+	for f in gts7xl-wifi gts7xl-udhcpc gts7xl-doom gts7xl-browser; do install -m755 "$HERE/mainline/$f" "$O/system/bin/$f"; done
+	# NetSurf as a small root, built by netsurf/build.sh
+	NS=${NETSURF_PKG:-$HERE/../../src/netsurf-build/netsurf-pkg.tar.xz}
+	[ -f "$NS" ] && install -m644 "$NS" "$O/linux-tools/netsurf.tar.xz"
 	"${CC:-aarch64-linux-gnu-gcc}" -static -Os -o "$O/system/bin/gts7xl-pad2mouse" "$HERE/mainline/gts7xl-pad2mouse.c"
 	# Advanced > Wi-Fi and Linux entries in TWRP's theme
 	mkdir -p "$O/twres"

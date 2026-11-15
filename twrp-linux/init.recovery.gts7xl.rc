@@ -17,6 +17,21 @@ service gts7xl-pad2mouse /system/bin/gts7xl-pad2mouse
     seclabel u:r:recovery:s0
     disabled
 
+# Wi-Fi, started and stopped by gts7xl-wifi
+service gts7xl-wpa /linux-tools/lib/ld-musl-aarch64.so.1 --library-path /linux-tools/lib /linux-tools/bin/wpa_supplicant -i wlan0 -D nl80211 -c /tmp/gts7xl-wifi/run/wpa.conf
+    user root
+    group root inet net_admin net_raw wifi
+    seclabel u:r:recovery:s0
+    disabled
+
+# The browser: its own service, as stopping recovery kills what the UI started
+service gts7xl-browser /system/bin/gts7xl-browser run
+    user root
+    group root input graphics inet
+    seclabel u:r:recovery:s0
+    disabled
+    oneshot
+
 # Doom: its own service, as stopping recovery kills what the UI started
 service gts7xl-doom /system/bin/gts7xl-doom run
     user root
