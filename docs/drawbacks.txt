@@ -1,1 +1,1 @@
-Very usable day to day. Drawbacks for now: sleep is weak (s2idle only, drain not measured), a few features are still missing (see the grid), small bugs such as S Pen Bluetooth, a slight S Pen offset at the bottom edge, and brief glitches while booting.
+Very usable day to day. Drawbacks for now: sleep is weak (s2idle at about 120 mA, no AOSS/DDR sleep yet; stock reaches single-digit mA), a few features are still missing (see the grid), and small bugs such as S Pen Bluetooth and a slight S Pen offset at the bottom edge.
