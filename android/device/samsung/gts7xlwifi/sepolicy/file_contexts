@@ -2,3 +2,6 @@
 /vendor/bin/qrtr-ns                         u:object_r:vendor_qrtr_exec:s0
 /vendor/bin/pd-mapper                       u:object_r:vendor_qrtr_exec:s0
 /vendor/bin/tqftpserv                       u:object_r:vendor_qrtr_exec:s0
+/vendor/bin/gts7xl-btaddr                   u:object_r:vendor_gts7xl_btaddr_exec:s0
+/dev/dri/renderD[0-9]+                      u:object_r:gpu_device:s0
+/dev/dri/card[0-9]+                         u:object_r:graphics_device:s0

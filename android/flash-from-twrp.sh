@@ -4,6 +4,8 @@ set -u
 adb devices | grep -q "recovery$" || { echo "NOT IN TWRP - nothing flashed"; exit 1; }
 O=/mnt/builddrive/aosp17/out; P=$O/target/product/gts7xlwifi; C=/mnt/builddrive/superchunks
 $O/host/linux-x86/bin/simg2img $P/super.img /mnt/builddrive/super.raw
+# Only the first 1 GiB is flashed: refuse if anything lies beyond it
+case "$(tail -c +$((1024*1048576+1)) /mnt/builddrive/super.raw | cmp - /dev/zero 2>&1)" in *EOF*) ;; *) echo "super data beyond 1 GiB - nothing flashed"; exit 1;; esac
 rm -rf $C; mkdir -p $C
 for i in 0 1 2 3; do dd if=/mnt/builddrive/super.raw of=$C/c$i bs=1M skip=$((i*256)) count=256 status=none; done
 for i in 0 1 2 3; do

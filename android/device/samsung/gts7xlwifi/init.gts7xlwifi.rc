@@ -11,6 +11,9 @@ on early-init
 on init
     # Compressed swap
     write /sys/block/zram0/comp_algorithm lz4
+    # efs, read only (bt_addr)
+    mkdir /mnt/vendor 0755 root root
+    mkdir /mnt/vendor/efs 0750 system bluetooth
 
 on fs
     # Everything but /data (cache, the firmware partition)
@@ -32,6 +35,20 @@ service vendor.gts7xl-logcat /system/bin/logcat -b all -v time -f /metadata/gts7
 
 on property:logd.ready=true
     start vendor.gts7xl-logcat
+
+on post-fs
+    # efs by hand, not in the fstab: fs_mgr would replay its journal and run
+    # e2fsck on it. noload: nothing is ever written
+    mount ext4 /dev/block/by-name/efs /mnt/vendor/efs ro nosuid nodev noatime noload
+    start vendor.gts7xl-btaddr
+
+# Bluetooth address from efs: without it hci0 stays unconfigured
+service vendor.gts7xl-btaddr /vendor/bin/gts7xl-btaddr
+    stdio_to_kmsg
+    user root
+    group bluetooth
+    disabled
+    oneshot
 
 on late-fs
     # /data (latemount)
