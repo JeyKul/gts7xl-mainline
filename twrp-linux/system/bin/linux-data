@@ -36,4 +36,12 @@ case "$(uname -r)" in
 esac
 grep -q " $M " /proc/mounts || mount -t btrfs -o $O,subvolid=5 $D $M || exit 1
 echo "early boot logs: $M/@/var/lib/gts7xl/early"
+# The clock: Linux keeps wall time as the PMIC RTC counter plus an offset
+O=$(cat $M/@/var/lib/gts7xl-rtc/offset 2>/dev/null)
+for r in /sys/class/rtc/rtc*; do
+	case "$(cat $r/name 2>/dev/null)" in *pm8xxx*) ;; *) continue ;; esac
+	t=$(( $(cat $r/since_epoch) + ${O:-0} ))
+	# never earlier than 2026-01-01
+	[ -n "$O" ] && [ $t -gt 1767225600 ] && date @$t >/dev/null && echo "clock set from Linux: $(date)"
+done
 echo "mounted at $M:"; ls $M

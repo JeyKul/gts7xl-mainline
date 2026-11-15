@@ -1,0 +1,11 @@
+#!/system/bin/sh
+# Doom from the Linux install (doomretro + Freedoom in /home/<user>), on the GPU.
+# TWRP gives up the screen while it runs and comes back when Doom quits.
+grep -q " /linux " /proc/mounts || { echo "Open Linux data first"; exit 1; }
+W=$(ls /linux/@home/*/freedoom2.wad /linux/@home/*/freedoom1.wad 2>/dev/null | head -n1)
+[ -n "$W" ] || { echo "No Freedoom WAD in a home folder"; exit 1; }
+[ -x /linux/@/usr/bin/doomretro ] || { echo "doomretro is not installed in Linux"; exit 1; }
+W=/${W#/linux/@}
+setsid sh -c "stop recovery; sleep 1
+	linux-chroot env SDL_VIDEO_DRIVER=kmsdrm SDL_AUDIODRIVER=dummy HOME=\$(dirname $W) doomretro -iwad $W > /tmp/doom.log 2>&1
+	start recovery" </dev/null >/dev/null 2>&1 &

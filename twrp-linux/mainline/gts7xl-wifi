@@ -1,0 +1,80 @@
+#!/system/bin/sh
+# Wi-Fi for TWRP on the mainline kernel (ath11k), with Alpine's wpa_supplicant,
+# busybox udhcpc and ntpd. Used by the Advanced > Wi-Fi pages.
+#   gts7xl-wifi scan            networks in range, one empty file per SSID in
+#                               /tmp/gts7xl-wifi/nets for TWRP's list
+#   gts7xl-wifi connect SSID [PASSWORD]
+#   gts7xl-wifi off | status
+N=/tmp/gts7xl-wifi
+T=/linux-tools
+m() { /linux-tools/lib/ld-musl-aarch64.so.1 --library-path $T/lib "$@"; }
+bb() { m $T/bin/busybox "$@"; }
+cli() { m $T/bin/wpa_cli -p $N/ctrl -i wlan0 "$@"; }
+
+up() {
+	mkdir -p $N/ctrl
+	i=0
+	while [ ! -e /sys/class/net/wlan0 ] && [ $i -lt 30 ]; do sleep 0.5; i=$((i + 1)); done
+	[ -e /sys/class/net/wlan0 ] || { echo "Wi-Fi: no wlan0 (firmware?)"; exit 1; }
+	bb ip link set wlan0 up
+	[ -S $N/ctrl/wlan0 ] && return 0
+	printf 'ctrl_interface=%s\nupdate_config=0\n' $N/ctrl > $N/wpa.conf
+	m $T/bin/wpa_supplicant -B -i wlan0 -D nl80211 -c $N/wpa.conf -P $N/wpa.pid >/dev/null ||
+		{ echo "Wi-Fi: wpa_supplicant failed"; exit 1; }
+	i=0
+	while [ ! -S $N/ctrl/wlan0 ] && [ $i -lt 20 ]; do sleep 0.2; i=$((i + 1)); done
+}
+
+case "$1" in
+scan)
+	up
+	cli scan >/dev/null
+	sleep 4
+	rm -rf $N/nets; mkdir -p $N/nets
+	cli scan_results | tail -n +2 | cut -f5- | while read -r s; do
+		[ -n "$s" ] || continue
+		# A file name can't hold "/"
+		: > "$N/nets/$(printf %s "$s" | tr / _)"
+	done
+	echo "Wi-Fi: $(ls $N/nets | wc -l) networks"
+	;;
+connect)
+	[ -n "$2" ] || { echo "usage: gts7xl-wifi connect SSID [PASSWORD]"; exit 1; }
+	up
+	cli remove_network all >/dev/null
+	id=$(cli add_network)
+	cli set_network $id ssid "\"$2\"" >/dev/null
+	if [ -n "$3" ]; then
+		cli set_network $id psk "\"$3\"" >/dev/null || { echo "Wi-Fi: password not accepted (8 to 63 characters)"; exit 1; }
+	else
+		cli set_network $id key_mgmt NONE >/dev/null
+	fi
+	cli enable_network $id >/dev/null
+	i=0
+	until cli status | grep -qx 'wpa_state=COMPLETED'; do
+		i=$((i + 1)); [ $i -lt 40 ] || { echo "Wi-Fi: could not join $2 (wrong password?)"; exit 1; }
+		sleep 0.5
+	done
+	bb pkill -f "udhcpc -i wlan0" 2>/dev/null
+	bb udhcpc -i wlan0 -q -n -t 10 -s /system/bin/gts7xl-udhcpc >/dev/null 2>&1 || { echo "Wi-Fi: joined, no address"; exit 1; }
+	# The clock starts in 1970 here
+	bb ntpd -n -q -p pool.ntp.org >/dev/null 2>&1 &
+	echo "Wi-Fi: $2, $(bb ip -4 -o addr show wlan0 | bb awk '{print $4}')"
+	;;
+off)
+	[ -f $N/wpa.pid ] && kill "$(cat $N/wpa.pid)" 2>/dev/null
+	bb pkill -f "udhcpc -i wlan0" 2>/dev/null
+	bb ip addr flush dev wlan0 2>/dev/null
+	bb ip link set wlan0 down 2>/dev/null
+	rm -rf $N/ctrl $N/wpa.pid
+	echo "Wi-Fi: off"
+	;;
+status)
+	[ -S $N/ctrl/wlan0 ] || { echo "Wi-Fi: off"; exit 0; }
+	cli status | grep -E '^(ssid|wpa_state|ip_address)='
+	;;
+*)
+	echo "usage: gts7xl-wifi scan | connect SSID [PASSWORD] | off | status"
+	exit 1
+	;;
+esac
