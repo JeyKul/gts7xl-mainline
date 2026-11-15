@@ -153,10 +153,13 @@ Restore `boot`, `dtbo` and `cache` from `backup/partitions`, then format `userda
 
 ## System and updates (user, 2026-11-14)
 
-- [ ] btrfs as the default root filesystem
-- [ ] Snapshots (e.g. before each upgrade); rescue mode can roll back or boot another snapshot
+- [ ] btrfs as the default root filesystem (written, untested: subvolumes @ @home @snapshots @log @pkg, zstd:1)
+- [ ] Snapshots (e.g. before each upgrade); rescue mode can roll back or boot another snapshot (written, untested: snapper + snap-pac, Vol Up rescue menu, rollback/undo, boot image follows the snapshot)
+- [ ] TWRP that reads btrfs + LUKS: rebuild its 4.19 kernel with BTRFS_FS/DM_CRYPT, add static btrfs/cryptsetup (writing `recovery` needs the user's OK)
 - [ ] Updates through a clean `pacman -Syu` (kernel and boot image as packages), no reinstalls
-- [ ] Encryption: password plus hardware-backed key; the user's login password can unlock it; unlock from a login-style screen at boot
+- [ ] Encryption: password plus hardware-backed key; the user's login password can unlock it; unlock from a login-style screen at boot (written, untested: LUKS2 aes-xts + argon2id, optional in the installer, stage 1 password screen, then autologin)
+- [ ] Keep the LUKS password in step when the login password changes (PAM hook)
+- [ ] Hardware-backed key: TrustZone keymaster through QSEECOM, as an extra LUKS2 keyslot (research; rate-limited guesses, key never leaves the TEE; no password-free unlock while the bootloader is unlocked)
 
 ## Missing internals (polish, not blocking)
 

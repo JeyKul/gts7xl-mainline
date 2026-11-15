@@ -17,7 +17,7 @@ pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -Rdd --noconfirm linux-aarch64 || true
 DESKTOP=${DESKTOP:-gnome}
-BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils alsa-utils mesa swh-plugins sudo psmisc python python-dbus python-cairo iio-sensor-proxy python-gobject gtk4 libcamera libcamera-tools gst-plugin-libcamera gst-plugin-gtk4 gst-plugins-base gst-plugins-good gst-python v4l-utils vulkan-icd-loader vulkan-freedreno vulkan-tools linux-firmware libgpiod geoclue libnotify tuned tuned-ppd"
+BASE="networkmanager pulseaudio pulseaudio-alsa pulseaudio-bluetooth bluez bluez-utils alsa-utils mesa swh-plugins sudo psmisc python python-dbus python-cairo iio-sensor-proxy python-gobject gtk4 libcamera libcamera-tools gst-plugin-libcamera gst-plugin-gtk4 gst-plugins-base gst-plugins-good gst-python v4l-utils vulkan-icd-loader vulkan-freedreno vulkan-tools linux-firmware libgpiod geoclue libnotify tuned tuned-ppd btrfs-progs cryptsetup"
 GNOME="gdm gnome-shell gnome-session gnome-settings-daemon gnome-control-center gnome-console gnome-text-editor gnome-system-monitor nautilus gnome-keyring gvfs xdg-desktop-portal-gnome adwaita-fonts"
 case "$DESKTOP" in
 gnome) PKGS="$GNOME"; DM=gdm ;;
@@ -97,3 +97,15 @@ if [ -f /tmp/linux-gts7xl.pkg.tar.gz ]; then
 	rm -f /tmp/linux-gts7xl.pkg.tar.gz
 fi
 for k in /usr/lib/modules/*/; do depmod -a "$(basename "$k")"; done
+# Snapshots on btrfs: one before and after each pacman run (snap-pac), the last
+# 10 kept; rescue mode (Vol Up at power on) rolls back to any of them
+if [ "$(findmnt -no FSTYPE / 2>/dev/null)" = btrfs ]; then
+	pacman -S --noconfirm --needed snapper snap-pac
+	mkdir -p /etc/snapper/configs
+	sed -e 's/^ALLOW_GROUPS=.*/ALLOW_GROUPS="wheel"/' -e 's/^SYNC_ACL=.*/SYNC_ACL="yes"/' \
+		-e 's/^TIMELINE_CREATE=.*/TIMELINE_CREATE="no"/' -e 's/^NUMBER_LIMIT=.*/NUMBER_LIMIT="10"/' \
+		-e 's/^NUMBER_LIMIT_IMPORTANT=.*/NUMBER_LIMIT_IMPORTANT="5"/' \
+		/usr/share/snapper/config-templates/default > /etc/snapper/configs/root
+	mkdir -p /etc/conf.d; echo 'SNAPPER_CONFIGS="root"' > /etc/conf.d/snapper
+	systemctl enable snapper-cleanup.timer
+fi

@@ -23,17 +23,34 @@ ip addr add 172.16.42.1/24 dev usb0 2>/dev/null; ip link set usb0 up 2>/dev/null
 # Hand over to the system on userdata when it is present
 mkdir -p /mnt/r
 for i in 1 2 3 4 5 6 7 8 9 10; do [ -b /dev/sda36 ] && break; sleep 1; done
-# Users may format data as either filesystem from TWRP
-mount -t ext4 -o rw,noatime /dev/sda36 /mnt/r 2>/dev/null || mount -t f2fs -o rw,noatime /dev/sda36 /mnt/r
-# The installer marker removes itself, so any reboot returns to the installed system
 S1=0
+# Holding volume up at power on opens rescue and the installer
+[ -x /s1/s1ui ] && /s1/s1ui --volup && S1=1
+# Encrypted data: the password screen opens it as /dev/mapper/userdata. In rescue
+# it can be skipped, which still allows a reinstall.
+D=/dev/sda36
+FS=
+if [ "$(head -c 4 $D 2>/dev/null)" = LUKS ] && [ -x /s1/s1ui ]; then
+	for d in proc sys dev; do mkdir -p /s1/$d; mount --bind /$d /s1/$d; done
+	mkdir -p /s1/tmp
+	if [ "$S1" = 1 ]; then chroot /s1 /s1ui --unlock $D skip; else until chroot /s1 /s1ui --unlock $D; do sleep 1; done; fi
+	for d in dev sys proc; do umount /s1/$d; done
+	[ -b /dev/mapper/userdata ] && D=/dev/mapper/userdata || FS=locked
+fi
+# btrfs is the installer's choice; ext4 and f2fs are what TWRP can format
+if [ -z "$FS" ]; then
+	# btrfs options count for the whole filesystem, and this first mount sets them
+	if mount -t btrfs -o rw,noatime,compress=zstd:1,discard=async $D /mnt/r 2>/dev/null; then FS=btrfs
+	elif mount -t ext4 -o rw,noatime $D /mnt/r 2>/dev/null; then FS=ext4
+	elif mount -t f2fs -o rw,noatime $D /mnt/r 2>/dev/null; then FS=f2fs
+	fi
+fi
+# The installer marker removes itself, so any reboot returns to the installed system
 if [ -e /mnt/r/.installer ]; then
 	rm -f /mnt/r/.installer
 	sync
 	S1=1
 fi
-# Holding volume up at power on opens the installer
-[ -x /s1/s1ui ] && /s1/s1ui --volup && S1=1
 # Saved Wi-Fi for the installer, read only: its own list and an installed system's
 # NetworkManager profiles. One network per line: SSID and passphrase, both hex.
 hex() { printf %s "$1" | od -An -v -tx1 | tr -d ' \n'; }
@@ -41,8 +58,10 @@ saved_wifi() {
 	mkdir -p /s1/tmp
 	{
 		cat /mnt/r/.gts7xl-wifi 2>/dev/null
+		cat /mnt/r/@/.gts7xl-wifi 2>/dev/null
 		for f in /mnt/r/etc/NetworkManager/system-connections/*.nmconnection \
-			 /mnt/r/arch/etc/NetworkManager/system-connections/*.nmconnection; do
+			 /mnt/r/arch/etc/NetworkManager/system-connections/*.nmconnection \
+			 /mnt/r/@/etc/NetworkManager/system-connections/*.nmconnection; do
 			[ -f "$f" ] || continue
 			s=$(sed -n 's/^ssid=//p' "$f" | head -n1); [ -n "$s" ] || continue
 			p=$(sed -n 's/^psk=//p' "$f" | head -n1)
@@ -56,9 +75,35 @@ saved_wifi() {
 # Bring-up: a marker file keeps us in the initramfs for one test
 if [ "$S1" = 1 ]; then
 	saved_wifi
-	umount /mnt/r
+	# Rescue works on the filesystem from inside stage 1
+	if [ "$FS" = btrfs ]; then
+		mkdir -p /s1/mnt/r
+		mount --move /mnt/r /s1/mnt/r
+	else
+		umount /mnt/r 2>/dev/null
+	fi
+	[ -n "$FS" ] && echo "${FS}" > /s1/tmp/rescue
 elif [ -e /mnt/r/.noswitch ]; then
 	umount /mnt/r
+elif [ "$FS" = btrfs ] && [ -e /mnt/r/@/usr/lib/systemd/systemd ]; then
+	# The system is subvolume @; home, snapshots, logs and packages come from fstab
+	echo "gts7xlwifi: switching to arch on btrfs" > /dev/kmsg
+	mkdir -p /mnt/a
+	mount -t btrfs -o rw,noatime,compress=zstd:1,discard=async,subvol=@ $D /mnt/a
+	umount /mnt/r
+	if [ "$D" = /dev/mapper/userdata ]; then
+		# Opened here without udev, so the system's udev has no record of it, and
+		# 10-dm.rules then hides it from systemd: fstab mounts would never start.
+		# systemd keeps a /run that is already mounted.
+		mount -t tmpfs -o mode=0755,nodev,nosuid,size=20%,nr_inodes=800k tmpfs /mnt/a/run
+		mkdir -p /mnt/a/run/udev/rules.d
+		echo 'SUBSYSTEM=="block", KERNEL=="dm-[0-9]*", ACTION=="add|change", ATTR{dm/name}=="userdata", ENV{DM_COOKIE}!="?*", ENV{DM_UDEV_PRIMARY_SOURCE_FLAG}="1"' \
+			> /mnt/a/run/udev/rules.d/09-gts7xl-userdata.rules
+	fi
+	umount /sys/kernel/config 2>/dev/null
+	umount /dev/pts 2>/dev/null
+	mount --move /dev /mnt/a/dev; mount --move /proc /mnt/a/proc; mount --move /sys /mnt/a/sys
+	exec switch_root /mnt/a /usr/lib/systemd/systemd
 elif [ -e /mnt/r/.arch ] && [ -e /mnt/r/arch/usr/lib/systemd/systemd ]; then
 	# Arch lives in a directory; removing /.arch from TWRP returns to Alpine
 	echo "gts7xlwifi: switching to arch" > /dev/kmsg

@@ -28,7 +28,7 @@ def add(n):
     seen.append(n)
     for d in pk[n].get('D','').split():
         if not d.startswith('!'): add(re.split('[=<>~]',d)[0])
-for w in ('curl','e2fsprogs','libarchive-tools','ca-certificates-bundle','bash'): add(w)
+for w in ('curl','e2fsprogs','btrfs-progs','cryptsetup','libarchive-tools','ca-certificates-bundle','bash'): add(w)
 for n in seen: print(f"{n}-{pk[n]['V']}.apk")
 P
 while read -r p; do
