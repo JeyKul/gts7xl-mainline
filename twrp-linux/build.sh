@@ -76,6 +76,9 @@ if [ -n "${MAINLINE_DTB:-}" ]; then
 	# NetSurf as a small root, built by netsurf/build.sh
 	NS=${NETSURF_PKG:-$HERE/../../src/netsurf-build/netsurf-pkg.tar.xz}
 	[ -f "$NS" ] && install -m644 "$NS" "$O/linux-tools/netsurf.tar.xz"
+	# The reader proxy, a static Rust binary
+	(cd "$HERE/reader" && PATH=$HOME/.cargo/bin:$PATH cargo build -q --release --target aarch64-unknown-linux-musl)
+	install -m755 "$HERE/reader/target/aarch64-unknown-linux-musl/release/gts7xl-reader" "$O/system/bin/gts7xl-reader"
 	"${CC:-aarch64-linux-gnu-gcc}" -static -Os -o "$O/system/bin/gts7xl-pad2mouse" "$HERE/mainline/gts7xl-pad2mouse.c"
 	# Advanced > Wi-Fi and Linux entries in TWRP's theme
 	mkdir -p "$O/twres"
