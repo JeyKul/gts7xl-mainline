@@ -16,6 +16,13 @@ for d in /sys/bus/pci/devices/*; do
 	[ "$(cat $d/vendor):$(cat $d/device)" = 0x17cb:0x1101 ] || continue
 	[ -e $d/driver ] || echo ${d##*/} > /sys/bus/pci/drivers/ath11k_pci/bind
 done
+# The Linux install: encrypted asks for its password on TWRP's main page,
+# plain btrfs is opened right away (Android's f2fs data just fails here)
+if [ "$(head -c 4 /dev/block/bootdevice/by-name/userdata)" = LUKS ]; then
+	touch /tmp/gts7xl-locked
+else
+	/system/bin/linux-data </dev/null >/dev/null 2>&1
+fi
 # TWRP shows thermal_zone17 as the CPU temperature (Samsung's numbering); on
 # mainline that zone is Wi-Fi. Put the prime core's sensor in its place.
 for z in /sys/class/thermal/thermal_zone*; do
