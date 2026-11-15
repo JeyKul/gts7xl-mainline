@@ -47,7 +47,7 @@ See the status tables in `README.md`.
 
 - [ ] Tablet powered off at 2% battery (UPower action); Arch keeps the default, Alpine has it disabled
 
-- [ ] Trackpad drops after under a second, keyboard recovers. Same on the stock kernel in TWRP, fine on One UI. Not caused by BOB, bus speed or MCU pins. Open lead: sensor DSP stack needs `sns_registry` in `hexagonrpcd`; the MCU watches a second I2C bus towards it
+- [x] Trackpad drops after under a second, keyboard recovers (fixed, works since the sensor/PMIC interrupt fix). Same on the stock kernel in TWRP, fine on One UI. Not caused by BOB, bus speed or MCU pins. Open lead: sensor DSP stack needs `sns_registry` in `hexagonrpcd`; the MCU watches a second I2C bus towards it
 - [x] Pen: side button, hover and tilt confirmed (2026-11-08); range is hand-calibrated
 - [ ] `su -c` fails on the tablet
 - [ ] Charging: input limit from CCIStat / BC1.2 without PD (PC port reads 1.4 A while CC says 500 mA)
@@ -67,7 +67,7 @@ See the status tables in `README.md`.
 - [ ] Fast charging: other chargers, `current_now` scale
 - [ ] Fast charging: at least 25W, user's goal
 - [ ] Battery reads 27.1C from the fuel gauge, which is fake; `batt_thm` is the real value
-- [ ] Sleep: s2idle works, about 2%/h measured by the user over 15h46 (79% to 48%), roughly 0.8W; find what keeps it above stock levels
+- [ ] Sleep: s2idle at about 120 mA (was 210); real AOSS/CX/DDR sleep should reach single-digit mA. `cxsd` still 0; IPA + uC now run (2026-11-15), NPU/CVP/SPSS/Venus next
 - [x] IRQ 156 (MAX77705) storm: wrong gpio11 pin config, fixed with stock bias-pull-up + power-source 1 (2026-11-07)
 - [x] Use the RTC offset to keep time across reboots (`gts7xl-rtc-offset`, 2026-11-08)
 
@@ -179,7 +179,6 @@ Restore `boot`, `dtbo` and `cache` from `backup/partitions`, then format `userda
 > **Reverse engineering / tuning**
 > - [ ] Main mic through the TX macro (stock routing captured: DMIC3→DEC0, DMIC1→DEC1)
 > - [ ] PPS direct charging through the PCA9468 charge pump (stock sequence captured)
-> - [ ] Pogo trackpad stall (sensor DSP `sns_registry` lead)
 > - [ ] Fingerprint (TrustZone TA)
 > - [ ] Ultrawide camera tuning (colours/geometry a little off)
 > - [ ] HDMI on the second DP pin mapping
