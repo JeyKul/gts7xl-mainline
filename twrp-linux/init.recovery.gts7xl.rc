@@ -4,8 +4,32 @@ on early-init
     # or the UI's code cache aborts the recovery
     setprop sys.use_memfd true
     # Route the USB data lines to the SoC before adbd starts
-    exec -- /system/bin/usbroute
+    exec u:r:recovery:s0 root root -- /system/bin/usbroute
 
-on fs
-    # TWRP's rc links platform/soc/<bootdevice>; mainline calls the bus soc@0
-    symlink /dev/block/platform/soc@0/1d84000.ufshc /dev/block/bootdevice
+on post-fs
+    # Firmware for the GPU (kernel path: firmware_class.path=/tmp/gts7xl-fw)
+    exec u:r:recovery:s0 root root -- /system/bin/gts7xl-fw.sh
+
+# Need QSEECOM, spcom and Samsung drivers that mainline doesn't have
+service qseecomd /system/bin/true
+    override
+    disabled
+service keymaster-4-0 /system/bin/true
+    override
+    disabled
+service keymaster-sb-4-0 /system/bin/true
+    override
+    disabled
+service gatekeeper-1-0-qti /system/bin/true
+    override
+    disabled
+service spdaemon /system/bin/true
+    override
+    disabled
+service sec_nvm /system/bin/true
+    override
+    disabled
+
+# Android's shutdown sequence hangs on this kernel: reboot directly instead
+on property:sys.powerctl=*
+    exec u:r:recovery:s0 root root -- /system/bin/gts7xl-reboot.sh ${sys.powerctl}

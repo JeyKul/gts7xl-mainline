@@ -58,9 +58,23 @@ if [ -n "${MAINLINE_DTB:-}" ]; then
 	install -m755 "${USBROUTE:-$HERE/../../initramfs/bin/usbroute}" "$O/system/bin/usbroute"
 	# Recovery init only reads init.recovery.<hardware>.rc: TWRP's, plus an import of ours
 	mkdir -p "$T/rd"
-	(cd "$T/rd" && gzip -dc "$T/ramdisk" | cpio -i --quiet init.recovery.qcom.rc)
-	{ cat "$T/rd/init.recovery.qcom.rc"; echo; echo "import /init.recovery.gts7xl.rc"; } > "$O/init.recovery.qcom.rc"
+	(cd "$T/rd" && gzip -dc "$T/ramdisk" | cpio -id --quiet init.recovery.qcom.rc system/etc/recovery.fstab)
+	# Mainline names the bus soc@0: TWRP's rc waited 5 s for platform/soc/ and then
+	# failed to mount persist, efs and apnhlos
+	{ sed 's|/dev/block/platform/soc/|/dev/block/platform/soc@0/|g' "$T/rd/init.recovery.qcom.rc"; echo; echo "import /init.recovery.gts7xl.rc"; } > "$O/init.recovery.qcom.rc"
 	install -m644 "$HERE/init.recovery.gts7xl.rc" "$O/init.recovery.gts7xl.rc"
+	# Android's FBE needs QSEECOM and keymaster, which mainline doesn't have: without
+	# the flags TWRP stops waiting for a keymaster that never starts
+	mkdir -p "$O/system/etc"
+	sed -E '/ \/data /{s/,?(fileencryption|keydirectory|checkpoint)=[^, ]*//g; s/,inlinecrypt//g}' \
+		"$T/rd/system/etc/recovery.fstab" > "$O/system/etc/recovery.fstab"
+	install -m755 "$HERE/mainline/gts7xl-fw.sh" "$O/system/bin/gts7xl-fw.sh"
+	install -m755 "$HERE/mainline/gts7xl-reboot.sh" "$O/system/bin/gts7xl-reboot.sh"
+	"${CC:-aarch64-linux-gnu-gcc}" -static -Os -o "$O/system/bin/gts7xl-reboot" "$HERE/mainline/gts7xl-reboot.c"
+	# GPU microcode, redistributable, from linux-firmware; the zap shader comes from apnhlos
+	LFW=https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/plain/qcom
+	mkdir -p "$O/linux-tools/firmware/qcom"
+	for f in a650_sqe.fw a650_gmu.bin; do curl -fsSL -o "$O/linux-tools/firmware/qcom/$f" "$LFW/$f"; done
 fi
 (cd "$O" && find . | sort | cpio -o -H newc -R 0:0 --quiet) | gzip -9 > "$T/extra"
 # The kernel unpacks concatenated archives in order: TWRP's, then ours
@@ -69,7 +83,24 @@ read -r OSV OSP < "$T/args"
 OSV=$(printf '%d.%d.%d' $((OSV >> 14)) $(((OSV >> 7) & 0x7f)) $((OSV & 0x7f)))
 OSP=$(printf '%04d-%02d' $(((OSP >> 4) + 2000)) $((OSP & 0xf)))
 if [ -n "${MAINLINE_DTB:-}" ]; then
-	cat "$K" "$(realpath "$MAINLINE_DTB")" > "$T/kernel-dtb"
+	# TWRP rotates touch itself (built for Samsung's driver, which reports the panel's
+	# raw portrait axes): drop the swap/invert the Linux DTB adds for the desktop
+	cp "$(realpath "$MAINLINE_DTB")" "$T/rec.dtb"
+	TS=$(python3 -I - "$T/rec.dtb" <<'PY'
+import subprocess,sys
+d=sys.argv[1]
+def walk(p):
+    for k in subprocess.run(['fdtget','-l',d,p],capture_output=True,text=True).stdout.split():
+        q=p.rstrip('/')+'/'+k
+        if 'fts1ba90a' in subprocess.run(['fdtget','-t','s',d,q,'compatible'],capture_output=True,text=True).stdout: return q
+        r=walk(q)
+        if r: return r
+print(walk('/') or '')
+PY
+)
+	[ -n "$TS" ] || { echo "no touchscreen node in the DTB"; exit 1; }
+	for p in touchscreen-swapped-x-y touchscreen-inverted-x touchscreen-inverted-y; do fdtput -d "$T/rec.dtb" "$TS" $p 2>/dev/null || true; done
+	cat "$K" "$T/rec.dtb" > "$T/kernel-dtb"
 	mkbootimg --header_version 1 --pagesize 2048 --base 0x10000000 --kernel_offset 0x00008000 \
 		--ramdisk_offset 0x01000000 --tags_offset 0x00000100 \
 		--os_version "$OSV" --os_patch_level "$OSP" \

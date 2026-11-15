@@ -1,0 +1,10 @@
+#!/system/bin/sh
+# Run a command (default: a shell) inside the Linux install, e.g. its Mesa for
+# GPU demos: linux-chroot kmscube. Opens the data with linux-data first.
+R=/linux/@
+grep -q " /linux " /proc/mounts || linux-data >/dev/null || exit 1
+for d in dev proc sys; do grep -q " $R/$d " /proc/mounts || mount --bind /$d $R/$d; done
+grep -q " $R/home " /proc/mounts || mount --bind /linux/@home $R/home
+grep -q " $R/tmp " /proc/mounts || mount -t tmpfs tmpfs $R/tmp
+[ $# -gt 0 ] || set -- /bin/bash -l
+exec chroot $R /usr/bin/env -i HOME=/root TERM=${TERM:-linux} PATH=/usr/local/sbin:/usr/local/bin:/usr/bin XDG_RUNTIME_DIR=/tmp "$@"
