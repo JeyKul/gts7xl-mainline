@@ -1,0 +1,90 @@
+From 7cbd0fab4f43aa9a2f5658b1df532174812c2216 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 16 Nov 2026 20:32:06 +0100
+Subject: [PATCH] Input: fts5cu56a: power up after resume, not during it
+
+fts5_start() waits about 300 ms for the controller firmware; done in the
+resume callback it held up the whole system resume (422 ms of 542 ms
+measured). A work item powers the controller up instead; suspend flushes
+it first.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/input/touchscreen/fts5cu56a.c | 23 ++++++++++++++++++++---
+ 1 file changed, 20 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/input/touchscreen/fts5cu56a.c b/drivers/input/touchscreen/fts5cu56a.c
+index f1e4effce..0a229500d 100644
+--- a/drivers/input/touchscreen/fts5cu56a.c
++++ b/drivers/input/touchscreen/fts5cu56a.c
+@@ -18,6 +18,7 @@
+ #include <linux/interrupt.h>
+ #include <linux/module.h>
+ #include <linux/regulator/consumer.h>
++#include <linux/workqueue.h>
+ 
+ #define FTS_READ_DEVICE_ID	0x22
+ #define FTS_ID0			0x48
+@@ -52,6 +53,7 @@ struct fts5_data {
+ 	struct regulator_bulk_data supplies[2];
+ 	struct touchscreen_properties prop;
+ 	bool powered;
++	struct work_struct resume_work;
+ };
+ 
+ static int fts5_write(struct fts5_data *ts, const u8 *buf, int len)
+@@ -284,19 +286,32 @@ static int fts5_suspend(struct device *dev)
+ {
+ 	struct fts5_data *ts = i2c_get_clientdata(to_i2c_client(dev));
+ 
++	/* a resume still powering up finishes first */
++	flush_work(&ts->resume_work);
+ 	guard(mutex)(&ts->input->mutex);
+ 	if (input_device_enabled(ts->input))
+ 		fts5_stop(ts);
+ 	return 0;
+ }
+ 
++/*
++ * Powering the controller up waits about 300 ms for its firmware: do it
++ * after resume instead of holding up every other device's resume.
++ */
++static void fts5_resume_work(struct work_struct *work)
++{
++	struct fts5_data *ts = container_of(work, struct fts5_data, resume_work);
++
++	guard(mutex)(&ts->input->mutex);
++	if (input_device_enabled(ts->input) && fts5_start(ts))
++		dev_err(&ts->client->dev, "resume failed\n");
++}
++
+ static int fts5_resume(struct device *dev)
+ {
+ 	struct fts5_data *ts = i2c_get_clientdata(to_i2c_client(dev));
+ 
+-	guard(mutex)(&ts->input->mutex);
+-	if (input_device_enabled(ts->input))
+-		return fts5_start(ts);
++	queue_work(system_unbound_wq, &ts->resume_work);
+ 	return 0;
+ }
+ 
+@@ -312,6 +327,7 @@ static int fts5_probe(struct i2c_client *client)
+ 		return -ENOMEM;
+ 
+ 	ts->client = client;
++	INIT_WORK(&ts->resume_work, fts5_resume_work);
+ 
+ 	ts->supplies[0].supply = "avdd";
+ 	ts->supplies[1].supply = "vdd";
+@@ -382,6 +398,7 @@ static void fts5_remove(struct i2c_client *client)
+ {
+ 	struct fts5_data *ts = i2c_get_clientdata(client);
+ 
++	cancel_work_sync(&ts->resume_work);
+ 	/* The input device goes after this; its close then finds the power off */
+ 	if (ts->powered) {
+ 		regulator_bulk_disable(ARRAY_SIZE(ts->supplies), ts->supplies);
+-- 
+2.56.0
+
