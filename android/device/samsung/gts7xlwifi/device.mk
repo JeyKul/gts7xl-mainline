@@ -83,7 +83,8 @@ PRODUCT_PACKAGES += \
     suspend_blocker
 
 # Qualcomm remote processors (ADSP for audio/sensors): service locator and file server
-PRODUCT_PACKAGES += pd-mapper qrtr-ns qrtr-cfg qrtr-lookup tqftpserv
+# pd-mapper: the kernel has its own (qcom_pd_mapper)
+PRODUCT_PACKAGES += qrtr-ns qrtr-cfg qrtr-lookup tqftpserv
 
 # Firmware: links into the tablet's own apnhlos (only the amp blobs in proprietary/ are in the tree)
 # plus redistributable linux-firmware files (prepare-kernel.sh fetches them)
