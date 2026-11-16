@@ -53,6 +53,8 @@ public class MainActivity extends Activity {
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private SensorManager mSensors;
     private final List<SensorEventListener> mListeners = new ArrayList<>();
+    // registered by the page being built, until show() makes it current
+    private final List<SensorEventListener> mPending = new ArrayList<>();
     private Runnable mOnLeave;
     private boolean mInMenu;
     private KeyTestView mKeyTest;
@@ -113,7 +115,9 @@ public class MainActivity extends Activity {
 
     private void leave() {
         for (SensorEventListener l : mListeners) mSensors.unregisterListener(l);
+        for (SensorEventListener l : mPending) mSensors.unregisterListener(l);
         mListeners.clear();
+        mPending.clear();
         if (mOnLeave != null) mOnLeave.run();
         mOnLeave = null;
         mKeyTest = null;
@@ -126,11 +130,15 @@ public class MainActivity extends Activity {
         Sensor s = mSensors.getDefaultSensor(type);
         if (s == null) return;
         mSensors.registerListener(l, s, rate);
-        mListeners.add(l);
+        mPending.add(l);
     }
 
+    /** Shows a page: the previous page is cleaned up, the new page's listeners stay. */
     private void show(View v) {
+        List<SensorEventListener> fresh = new ArrayList<>(mPending);
+        mPending.clear();
         leave();
+        mListeners.addAll(fresh);
         mInMenu = false;
         setContentView(v);
     }
@@ -163,6 +171,7 @@ public class MainActivity extends Activity {
             new Tile("WHITE", true, () -> color(Color.WHITE)),
             new Tile("VIBRATION", vib != null && vib.hasVibrator(), this::vibration),
             new Tile("SENSOR", !mSensors.getSensorList(Sensor.TYPE_ALL).isEmpty(), this::sensors),
+            new Tile("SENSOR LIST", !mSensors.getSensorList(Sensor.TYPE_ALL).isEmpty(), this::sensorList),
             new Tile("TOUCH", pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN), this::touch),
             new Tile("SPEAKER", pm.hasSystemFeature(PackageManager.FEATURE_AUDIO_OUTPUT), this::speakers),
             new Tile("KEYS", true, this::keys),
@@ -369,6 +378,46 @@ public class MainActivity extends Activity {
             all.append(x.getName()).append("  (").append(x.getVendor()).append(")\n");
         section(root, "All sensors", null).setText(all);
 
+        ScrollView sv = new ScrollView(this);
+        sv.setBackgroundColor(BG);
+        sv.addView(root);
+        show(sv);
+    }
+
+    /** Every sensor the system knows (hardware and virtual), each with its live values. */
+    private void sensorList() {
+        LinearLayout root = column();
+        root.setPadding(dp(24), dp(16), dp(24), dp(24));
+        List<Sensor> all = mSensors.getSensorList(Sensor.TYPE_ALL);
+        root.addView(text(all.size() + " sensors", 22));
+        for (Sensor x : all) {
+            TextView h = text(x.getName(), 17);
+            h.setTextColor(ACCENT);
+            h.setPadding(0, dp(14), 0, 0);
+            root.addView(h);
+            TextView info = text(String.format(Locale.US, "%s · %s · type %d%s · range %.4g · %s",
+                    x.getVendor(), x.getStringType().replace("android.sensor.", ""), x.getType(),
+                    x.isWakeUpSensor() ? " (wake-up)" : "", x.getMaximumRange(),
+                    x.getMinDelay() == 0 ? "on change" : x.getMinDelay() < 0 ? "one shot"
+                            : String.format(Locale.US, "up to %.0f Hz", 1e6 / x.getMinDelay())), 13);
+            info.setAlpha(0.6f);
+            root.addView(info);
+            TextView v = text(x.getReportingMode() == Sensor.REPORTING_MODE_ONE_SHOT
+                    ? "one-shot: not streamed" : "waiting…", 15);
+            v.setTypeface(android.graphics.Typeface.MONOSPACE);
+            root.addView(v);
+            if (x.getReportingMode() == Sensor.REPORTING_MODE_ONE_SHOT) continue;
+            Listener l = e -> {
+                StringBuilder sb = new StringBuilder();
+                int n = Math.min(e.values.length, 6);
+                for (int i = 0; i < n; i++)
+                    sb.append(String.format(Locale.US, "%9.3f ", e.values[i]));
+                sb.append(" acc ").append(e.accuracy);
+                v.setText(sb);
+            };
+            mSensors.registerListener(l, x, SensorManager.SENSOR_DELAY_UI);
+            mPending.add(l);
+        }
         ScrollView sv = new ScrollView(this);
         sv.setBackgroundColor(BG);
         sv.addView(root);

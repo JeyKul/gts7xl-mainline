@@ -118,15 +118,21 @@ void SscStream::run() {
     }
 }
 
+// Several streams starting at once confuse the SUID lookups: one at a time
+static std::mutex sSetupLock;
+
 // One streaming session; returns when released (0) or on failure
 int SscStream::streamOnce() {
+    std::unique_lock setup(sSetupLock);
     client c;
     int ret = client_open(&c, 5);
     if (ret) {
         ALOGW("%s: SSC service not found (%d)", mType.c_str(), ret);
         return ret;
     }
-    c.delivery = SSC_DELIVERY_NO_WAKEUP;
+    // NO_WAKEUP (value guessed in sensord) made the DSP hold back gyro, mag
+    // and light samples; wakeup delivery streams them
+    c.delivery = SSC_DELIVERY_WAKEUP;
     ssc_uid uids[8];
     Ctx ctx{this, {}};
     Attrs a;
@@ -153,6 +159,7 @@ int SscStream::streamOnce() {
         return ret;
     }
     ALOGI("%s: streaming", mType.c_str());
+    setup.unlock();
     // On-change sensors can stay quiet for long; mStop ends the pump
     c.timeout_ms = a.onChange ? 1000 : 10000;
     do {
