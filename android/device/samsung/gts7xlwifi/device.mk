@@ -116,3 +116,14 @@ PRODUCT_PRODUCT_PROPERTIES += media.c2.hal.selection=aidl
 # Twice the default HAL buffer (~260 ms): AudioFlinger writes 4096-frame
 # chunks, the default 4x1440 buffer underran on any scheduling delay
 PRODUCT_VENDOR_PROPERTIES += ro.hardware.audio.tinyalsa.period_size_multiplier=2
+
+# Sensors: the sensor DSP's, through gts7xl-sensord (file server for the DSP)
+# and a sensors HAL using its SSC client. Configs from stock vendor (proprietary/)
+PRODUCT_PACKAGES += gts7xl-sensord android.hardware.sensors-service.gts7xl
+PRODUCT_COPY_FILES += \
+    $(LOCAL_PATH)/gts7xl-sensors-setup.sh:$(TARGET_COPY_OUT_VENDOR)/bin/gts7xl-sensors-setup.sh \
+    $(call find-copy-subdir-files,*,$(LOCAL_PATH)/proprietary/etc/sensors,$(TARGET_COPY_OUT_VENDOR)/etc/sensors) \
+    frameworks/native/data/etc/android.hardware.sensor.accelerometer.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.sensor.accelerometer.xml \
+    frameworks/native/data/etc/android.hardware.sensor.gyroscope.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.sensor.gyroscope.xml \
+    frameworks/native/data/etc/android.hardware.sensor.compass.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.sensor.compass.xml \
+    frameworks/native/data/etc/android.hardware.sensor.light.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.sensor.light.xml

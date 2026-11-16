@@ -1,0 +1,21 @@
+// gts7xl-sensord (repo/sensord/src, copied in by android/sync-to-aosp.sh)
+cc_defaults {
+    name: "gts7xl-sensord-defaults",
+    vendor: true,
+    cflags: ["-std=gnu11", "-Wall", "-Wno-unused-parameter"],
+}
+
+// The SSC client, for the sensors HAL
+cc_library_static {
+    name: "libgts7xl-ssc",
+    defaults: ["gts7xl-sensord-defaults"],
+    srcs: ["src/client.c", "src/ssc.c", "src/pb.c"],
+    export_include_dirs: ["src"],
+}
+
+// Serves the DSP its files (registry, configs) over the FastRPC tunnel
+cc_binary {
+    name: "gts7xl-sensord",
+    defaults: ["gts7xl-sensord-defaults"],
+    srcs: ["src/*.c"],
+}

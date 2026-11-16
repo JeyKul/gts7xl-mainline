@@ -16,3 +16,9 @@ type vendor_gts7xl_dsp_up, domain;
 type vendor_gts7xl_dsp_up_exec, exec_type, vendor_file_type, file_type;
 init_daemon_domain(vendor_gts7xl_dsp_up)
 permissive vendor_gts7xl_dsp_up;
+
+# Serves the sensor DSP its files (gts7xl-sensord)
+type vendor_gts7xl_sensord, domain;
+type vendor_gts7xl_sensord_exec, exec_type, vendor_file_type, file_type;
+init_daemon_domain(vendor_gts7xl_sensord)
+permissive vendor_gts7xl_sensord;

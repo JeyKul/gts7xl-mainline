@@ -1,0 +1,33 @@
+// AOSP's example AIDL sensors HAL (hardware/interfaces/sensors/aidl/default)
+// with its fake sensors replaced by the sensor DSP's, streamed over QRTR with
+// gts7xl-sensord's SSC client
+cc_binary {
+    name: "android.hardware.sensors-service.gts7xl",
+    relative_install_path: "hw",
+    vendor: true,
+    init_rc: ["sensors-gts7xl.rc"],
+    vintf_fragments: ["sensors-default.xml"],
+    local_include_dirs: ["include"],
+    shared_libs: [
+        "libbinder_ndk",
+        "liblog",
+    ],
+    static_libs: [
+        "android.hardware.common-V2-ndk",
+        "android.hardware.common.fmq-V1-ndk",
+        "android.hardware.sensors-V3-ndk",
+        "android.system.suspend-V1-ndk",
+        "libbase",
+        "libcutils",
+        "libfmq",
+        "libpower",
+        "libutils",
+        "libgts7xl-ssc",
+    ],
+    srcs: [
+        "main.cpp",
+        "Sensors.cpp",
+        "Sensor.cpp",
+        "SscStream.cpp",
+    ],
+}
