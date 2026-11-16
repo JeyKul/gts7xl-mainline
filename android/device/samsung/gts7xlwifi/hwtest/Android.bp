@@ -1,0 +1,9 @@
+// gts7xl hardware test: one app for display, touch, pen, sensors, audio,
+// vibration, keys and status
+android_app {
+    name: "Gts7xlHwTest",
+    srcs: ["src/**/*.java"],
+    resource_dirs: ["res"],
+    sdk_version: "current",
+    product_specific: true,
+}

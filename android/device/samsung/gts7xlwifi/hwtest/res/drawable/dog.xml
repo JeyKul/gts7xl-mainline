@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original mascot for this project: a round-faced pup -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- ears -->
+    <path android:fillColor="#8B5A3C"
+        android:pathData="M22,30 C14,34 12,58 20,66 C26,70 32,60 33,48 C34,38 30,27 22,30 Z" />
+    <path android:fillColor="#8B5A3C"
+        android:pathData="M86,30 C94,34 96,58 88,66 C82,70 76,60 75,48 C74,38 78,27 86,30 Z" />
+    <!-- head -->
+    <path android:fillColor="#E8B98A"
+        android:pathData="M54,22 C76,22 84,40 84,56 C84,76 70,88 54,88 C38,88 24,76 24,56 C24,40 32,22 54,22 Z" />
+    <!-- muzzle -->
+    <path android:fillColor="#FFF3E2"
+        android:pathData="M54,56 C66,56 72,63 72,70 C72,79 63,84 54,84 C45,84 36,79 36,70 C36,63 42,56 54,56 Z" />
+    <!-- patch over the right eye -->
+    <path android:fillColor="#C98E5E"
+        android:pathData="M62,36 C70,34 76,40 75,48 C74,54 66,55 62,50 C58,45 57,38 62,36 Z" />
+    <!-- eyes -->
+    <path android:fillColor="#2B1D14"
+        android:pathData="M44,46 m-4.5,0 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0" />
+    <path android:fillColor="#2B1D14"
+        android:pathData="M66,46 m-4.5,0 a4.5,4.5 0 1,0 9,0 a4.5,4.5 0 1,0 -9,0" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M45.5,44.5 m-1.4,0 a1.4,1.4 0 1,0 2.8,0 a1.4,1.4 0 1,0 -2.8,0" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M67.5,44.5 m-1.4,0 a1.4,1.4 0 1,0 2.8,0 a1.4,1.4 0 1,0 -2.8,0" />
+    <!-- nose -->
+    <path android:fillColor="#2B1D14"
+        android:pathData="M48,62 C48,59 60,59 60,62 C60,66 56,68 54,68 C52,68 48,66 48,62 Z" />
+    <!-- mouth -->
+    <path android:strokeColor="#2B1D14" android:strokeWidth="2" android:strokeLineCap="round"
+        android:pathData="M54,68 L54,72 M54,72 C51,76 46,75 45,72 M54,72 C57,76 62,75 63,72" />
+    <!-- tongue -->
+    <path android:fillColor="#F07C8A"
+        android:pathData="M50,74 C50,80 58,80 58,74 C56,76 52,76 50,74 Z" />
+    <!-- cheeks -->
+    <path android:fillColor="#F5A9A0"
+        android:pathData="M36,62 m-4,0 a4,3 0 1,0 8,0 a4,3 0 1,0 -8,0" />
+    <path android:fillColor="#F5A9A0"
+        android:pathData="M72,62 m-4,0 a4,3 0 1,0 8,0 a4,3 0 1,0 -8,0" />
+</vector>
