@@ -13,7 +13,7 @@ Galaxy Tab S7+ Wi-Fi (SM-T970, SM8250) on mainline Linux + Arch Linux ARM. The t
 ## Safety (hard rules)
 - Never write to: efs, sec_efs, modem*, persist, abl*, xbl*, tz*, hyp*, keymaster*, vbmeta*, or any bootloader partition. Only boot, dtbo and userdata.
 - Back up a partition before writing it, the first time.
-- Firmware blobs come from the tablet's own partitions at runtime and never get committed to git.
+- Firmware blobs come from the tablet's own partitions at runtime. Exception (user decision 2026-11-16): blobs Android needs may be committed under `android/device/samsung/gts7xlwifi/proprietary/`, credited in the README.
 
 ## Build / flash / test
 - Kernel: tree in `src/linux` (branch gts7xl, v7.3 + `repo/linux-patches`). `cd src/linux && ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- LOCALVERSION= make -s O=build -j24 Image modules qcom/sm8250-samsung-gts7xlwifi.dtb`. `CONFIG_INITRAMFS_SOURCE` must be `~/gts7xl-mainline/initramfs`: a good boot image is about 27 MB, 15 MB means no initramfs and no boot.
