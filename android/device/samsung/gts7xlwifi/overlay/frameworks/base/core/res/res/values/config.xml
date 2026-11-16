@@ -6,4 +6,7 @@
     <integer name="config_screenBrightnessSettingDefault">100</integer>
     <bool name="config_automatic_brightness_available">false</bool>
     <bool name="config_showNavigationBar">true</bool>
+    <!-- 120 Hz by default (0090 fixed the half screen); "Smooth display" switches to 60 -->
+    <integer name="config_defaultRefreshRate">120</integer>
+    <integer name="config_defaultPeakRefreshRate">120</integer>
 </resources>
