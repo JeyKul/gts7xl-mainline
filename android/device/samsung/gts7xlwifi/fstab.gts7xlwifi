@@ -13,3 +13,5 @@ vendor_dlkm                                /vendor_dlkm         erofs  ro       
 /dev/block/by-name/apnhlos                 /vendor/etc/apnhlos vfat   ro,shortname=lower,uid=1000,gid=1000,dmask=227,fmask=337,context=u:object_r:vendor_firmware_file:s0 wait
 /devices/platform/soc@0/8804000.mmc/mmc_host* auto              auto   defaults                                                        voldmanaged=sdcard1:auto
 /devices/platform/soc@0/a600000.usb*       auto                 auto   defaults                                                        voldmanaged=usb:auto
+# Bootloader message (reboot recovery writes boot-recovery here)
+/dev/block/by-name/misc                    /misc               emmc   defaults                                                        defaults

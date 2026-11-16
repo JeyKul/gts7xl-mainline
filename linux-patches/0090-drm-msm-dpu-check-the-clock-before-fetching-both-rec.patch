@@ -1,0 +1,88 @@
+From 3e9bdd4fb7311464ec55334d9514a690254c65bb Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 16 Nov 2026 21:54:26 +0100
+Subject: [PATCH 90/91] drm/msm/dpu: check the clock before fetching both rects
+ with one pipe
+
+A plane split across two mixers may be fetched by a single SSPP in
+parallel multirect mode. Only the line width was checked: the pipe then
+has to deliver both rects, twice the pixel rate of either. On the Tab S7+
+(2800x1752 DSC command-mode panel) a full-screen layer at the 120 Hz pixel
+clock needs 2 x 321 MHz from one DMA pipe against a 460 MHz core clock;
+the right rect stays empty. Android's composer hit it whenever it
+flattened to one layer, leaving the right half of the screen black.
+
+Refuse parallel multirect when both rects together exceed the core clock;
+the planes then get two pipes. The legacy fixed-pipe path is unchanged.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/msm/disp/dpu1/dpu_plane.c | 21 ++++++++++++++++++---
+ 1 file changed, 18 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/gpu/drm/msm/disp/dpu1/dpu_plane.c b/drivers/gpu/drm/msm/disp/dpu1/dpu_plane.c
+index 7b92082d3..daa807e00 100644
+--- a/drivers/gpu/drm/msm/disp/dpu1/dpu_plane.c
++++ b/drivers/gpu/drm/msm/disp/dpu1/dpu_plane.c
+@@ -1080,7 +1080,8 @@ static int dpu_plane_atomic_check_sspp(struct drm_plane *plane,
+ static bool dpu_plane_try_multirect_parallel(struct dpu_sw_pipe *pipe, struct dpu_sw_pipe_cfg *pipe_cfg,
+ 					     struct dpu_sw_pipe *r_pipe, struct dpu_sw_pipe_cfg *r_pipe_cfg,
+ 					     struct dpu_hw_sspp *sspp, const struct msm_format *fmt,
+-					     uint32_t max_linewidth)
++					     uint32_t max_linewidth,
++					     const struct drm_display_mode *mode, u64 max_clk)
+ {
+ 	r_pipe->sspp = NULL;
+ 
+@@ -1095,6 +1096,15 @@ static bool dpu_plane_try_multirect_parallel(struct dpu_sw_pipe *pipe, struct dp
+ 		    !dpu_plane_is_multirect_parallel_capable(pipe->sspp, r_pipe_cfg, fmt, max_linewidth))
+ 			return false;
+ 
++		/*
++		 * In parallel mode one SSPP fetches both rects: it has to keep up
++		 * with both. Otherwise the second rect stays empty, e.g. the right
++		 * half of a full-screen layer on a fast command-mode panel.
++		 */
++		if (mode && _dpu_plane_calc_clk(mode, pipe_cfg) +
++			    _dpu_plane_calc_clk(mode, r_pipe_cfg) > max_clk)
++			return false;
++
+ 		r_pipe->sspp = pipe->sspp;
+ 
+ 		pipe->multirect_index = DPU_SSPP_RECT_0;
+@@ -1220,6 +1230,7 @@ static int dpu_plane_assign_resource_in_stage(struct dpu_sw_pipe *pipe,
+ 	struct dpu_kms *dpu_kms = _dpu_plane_get_kms(plane);
+ 	struct dpu_sw_pipe *r_pipe = pipe + 1;
+ 	struct dpu_sw_pipe_cfg *r_pipe_cfg = pipe_cfg + 1;
++	struct drm_crtc_state *crtc_state;
+ 
+ 	if (drm_rect_width(&pipe_cfg->src_rect) == 0)
+ 		return 0;
+@@ -1233,10 +1244,13 @@ static int dpu_plane_assign_resource_in_stage(struct dpu_sw_pipe *pipe,
+ 	if (drm_rect_width(&r_pipe_cfg->src_rect) == 0)
+ 		return 0;
+ 
++	crtc_state = drm_atomic_get_new_crtc_state(plane_state->state, crtc);
+ 	if (dpu_plane_try_multirect_parallel(pipe, pipe_cfg, r_pipe, r_pipe_cfg,
+ 					      pipe->sspp,
+ 					      msm_framebuffer_format(plane_state->fb),
+-					      dpu_kms->catalog->caps->max_linewidth))
++					      dpu_kms->catalog->caps->max_linewidth,
++					      crtc_state ? &crtc_state->adjusted_mode : NULL,
++					      dpu_kms->perf.max_core_clk_rate))
+ 		return 0;
+ 
+ 	r_pipe->sspp = dpu_rm_reserve_sspp(&dpu_kms->rm, global_state, crtc, reqs);
+@@ -1336,7 +1350,8 @@ static int dpu_plane_assign_resources(struct drm_crtc *crtc,
+ 	if (!dpu_plane_try_multirect_parallel(pipe, pipe_cfg, r_pipe, r_pipe_cfg,
+ 					      pipe->sspp,
+ 					      msm_framebuffer_format(plane_state->fb),
+-					      dpu_kms->catalog->caps->max_linewidth)) {
++					      dpu_kms->catalog->caps->max_linewidth,
++					      NULL, 0)) {
+ 		DPU_DEBUG_PLANE(pdpu, "invalid " DRM_RECT_FMT " /" DRM_RECT_FMT
+ 				" max_line:%u, can't use split source\n",
+ 				DRM_RECT_ARG(&pipe_cfg->src_rect),
+-- 
+2.56.0
+

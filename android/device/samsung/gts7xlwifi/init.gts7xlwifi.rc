@@ -84,10 +84,6 @@ service vendor.qrtr-ns /vendor/bin/qrtr-ns -f
     class core
     user root
     group system
-service vendor.pd-mapper /vendor/bin/pd-mapper
-    class core
-    user root
-    group system
 service vendor.tqftpserv /vendor/bin/tqftpserv
     class core
     user root
