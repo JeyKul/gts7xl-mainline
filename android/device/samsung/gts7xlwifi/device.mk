@@ -77,7 +77,7 @@ PRODUCT_COPY_FILES += \
 # Health, power, thermal, USB: AOSP's reference services read sysfs
 PRODUCT_PACKAGES += \
     android.hardware.health-service.example \
-    android.hardware.power-service.example \
+    android.hardware.power-service.gts7xl \
     com.android.hardware.thermal \
     android.hardware.usb-service.example \
     suspend_blocker
