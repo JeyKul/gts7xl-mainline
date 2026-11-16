@@ -1,0 +1,56 @@
+From d0ae33a8cbaca44fb9c3fa6ad512ffa2eae47032 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 16 Nov 2026 01:11:24 +0100
+Subject: [PATCH] ASoC: q6asm-dai: resync queue_ptr after prepare
+
+queue_ptr counts the playback periods sent to the DSP and is compared
+with appl_ptr in the ack callback. It was never reset: after a stop and
+a new prepare (Android's audio HAL keeps the PCM open across standby)
+appl_ptr - queue_ptr no longer matched the queued data, the driver sent
+far more buffers than the DSP accepts and every write failed with
+-EBUSY. Resync it to hw_ptr (where appl_ptr starts) on the first ack.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ sound/soc/qcom/qdsp6/q6asm-dai.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/sound/soc/qcom/qdsp6/q6asm-dai.c b/sound/soc/qcom/qdsp6/q6asm-dai.c
+index 4f09fdd40..44a3cac80 100644
+--- a/sound/soc/qcom/qdsp6/q6asm-dai.c
++++ b/sound/soc/qcom/qdsp6/q6asm-dai.c
+@@ -64,6 +64,7 @@ struct q6asm_dai_rtd {
+ 	uint64_t copied_total;
+ 	uint16_t bits_per_sample;
+ 	snd_pcm_uframes_t queue_ptr;
++	bool queue_resync;
+ 	uint16_t source; /* Encoding source bit mask */
+ 	struct audio_client *audio_client;
+ 	uint32_t next_track_stream_id;
+@@ -222,6 +223,12 @@ static int q6asm_dai_prepare(struct snd_soc_component *component,
+ 	}
+ 
+ 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
++	/*
++	 * The core sets appl_ptr = hw_ptr after this prepare: count queued
++	 * periods from there, not from before a stop (a re-prepared stream
++	 * otherwise queues far more periods than the DSP takes: -EBUSY)
++	 */
++	prtd->queue_resync = true;
+ 	/* rate and channels are sent to audio driver */
+ 	if (prtd->state == Q6ASM_STREAM_RUNNING) {
+ 		/* clear the previous setup if any  */
+@@ -316,6 +323,10 @@ static int q6asm_dai_ack(struct snd_soc_component *component, struct snd_pcm_sub
+ 	int i, ret = 0, avail_periods;
+ 
+ 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK && prtd->state == Q6ASM_STREAM_RUNNING) {
++		if (prtd->queue_resync) {
++			prtd->queue_ptr = runtime->status->hw_ptr;
++			prtd->queue_resync = false;
++		}
+ 		avail_periods = (runtime->control->appl_ptr - prtd->queue_ptr)/runtime->period_size;
+ 		for (i = 0; i < avail_periods; i++) {
+ 			ret = q6asm_write_async(prtd->audio_client, prtd->stream_id,
+-- 
+2.56.0
+
