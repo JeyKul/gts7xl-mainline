@@ -1,0 +1,50 @@
+From 7cd9cb43b6240258bb0c0b3bc42e0ba7bf833ce6 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 16 Nov 2026 20:24:25 +0100
+Subject: [PATCH 88/88] Input: pm8941-pwrkey: report_wake_press for Android
+
+The press that wakes the system is swallowed so a desktop doesn't suspend
+again right away. Android needs that press to turn the screen on: without
+it only a press held through resume woke the tablet. report_wake_press=1
+reports it.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/input/misc/pm8941-pwrkey.c | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/input/misc/pm8941-pwrkey.c b/drivers/input/misc/pm8941-pwrkey.c
+index de480a84c..02151a21f 100644
+--- a/drivers/input/misc/pm8941-pwrkey.c
++++ b/drivers/input/misc/pm8941-pwrkey.c
+@@ -148,6 +148,10 @@ static int pm8941_reboot_notify(struct notifier_block *nb,
+ 	return NOTIFY_DONE;
+ }
+ 
++static bool report_wake_press;
++module_param(report_wake_press, bool, 0644);
++MODULE_PARM_DESC(report_wake_press, "Report the key press that woke the system (Android)");
++
+ static irqreturn_t pm8941_pwrkey_irq(int irq, void *_data)
+ {
+ 	struct pm8941_pwrkey *pwrkey = _data;
+@@ -169,9 +173,13 @@ static irqreturn_t pm8941_pwrkey_irq(int irq, void *_data)
+ 
+ 	sts &= pwrkey->data->status_bit;
+ 
+-	/* The press that wakes the system must not reach userspace as a new press */
+-	if (READ_ONCE(pwrkey->suspended) ||
+-	    ktime_before(ktime_get(), pwrkey->wake_ignore_end_time)) {
++	/*
++	 * The press that wakes the system must not reach userspace as a new
++	 * press (a desktop would suspend again), unless userspace needs it to
++	 * turn the screen on (Android: report_wake_press)
++	 */
++	if (!report_wake_press && (READ_ONCE(pwrkey->suspended) ||
++	    ktime_before(ktime_get(), pwrkey->wake_ignore_end_time))) {
+ 		pwrkey->last_status = sts;
+ 		return IRQ_HANDLED;
+ 	}
+-- 
+2.56.0
+

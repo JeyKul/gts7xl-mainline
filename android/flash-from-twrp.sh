@@ -2,7 +2,8 @@
 # Flash super (data part, verified chunks) and optionally boot. Only in TWRP.
 set -u
 # The tablet in TWRP, by transport id (it has no serial; a phone may be plugged in too)
-T=$(adb devices -l | awk '$2 == "recovery" { for (i = 3; i <= NF; i++) if ($i ~ /^transport_id:/) { sub("transport_id:", "", $i); print $i } }' | head -1)
+# ("(no serial number)" shifts the fields: look for the words, not columns)
+T=$(adb devices -l | awk '{ r = 0; t = ""; for (i = 1; i <= NF; i++) { if ($i == "recovery") r = 1; if ($i ~ /^transport_id:/) t = substr($i, 14) } if (r && t != "") print t }' | head -1)
 [ -n "$T" ] || { echo "NOT IN TWRP - nothing flashed"; exit 1; }
 adb() { command adb -t "$T" "$@"; }
 O=/mnt/builddrive/aosp17/out; P=$O/target/product/gts7xlwifi; C=/mnt/builddrive/superchunks

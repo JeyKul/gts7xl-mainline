@@ -1,0 +1,54 @@
+From ad97396f19073eb7d9e7248fa35dce4fc6f2a7bb Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 16 Nov 2026 20:24:25 +0100
+Subject: [PATCH 87/88] of: fdt: keep the bootloader's androidboot.serialno
+ with CMDLINE_FORCE
+
+The forced command line replaces everything the bootloader passes,
+including the device serial number Android takes from
+androidboot.serialno (adb, Build.getSerial()). Append just that key.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/of/fdt.c | 25 ++++++++++++++++++++++++-
+ 1 file changed, 24 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/of/fdt.c b/drivers/of/fdt.c
+index a64afc3de..848f5b930 100644
+--- a/drivers/of/fdt.c
++++ b/drivers/of/fdt.c
+@@ -1136,7 +1136,30 @@ int __init early_init_dt_scan_chosen(char *cmdline)
+ 	strlcat(cmdline, " ", COMMAND_LINE_SIZE);
+ 	strlcat(cmdline, CONFIG_CMDLINE, COMMAND_LINE_SIZE);
+ #elif defined(CONFIG_CMDLINE_FORCE)
+-	strscpy(cmdline, CONFIG_CMDLINE, COMMAND_LINE_SIZE);
++	{
++		/*
++		 * Keep the bootloader's device serial number: Android takes it
++		 * from androidboot.serialno (adb, Build.getSerial()). Only that
++		 * key, so the rest of the forced command line stays in charge.
++		 */
++		static char serial[64] __initdata;
++		const char *s = strstr(cmdline, "androidboot.serialno=");
++
++		serial[0] = 0;
++		if (s) {
++			size_t n = strcspn(s, " ");
++
++			if (n < sizeof(serial)) {
++				memcpy(serial, s, n);
++				serial[n] = 0;
++			}
++		}
++		strscpy(cmdline, CONFIG_CMDLINE, COMMAND_LINE_SIZE);
++		if (serial[0]) {
++			strlcat(cmdline, " ", COMMAND_LINE_SIZE);
++			strlcat(cmdline, serial, COMMAND_LINE_SIZE);
++		}
++	}
+ #else
+ 	/* No arguments from boot loader, use kernel's  cmdl*/
+ 	if (!((char *)cmdline)[0])
+-- 
+2.56.0
+
