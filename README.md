@@ -172,7 +172,9 @@ This port stands on other people's work:
 - **[agcarbajo/postmarketos-galaxy-tab-s9-ultra](https://github.com/agcarbajo/postmarketos-galaxy-tab-s9-ultra)**: the Tab S9 Ultra port; its built-in display stack showed the way to a clean boot handoff.
 - **[portare-ch/portareos](https://github.com/portare-ch/portareos)** (with Armada's SM8550 sleep fixes): their suspend investigation guides our deep-sleep work.
 - **[v4l2loopback](https://github.com/v4l2loopback/v4l2loopback)**: the webcam device behind `gts7xl-webcam`.
-- **[linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git)**: GPU and Wi-Fi firmware. All other firmware comes from the tablet's own partitions and is never redistributed.
+- **[linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git)**: GPU, Wi-Fi and Bluetooth firmware. Other firmware comes from the tablet's own partitions at runtime, except the Android port's speaker blobs below.
+- **Samsung and Cirrus Logic**: the CS35L41 speaker protection firmware in `android/device/samsung/gts7xlwifi/proprietary/` comes from Samsung's stock SM-T970 firmware (Cirrus Logic's amplifier DSP code), redistributed unmodified; the calibration files there are one tablet's factory values.
+- **[LineageOS](https://lineageos.org)** mainline device work (android_device_mainline_*, android_kernel_mainline_configs, external/mesa) and **[Linaro](https://www.linaro.org)**'s drm_hwcomposer/minigbm device setup: the base of the Android port in `android/`.
 - **[Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium)**: base of the early UEFI attempt in `uefi/`.
 - **[Arch Linux ARM](https://archlinuxarm.org)** and **[Alpine Linux](https://alpinelinux.org)**: the installed system and the installer.
 - **Claudius** (claudiusthebot): the RTC offset, thermal zones and throttling, and the gyroscope, magnetometer and compass bridge.
@@ -182,4 +184,4 @@ This port stands on other people's work:
 
 Free to use, change and share; just mention [JeyKul](https://github.com/JeyKul). See [LICENSE](LICENSE) (MIT).
 
-Exceptions: `linux-patches/` and `kmod/` change or build on Linux, so they stay under GPL-2.0. `uefi/` builds on Mu-Silicium and follows its license.
+Exceptions: the blobs in `android/device/samsung/gts7xlwifi/proprietary/` belong to Samsung / Cirrus Logic and are not covered by the MIT license. `linux-patches/` and `kmod/` change or build on Linux, so they stay under GPL-2.0. `uefi/` builds on Mu-Silicium and follows its license.

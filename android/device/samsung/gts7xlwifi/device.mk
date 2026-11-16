@@ -85,7 +85,7 @@ PRODUCT_PACKAGES += \
 # Qualcomm remote processors (ADSP for audio/sensors): service locator and file server
 PRODUCT_PACKAGES += pd-mapper qrtr-ns qrtr-cfg qrtr-lookup tqftpserv
 
-# Firmware: links into the tablet's own apnhlos (nothing proprietary in the build)
+# Firmware: links into the tablet's own apnhlos (only the amp blobs in proprietary/ are in the tree)
 # plus redistributable linux-firmware files (prepare-kernel.sh fetches them)
 PRODUCT_PACKAGES += gts7xl-firmware-links gts7xl-btaddr
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/gts7xl-dsp-up.sh:$(TARGET_COPY_OUT_VENDOR)/bin/gts7xl-dsp-up.sh
@@ -94,6 +94,9 @@ PRODUCT_COPY_FILES += $(LOCAL_PATH)/gts7xl-dsp-up.sh:$(TARGET_COPY_OUT_VENDOR)/b
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/apnhlos/README:$(TARGET_COPY_OUT_VENDOR)/etc/apnhlos/README
 PRODUCT_COPY_FILES += \
     $(call find-copy-subdir-files,*,$(LOCAL_PATH)/prebuilt/firmware,$(TARGET_COPY_OUT_VENDOR)/firmware)
+# Speaker amp protection firmware and calibration (see proprietary/README)
+PRODUCT_COPY_FILES += \
+    $(call find-copy-subdir-files,*,$(LOCAL_PATH)/proprietary/firmware,$(TARGET_COPY_OUT_VENDOR)/firmware)
 
 PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/tablet_core_hardware.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/tablet_core_hardware.xml \
@@ -105,3 +108,7 @@ PRODUCT_COPY_FILES += \
 
 PRODUCT_PACKAGES += Launcher3QuickStep
 PRODUCT_SOONG_NAMESPACES += device/samsung/gts7xlwifi device/linaro/dragonboard
+
+# Codec2 over AIDL: the default (HIDL) needs hwservicemanager, which this
+# device doesn't run, and leaves only the in-process AAC decoder
+PRODUCT_PRODUCT_PROPERTIES += media.c2.hal.selection=aidl
