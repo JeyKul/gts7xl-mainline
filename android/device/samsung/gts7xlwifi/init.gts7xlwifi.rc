@@ -19,7 +19,8 @@ on fs
     # Everything but /data (cache, the firmware partition)
     mount_all /vendor/etc/fstab.gts7xlwifi --early
 
-service vendor.gts7xl-bootlog /vendor/bin/sh -c "/system/bin/dmesg -w > /metadata/gts7xl/kmsg.txt 2>&1"
+# /metadata is only 27 MB (apexd and encryption need it): the kernel log only, capped
+service vendor.gts7xl-bootlog /vendor/bin/sh -c "/system/bin/dmesg -w 2>&1 | /system/bin/head -c 4194304 > /metadata/gts7xl/kmsg.txt"
     user root
     group root log
     seclabel u:r:su:s0
@@ -27,13 +28,15 @@ service vendor.gts7xl-bootlog /vendor/bin/sh -c "/system/bin/dmesg -w > /metadat
     oneshot
 
 # logcat once logd is up; it waits for logd on its own and is restarted if not
-service vendor.gts7xl-logcat /system/bin/logcat -b all -v time -f /metadata/gts7xl/logcat.txt
+# logcat on /data, rotated (2 x 8 MB)
+service vendor.gts7xl-logcat /system/bin/logcat -b all -v time -f /data/vendor/gts7xl-log/logcat.txt -r 8192 -n 2
     user root
     group root log
     seclabel u:r:su:s0
     disabled
 
-on property:logd.ready=true
+on property:logd.ready=true && property:sys.boot_completed=1
+    mkdir /data/vendor/gts7xl-log 0750 root log
     start vendor.gts7xl-logcat
 
 on post-fs
