@@ -1,0 +1,79 @@
+From 4db793e850877943f78853d0601fc712945ccb40 Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Mon, 16 Nov 2026 01:24:27 +0100
+Subject: [PATCH] ASoC: q6asm: restart the playback ring when prepare reopens
+ the stream
+
+Prepare on a running stream closes and reopens the ASM stream but kept
+the old buffer index and position: the DSP played periods from the
+wrong place and reported a position past the written data, so a
+re-prepared stream (Android's HAL after an underrun or a new song)
+went from XRUN to XRUN. Reset both after the reopen.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ sound/soc/qcom/qdsp6/q6asm-dai.c |  4 ++++
+ sound/soc/qcom/qdsp6/q6asm.c     | 20 ++++++++++++++++++++
+ sound/soc/qcom/qdsp6/q6asm.h     |  1 +
+ 3 files changed, 25 insertions(+)
+
+diff --git a/sound/soc/qcom/qdsp6/q6asm-dai.c b/sound/soc/qcom/qdsp6/q6asm-dai.c
+index 44a3cac80..ddbb03b2c 100644
+--- a/sound/soc/qcom/qdsp6/q6asm-dai.c
++++ b/sound/soc/qcom/qdsp6/q6asm-dai.c
+@@ -306,6 +306,10 @@ static int q6asm_dai_prepare(struct snd_soc_component *component,
+ 	else
+ 		prtd->state = Q6ASM_STREAM_RUNNING;
+ 
++	/* The stream was closed and opened again: its ring restarts too */
++	if (ret >= 0 && substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
++		q6asm_reset_position(prtd->audio_client);
++
+ 	return ret;
+ 
+ routing_err:
+diff --git a/sound/soc/qcom/qdsp6/q6asm.c b/sound/soc/qcom/qdsp6/q6asm.c
+index de0bd8fd0..afee478a2 100644
+--- a/sound/soc/qcom/qdsp6/q6asm.c
++++ b/sound/soc/qcom/qdsp6/q6asm.c
+@@ -1570,6 +1570,26 @@ static void q6asm_reset_buf_state(struct audio_client *ac)
+ 	port->dsp_buf = 0;
+ }
+ 
++/**
++ * q6asm_reset_position() - restart the playback buffer ring
++ *
++ * @ac: audio client
++ *
++ * For a stream that is closed and opened again in prepare: start queueing
++ * at the first buffer again and report position 0, matching the PCM core
++ * which restarts at hw_ptr 0.
++ */
++void q6asm_reset_position(struct audio_client *ac)
++{
++	struct audio_port_data *port;
++
++	guard(spinlock_irqsave)(&ac->lock);
++	port = &ac->port[SNDRV_PCM_STREAM_PLAYBACK];
++	port->dsp_buf = 0;
++	atomic_set(&port->hw_ptr, 0);
++}
++EXPORT_SYMBOL_GPL(q6asm_reset_position);
++
+ static int __q6asm_cmd(struct audio_client *ac, uint32_t stream_id, int cmd,
+ 		       bool wait)
+ {
+diff --git a/sound/soc/qcom/qdsp6/q6asm.h b/sound/soc/qcom/qdsp6/q6asm.h
+index 6fafda5bd..d0a31682d 100644
+--- a/sound/soc/qcom/qdsp6/q6asm.h
++++ b/sound/soc/qcom/qdsp6/q6asm.h
+@@ -148,5 +148,6 @@ int q6asm_map_memory_regions(unsigned int dir,
+ 			     phys_addr_t phys,
+ 			     size_t period_sz, unsigned int periods);
+ int q6asm_unmap_memory_regions(unsigned int dir, struct audio_client *ac);
++void q6asm_reset_position(struct audio_client *ac);
+ int q6asm_get_hw_pointer(struct audio_client *ac, unsigned int dir);
+ #endif /* __Q6_ASM_H__ */
+-- 
+2.56.0
+

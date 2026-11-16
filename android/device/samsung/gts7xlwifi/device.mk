@@ -112,3 +112,7 @@ PRODUCT_SOONG_NAMESPACES += device/samsung/gts7xlwifi device/linaro/dragonboard
 # Codec2 over AIDL: the default (HIDL) needs hwservicemanager, which this
 # device doesn't run, and leaves only the in-process AAC decoder
 PRODUCT_PRODUCT_PROPERTIES += media.c2.hal.selection=aidl
+
+# Twice the default HAL buffer (~260 ms): AudioFlinger writes 4096-frame
+# chunks, the default 4x1440 buffer underran on any scheduling delay
+PRODUCT_VENDOR_PROPERTIES += ro.hardware.audio.tinyalsa.period_size_multiplier=2
