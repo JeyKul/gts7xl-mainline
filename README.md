@@ -173,7 +173,7 @@ This port stands on other people's work:
 - **[portare-ch/portareos](https://github.com/portare-ch/portareos)** (with Armada's SM8550 sleep fixes): their suspend investigation guides our deep-sleep work.
 - **[v4l2loopback](https://github.com/v4l2loopback/v4l2loopback)**: the webcam device behind `gts7xl-webcam`.
 - **[linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git)**: GPU, Wi-Fi and Bluetooth firmware. Other firmware comes from the tablet's own partitions at runtime, except the Android port's speaker blobs below.
-- **Samsung and Cirrus Logic**: the CS35L41 speaker protection firmware in `android/device/samsung/gts7xlwifi/proprietary/` comes from Samsung's stock SM-T970 firmware (Cirrus Logic's amplifier DSP code), redistributed unmodified; the calibration files there are one tablet's factory values.
+- **Samsung and Cirrus Logic**: the sensor DSP configs (`proprietary/etc/sensors`, Samsung/Qualcomm) and the CS35L41 speaker protection firmware in `android/device/samsung/gts7xlwifi/proprietary/` come from Samsung's stock SM-T970 firmware (Cirrus Logic's amplifier DSP code), redistributed unmodified; the calibration files there are one tablet's factory values.
 - **[LineageOS](https://lineageos.org)** mainline device work (android_device_mainline_*, android_kernel_mainline_configs, external/mesa) and **[Linaro](https://www.linaro.org)**'s drm_hwcomposer/minigbm device setup: the base of the Android port in `android/`.
 - **[Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium)**: base of the early UEFI attempt in `uefi/`.
 - **[Arch Linux ARM](https://archlinuxarm.org)** and **[Alpine Linux](https://alpinelinux.org)**: the installed system and the installer.
