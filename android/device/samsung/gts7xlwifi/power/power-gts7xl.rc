@@ -6,3 +6,6 @@ service vendor.power-gts7xl /vendor/bin/hw/android.hardware.power-service.gts7xl
     class hal
     user system
     group system
+
+on boot
+    chown system system /sys/class/devfreq/3d00000.gpu/min_freq
