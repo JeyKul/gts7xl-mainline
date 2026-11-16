@@ -1,0 +1,24 @@
+// AOSP's example power HAL (hardware/interfaces/power/aidl/default) plus a
+// CPU clock floor for the UI, see Booster in Power.cpp
+cc_binary {
+    name: "android.hardware.power-service.gts7xl",
+    defaults: ["android.hardware.power-ndk_shared"],
+    relative_install_path: "hw",
+    init_rc: ["power-gts7xl.rc"],
+    vintf_fragments: ["power-default.xml"],
+    vendor: true,
+    shared_libs: [
+        "android.hardware.common-V2-ndk",
+        "android.hardware.common.fmq-V1-ndk",
+        "libbase",
+        "libbinder_ndk",
+        "libcutils",
+        "libfmq",
+        "libutils",
+    ],
+    srcs: [
+        "main.cpp",
+        "Power.cpp",
+        "PowerHintSession.cpp",
+    ],
+}

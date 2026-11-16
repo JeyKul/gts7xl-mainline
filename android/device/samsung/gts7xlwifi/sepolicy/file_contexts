@@ -6,3 +6,4 @@
 /dev/dri/renderD[0-9]+                      u:object_r:gpu_device:s0
 /dev/dri/card[0-9]+                         u:object_r:graphics_device:s0
 /vendor/bin/gts7xl-dsp-up\.sh                u:object_r:vendor_gts7xl_dsp_up_exec:s0
+/vendor/bin/hw/android\.hardware\.power-service\.gts7xl  u:object_r:hal_power_default_exec:s0

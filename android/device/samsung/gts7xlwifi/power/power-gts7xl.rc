@@ -1,0 +1,8 @@
+on boot
+    chown system system /dev/cpuctl/top-app/cpu.uclamp.min
+    chown system system /dev/cpuctl/foreground/cpu.uclamp.min
+
+service vendor.power-gts7xl /vendor/bin/hw/android.hardware.power-service.gts7xl
+    class hal
+    user system
+    group system
