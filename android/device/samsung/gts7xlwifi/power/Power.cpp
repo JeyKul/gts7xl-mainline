@@ -22,6 +22,7 @@
 #include <fmq/EventFlag.h>
 #include <android-base/file.h>
 #include <android-base/properties.h>
+#include <android-base/strings.h>
 #include <chrono>
 #include <condition_variable>
 #include <mutex>
@@ -60,6 +61,7 @@ constexpr size_t enum_size() {
 class Booster {
   public:
     Booster() : mBase(::android::base::GetIntProperty("vendor.power.uclamp_base", 30)) {
+        readGpu();
         apply(mBase);
         std::thread([this] { run(); }).detach();
     }
@@ -81,13 +83,40 @@ class Booster {
     }
 
   private:
-    static void apply(int value) {
+    static constexpr const char* kGpu = "/sys/class/devfreq/3d00000.gpu/";
+
+    void apply(int value) {
         for (const char* g : {"top-app", "foreground"}) {
             std::string f = std::string("/dev/cpuctl/") + g + "/cpu.uclamp.min";
             if (!::android::base::WriteStringToFile(std::to_string(value), f))
                 PLOG(ERROR) << "write " << f;
         }
+        // GPU: boosted, its lowest clock is its highest; otherwise devfreq's own floor
+        if (!mGpuMin.empty())
+            ::android::base::WriteStringToFile(value == 100 ? mGpuMax : mGpuMin,
+                                               std::string(kGpu) + "min_freq");
     }
+
+    void readGpu() {
+        std::string avail;
+        if (!::android::base::ReadFileToString(std::string(kGpu) + "available_frequencies", &avail))
+            return;
+        auto f = ::android::base::Split(::android::base::Trim(avail), " ");
+        if (f.empty()) return;
+        long lo = -1, hi = -1;
+        for (auto& x : f) {
+            long v = std::atol(x.c_str());
+            if (v <= 0) continue;
+            if (lo < 0 || v < lo) lo = v;
+            if (v > hi) hi = v;
+        }
+        if (lo > 0) {
+            mGpuMin = std::to_string(lo);
+            mGpuMax = std::to_string(hi);
+        }
+    }
+
+    std::string mGpuMin, mGpuMax;
     void run() {
         std::unique_lock l(mLock);
         int current = -1;
