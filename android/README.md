@@ -21,7 +21,8 @@ on them.
 | Speakers, media audio | ✅ | Each tablet's own factory calibration, read from `sec_efs` at boot |
 | Sensors | ✅ | Auto-rotate, auto-brightness, accelerometer, gyroscope; magnetometer not calibrated yet |
 | Charging, USB (adb) | 🟡 | Charges, but the battery icon says "discharging" |
-| Vibration | 🟡 | HAL in this build, not confirmed on every tablet yet |
+| Battery details | ✅ | Design capacity from Samsung's power profile, cycle count in About > Battery information |
+| Vibration | ✅ | Fixed-voltage motor, so short pulses instead of strength levels |
 | Sleep | 🟡 | Suspends, but uses about 170 mA with the screen off (an SoC-level limit, also on Linux) |
 | Cameras, microphone, fingerprint, GPS, HDMI | ❌ | Not done on Android yet |
 | Encryption | ❌ | **`/data` is not encrypted.** SELinux is permissive, and the build is userdebug (adb root works) |

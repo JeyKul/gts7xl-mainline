@@ -3,7 +3,9 @@
  *
  * The motor is a plain ERM on a fixed-voltage regulator, exposed by the
  * kernel's regulator-haptic driver as an input device with FF_RUMBLE.
- * There is no amplitude control, so effects are just on-times.
+ * There is no amplitude control (the regulator has one fixed voltage), so
+ * effects are just on-times, kept short: the motor is strong at full voltage
+ * and slider ticks (TEXTURE_TICK) come in bursts.
  */
 
 #include <aidl/android/hardware/vibrator/BnVibrator.h>
@@ -77,11 +79,11 @@ class Vibrator : public BnVibrator {
                                int32_t* ret) override {
         int ms;
         switch (effect) {
-            case Effect::TICK:
-            case Effect::TEXTURE_TICK: ms = 15; break;
-            case Effect::CLICK: ms = 25; break;
-            case Effect::HEAVY_CLICK: ms = 40; break;
-            case Effect::DOUBLE_CLICK: ms = 60; break;
+            case Effect::TEXTURE_TICK: ms = 4; break;
+            case Effect::TICK: ms = 7; break;
+            case Effect::CLICK: ms = 12; break;
+            case Effect::HEAVY_CLICK: ms = 20; break;
+            case Effect::DOUBLE_CLICK: ms = 12; break;
             default: return unsupported();
         }
         switch (strength) {
@@ -89,6 +91,11 @@ class Vibrator : public BnVibrator {
             case EffectStrength::MEDIUM: break;
             case EffectStrength::STRONG: ms = ms * 5 / 4; break;
             default: return unsupported();
+        }
+        if (effect == Effect::DOUBLE_CLICK) {
+            // two pulses with a gap the motor can stop in
+            *ret = ms + kDoubleGapMs + ms;
+            return startDouble(ms, cb);
         }
         *ret = ms;
         return start(ms, cb);
@@ -210,6 +217,34 @@ class Vibrator : public BnVibrator {
                 cb->onComplete();
             }).detach();
         }
+        return ndk::ScopedAStatus::ok();
+    }
+
+    static constexpr int kDoubleGapMs = 80;
+
+    ndk::ScopedAStatus startDouble(int ms, const std::shared_ptr<IVibratorCallback>& cb) {
+        uint64_t gen;
+        {
+            std::lock_guard lock(mMutex);
+            gen = ++mGeneration;
+            if (!play(ms)) {
+                return ndk::ScopedAStatus::fromExceptionCode(EX_SERVICE_SPECIFIC);
+            }
+        }
+        std::thread([this, ms, cb, gen, self = ref<Vibrator>()] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(ms + kDoubleGapMs));
+            {
+                std::lock_guard lock(mMutex);
+                if (mGeneration != gen) return;
+                play(ms);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+            {
+                std::lock_guard lock(mMutex);
+                if (mGeneration != gen) return;
+            }
+            if (cb) cb->onComplete();
+        }).detach();
         return ndk::ScopedAStatus::ok();
     }
 

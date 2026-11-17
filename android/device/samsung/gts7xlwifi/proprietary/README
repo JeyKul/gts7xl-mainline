@@ -5,3 +5,6 @@ Blobs from this tablet's stock firmware:
   gts7xl-dsp-up.sh builds each tablet's own speaker calibration from its sec_efs
   (cirrus: rdc, temp, vsc, isc as 4x u32 LE; amp 40=_r 41= 42=_br 43=_b) and
   bind-mounts it over these.
+- ../overlay/frameworks/base/core/res/res/xml/power_profile.xml: Samsung's power
+  profile (battery capacity, CPU/screen power), from stock vendor
+  overlay/framework-res__auto_generated_rro_vendor.apk, unchanged.
