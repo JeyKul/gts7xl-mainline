@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copy to <aosp>/.repo/local_manifests/ before `repo sync`.
+     LineageOS's Mesa (AOSP 17's external/mesa3d is emulator-only), at the commit this
+     port was built and tested with. -->
+<manifest>
+  <remote name="gts7xl-github" fetch="https://github.com/" />
+  <project path="external/mesa" name="LineageOS/android_external_mesa" remote="gts7xl-github"
+           revision="400e673cf8ba515d3aace56ed3acc3bb300869a5" upstream="lineage-24.0" />
+</manifest>

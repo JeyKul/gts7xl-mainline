@@ -1,3 +1,5 @@
 #!/bin/sh
-# gts7xl: system ninja with mako for Mesa's generators (AOSP clears PYTHONPATH)
-PYTHONPATH=/mnt/builddrive/pydeps exec /usr/bin/ninja "$@"
+# gts7xl: system ninja with mako for Mesa's generators (AOSP clears PYTHONPATH).
+# pydeps: pip install --target <aosp>/prebuilts/mesa-build-dep/pydeps mako pyyaml packaging
+D=$(dirname "$(readlink -f "$0")")
+PYTHONPATH=${GTS7XL_PYDEPS:-$D/../pydeps} exec /usr/bin/ninja "$@"

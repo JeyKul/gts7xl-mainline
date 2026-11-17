@@ -8,11 +8,13 @@ T=$(adb devices -l | awk '{ r = 0; t = ""; for (i = 1; i <= NF; i++) { if ($i ==
 adb() { command adb -t "$T" "$@"; }
 O=/mnt/builddrive/aosp17/out; P=$O/target/product/gts7xlwifi; C=/mnt/builddrive/superchunks
 $O/host/linux-x86/bin/simg2img $P/super.img /mnt/builddrive/super.raw
-# Only the first 1 GiB is flashed: refuse if anything lies beyond it
-case "$(tail -c +$((1024*1048576+1)) /mnt/builddrive/super.raw | cmp - /dev/zero 2>&1)" in *EOF*) ;; *) echo "super data beyond 1 GiB - nothing flashed"; exit 1;; esac
+# Only up to the last partition's end is flashed, in 256 MiB chunks
+END=$($O/host/linux-x86/bin/lpdump /mnt/builddrive/super.raw | awk '/ linear super / { e = $6 + $3 - $1 + 1; if (e > m) m = e } END { print m * 512 }')
+[ "${END:-0}" -gt 0 ] || { echo "no extents in super - nothing flashed"; exit 1; }
+N=$(( (END + 268435455) / 268435456 ))
 rm -rf $C; mkdir -p $C
-for i in 0 1 2 3; do dd if=/mnt/builddrive/super.raw of=$C/c$i bs=1M skip=$((i*256)) count=256 status=none; done
-for i in 0 1 2 3; do
+for i in $(seq 0 $((N - 1))); do dd if=/mnt/builddrive/super.raw of=$C/c$i bs=1M skip=$((i*256)) count=256 status=none; done
+for i in $(seq 0 $((N - 1))); do
 	adb push $C/c$i /tmp/c >/dev/null 2>&1
 	l=$(sha256sum < $C/c$i | cut -c1-12)
 	r=$(adb shell "dd if=/tmp/c of=/dev/block/by-name/super bs=1048576 seek=$((i*256)) conv=notrunc 2>/dev/null; sync; dd if=/dev/block/by-name/super bs=1048576 skip=$((i*256)) count=256 2>/dev/null | sha256sum; rm /tmp/c" | cut -c1-12)
@@ -25,3 +27,5 @@ if [ "${1:-}" = boot ]; then
 	echo "boot: $([ "$r" = "$(sha256sum < $B | cut -c1-12)" ] && echo OK || echo DIFF)"
 fi
 adb shell "dd if=/dev/zero of=/dev/block/by-name/param bs=1 count=1 conv=notrunc 2>/dev/null; sync"
+# TWRP still maps the old partitions read only: map the new ones writable (GApps)
+adb shell "for p in system system_ext product vendor vendor_dlkm; do umount /\$p 2>/dev/null; lptools unmap \$p >/dev/null 2>&1; lptools map \$p >/dev/null 2>&1; done"
