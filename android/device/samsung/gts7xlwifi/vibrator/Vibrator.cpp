@@ -3,9 +3,11 @@
  *
  * The motor is a plain ERM on a fixed-voltage regulator, exposed by the
  * kernel's regulator-haptic driver as an input device with FF_RUMBLE.
- * There is no amplitude control (the regulator has one fixed voltage), so
- * effects are just on-times, kept short: the motor is strong at full voltage
- * and slider ticks (TEXTURE_TICK) come in bursts.
+ * The regulator has one fixed voltage, so effects are just on-times, kept short:
+ * the motor is strong at full voltage and slider ticks (TEXTURE_TICK) come in
+ * bursts. Amplitude is emulated by pulsing the motor in 16 ms periods (4 ms
+ * steps at HZ=250); the motor's inertia smooths the pulses. Below a quarter it
+ * stays off, so ramps like the charging swell play short and soft.
  */
 
 #include <aidl/android/hardware/vibrator/BnVibrator.h>
@@ -19,6 +21,8 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <mutex>
@@ -57,7 +61,8 @@ class Vibrator : public BnVibrator {
     }
 
     ndk::ScopedAStatus getCapabilities(int32_t* ret) override {
-        *ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK;
+        *ret = IVibrator::CAP_ON_CALLBACK | IVibrator::CAP_PERFORM_CALLBACK |
+               IVibrator::CAP_AMPLITUDE_CONTROL;
         return ndk::ScopedAStatus::ok();
     }
 
@@ -71,7 +76,8 @@ class Vibrator : public BnVibrator {
     ndk::ScopedAStatus on(int32_t timeoutMs,
                           const std::shared_ptr<IVibratorCallback>& cb) override {
         if (timeoutMs <= 0) return off();
-        return start(timeoutMs, cb);
+        if (mAmplitude.load() >= 0.99f) return start(timeoutMs, cb);
+        return startPulsed(timeoutMs, cb);
     }
 
     ndk::ScopedAStatus perform(Effect effect, EffectStrength strength,
@@ -111,7 +117,13 @@ class Vibrator : public BnVibrator {
                                            const std::shared_ptr<IVibratorCallback>&) override {
         return unsupported();
     }
-    ndk::ScopedAStatus setAmplitude(float) override { return unsupported(); }
+    ndk::ScopedAStatus setAmplitude(float amplitude) override {
+        if (amplitude <= 0.0f || amplitude > 1.0f) {
+            return ndk::ScopedAStatus::fromExceptionCode(EX_ILLEGAL_ARGUMENT);
+        }
+        mAmplitude = amplitude;  // a running on() picks it up at its next period
+        return ndk::ScopedAStatus::ok();
+    }
     ndk::ScopedAStatus setExternalControl(bool) override { return unsupported(); }
     ndk::ScopedAStatus getCompositionDelayMax(int32_t*) override { return unsupported(); }
     ndk::ScopedAStatus getCompositionSizeMax(int32_t*) override { return unsupported(); }
@@ -221,6 +233,38 @@ class Vibrator : public BnVibrator {
     }
 
     static constexpr int kDoubleGapMs = 80;
+    static constexpr int kPeriodMs = 16;
+    static constexpr int kStepMs = 4;
+
+    // on() below full amplitude: kStepMs..kPeriodMs of every period, or nothing
+    ndk::ScopedAStatus startPulsed(int ms, const std::shared_ptr<IVibratorCallback>& cb) {
+        uint64_t gen;
+        {
+            std::lock_guard lock(mMutex);
+            gen = ++mGeneration;
+        }
+        std::thread([this, ms, cb, gen, self = ref<Vibrator>()] {
+            for (int t = 0; t < ms; t += kPeriodMs) {
+                int steps = static_cast<int>(mAmplitude.load() * (kPeriodMs / kStepMs) + 0.5f);
+                if (mAmplitude.load() < 0.25f) steps = 0;
+                int onMs = std::min(steps * kStepMs, ms - t);
+                {
+                    std::lock_guard lock(mMutex);
+                    if (mGeneration != gen) return;  // replaced or turned off
+                    if (onMs > 0) play(onMs);
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(std::min(kPeriodMs, ms - t)));
+            }
+            {
+                std::lock_guard lock(mMutex);
+                if (mGeneration != gen) return;
+            }
+            if (cb) cb->onComplete();
+        }).detach();
+        return ndk::ScopedAStatus::ok();
+    }
+
+    std::atomic<float> mAmplitude{1.0f};
 
     ndk::ScopedAStatus startDouble(int ms, const std::shared_ptr<IVibratorCallback>& cb) {
         uint64_t gen;
