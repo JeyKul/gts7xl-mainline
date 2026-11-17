@@ -78,6 +78,7 @@ PRODUCT_COPY_FILES += \
 PRODUCT_PACKAGES += \
     android.hardware.health-service.example \
     android.hardware.power-service.gts7xl \
+    android.hardware.vibrator-service.gts7xl \
     com.android.hardware.thermal \
     android.hardware.usb-service.example \
     suspend_blocker
