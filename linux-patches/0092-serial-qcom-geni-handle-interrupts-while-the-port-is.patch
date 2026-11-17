@@ -1,0 +1,48 @@
+From 6878e82a9ccc19e7badb057591aa6679b46eaadb Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Tue, 17 Nov 2026 15:08:13 +0100
+Subject: [PATCH] serial: qcom-geni: handle interrupts while the port is
+ suspending
+
+uart_suspend_port() sets uport->suspended, waits up to 30 ms for the
+transmitter and only then calls shutdown(), which disables the IRQ. An
+interrupt in that window (on the Tab S7+ the QCA6390 answering the IBS
+sleep request hci_qca sends at suspend) was answered with IRQ_NONE and
+never cleared. The line is level triggered, so it fired until the core
+gave up with "irq nobody cared" and disabled it for good: every later
+Bluetooth command timed out until reboot.
+
+Only bail out once the SE is runtime suspended (clocks off); before that,
+handle the interrupt as usual so its source is drained.
+
+Tested: 40 RTC-woken suspends with Bluetooth on. Before: ~200k IRQs,
+IRQ 164 disabled, BT dead. After: ~3.6k IRQs, BT off/on works.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/tty/serial/qcom_geni_serial.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/tty/serial/qcom_geni_serial.c b/drivers/tty/serial/qcom_geni_serial.c
+index a851b8f0e..216d2ef68 100644
+--- a/drivers/tty/serial/qcom_geni_serial.c
++++ b/drivers/tty/serial/qcom_geni_serial.c
+@@ -1211,7 +1211,14 @@ static irqreturn_t qcom_geni_serial_isr(int isr, void *dev)
+ 	struct tty_port *tport = &uport->state->port;
+ 	struct qcom_geni_serial_port *port = to_dev_port(uport);
+ 
+-	if (uport->suspended)
++	/*
++	 * uart_suspend_port() marks the port suspended before shutdown()
++	 * disables the IRQ. The line is level triggered: an event in that
++	 * window (e.g. a Bluetooth controller acking a sleep request) must
++	 * be handled, or it fires until the core disables the IRQ for good.
++	 * Only skip it once the SE is powered down.
++	 */
++	if (uport->suspended && pm_runtime_status_suspended(uport->dev))
+ 		return IRQ_NONE;
+ 
+ 	uart_port_lock(uport);
+-- 
+2.56.0
+

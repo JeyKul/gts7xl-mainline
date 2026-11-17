@@ -1,0 +1,14 @@
+// Vibrator HAL: FF_RUMBLE on the kernel's regulator-haptic input device
+cc_binary {
+    name: "android.hardware.vibrator-service.gts7xl",
+    relative_install_path: "hw",
+    init_rc: ["vibrator-gts7xl.rc"],
+    vintf_fragments: ["vibrator-gts7xl.xml"],
+    vendor: true,
+    shared_libs: [
+        "android.hardware.vibrator-V4-ndk",
+        "libbase",
+        "libbinder_ndk",
+    ],
+    srcs: ["Vibrator.cpp"],
+}
