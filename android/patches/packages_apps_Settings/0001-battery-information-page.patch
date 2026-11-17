@@ -1,0 +1,14 @@
+diff --git a/src/com/android/settings/fuelgauge/BatterySettingsFeatureProviderImpl.java b/src/com/android/settings/fuelgauge/BatterySettingsFeatureProviderImpl.java
+index d292a6dd35e..2929a44baf1 100644
+--- a/src/com/android/settings/fuelgauge/BatterySettingsFeatureProviderImpl.java
++++ b/src/com/android/settings/fuelgauge/BatterySettingsFeatureProviderImpl.java
+@@ -43,7 +43,8 @@ public class BatterySettingsFeatureProviderImpl implements BatterySettingsFeatur
+ 
+     @Override
+     public boolean isBatteryInfoEnabled(Context context) {
+-        return false;
++        // gts7xl: About > Battery information (cycle count from the fuel gauge)
++        return true;
+     }
+ 
+     @Override
