@@ -5,3 +5,5 @@ backup/
 dt-dump/
 __pycache__/
 site/
+# Android needs these blobs from the stock firmware (see its README)
+!android/device/samsung/gts7xlwifi/proprietary/**/*.bin

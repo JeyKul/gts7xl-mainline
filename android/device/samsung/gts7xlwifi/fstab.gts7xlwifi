@@ -1,7 +1,7 @@
 # <src>                                    <mnt point>          <type> <mnt flags>                                                     <fs_mgr flags>
 system                                     /system              erofs  ro                                                              wait,logical,first_stage_mount
 system_ext                                 /system_ext          erofs  ro                                                              wait,logical,first_stage_mount
-product                                    /product             erofs  ro                                                              wait,logical,first_stage_mount
+product                                    /product             ext4   ro,barrier=1                                                    wait,logical,first_stage_mount
 vendor                                     /vendor              erofs  ro                                                              wait,logical,first_stage_mount
 vendor_dlkm                                /vendor_dlkm         erofs  ro                                                              wait,logical,first_stage_mount
 /dev/block/by-name/metadata                /metadata            ext4   noatime,nosuid,nodev,discard                                    wait,formattable,first_stage_mount,check

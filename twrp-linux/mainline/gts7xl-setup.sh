@@ -2,6 +2,10 @@
 # Mainline kernel only, at post-fs.
 # GPU and Wi-Fi firmware: microcode and ath11k from the ramdisk, the zap shader from the tablet's own
 # apnhlos (mounted by TWRP's rc), under one firmware path.
+# The bootloader sets byte 0 of param whenever it boots recovery and then boots
+# recovery every time: clear it, so leaving TWRP boots the system again
+P=/dev/block/bootdevice/by-name/param
+[ "$(od -An -tx1 -N1 $P | tr -d ' ')" = 00 ] || dd if=/dev/zero of=$P bs=1 count=1 conv=notrunc 2>/dev/null
 F=/tmp/gts7xl-fw/qcom
 mkdir -p $F/sm8250
 cp -r /linux-tools/firmware/* /tmp/gts7xl-fw/

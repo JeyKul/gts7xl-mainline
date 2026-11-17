@@ -4,6 +4,8 @@ Linux v7.3 and Arch Linux ARM on the Snapdragon 865 Tab S7+, booted directly fro
 
 <p align="center"><a href="https://jeykul.github.io/gts7xl-mainline/"><img alt="progress" src="https://img.shields.io/badge/dynamic/json?url=https://jeykul.github.io/gts7xl-mainline/progress.json&query=%24.score&suffix=%25&label=progress&color=2ea043&style=for-the-badge"> <img alt="usability" src="https://img.shields.io/badge/dynamic/json?url=https://jeykul.github.io/gts7xl-mainline/progress.json&query=%24.usability&label=usability&color=d4a72c&style=for-the-badge"></a><br><b><a href="https://jeykul.github.io/gts7xl-mainline/">📊 Live progress page</a></b></p>
 
+**Android:** AOSP 17 on the same kernel, with a TWRP-flashable zip. Install and build steps are in [android/README.md](android/README.md).
+
 Experimental. It's Linux or Android, not both: installing replaces `boot` and `dtbo` and erases `userdata`, so back up every partition first.
 
 ## Status
@@ -173,7 +175,7 @@ This port stands on other people's work:
 - **[portare-ch/portareos](https://github.com/portare-ch/portareos)** (with Armada's SM8550 sleep fixes): their suspend investigation guides our deep-sleep work.
 - **[v4l2loopback](https://github.com/v4l2loopback/v4l2loopback)**: the webcam device behind `gts7xl-webcam`.
 - **[linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git)**: GPU, Wi-Fi and Bluetooth firmware. Other firmware comes from the tablet's own partitions at runtime, except the Android port's speaker blobs below.
-- **Samsung and Cirrus Logic**: the sensor DSP configs (`proprietary/etc/sensors`, Samsung/Qualcomm) and the CS35L41 speaker protection firmware in `android/device/samsung/gts7xlwifi/proprietary/` come from Samsung's stock SM-T970 firmware (Cirrus Logic's amplifier DSP code), redistributed unmodified; the calibration files there are one tablet's factory values.
+- **Samsung and Cirrus Logic**: the sensor DSP configs (`proprietary/etc/sensors`, Samsung/Qualcomm) and the CS35L41 speaker protection firmware in `android/device/samsung/gts7xlwifi/proprietary/` come from Samsung's stock SM-T970 firmware (Cirrus Logic's amplifier DSP code), redistributed unmodified. Speaker calibration is not shipped: each tablet's own values are read from its `sec_efs` at boot.
 - **[LineageOS](https://lineageos.org)** mainline device work (android_device_mainline_*, android_kernel_mainline_configs, external/mesa) and **[Linaro](https://www.linaro.org)**'s drm_hwcomposer/minigbm device setup: the base of the Android port in `android/`.
 - **[Mu-Silicium](https://github.com/Project-Silicium/Mu-Silicium)**: base of the early UEFI attempt in `uefi/`.
 - **[Arch Linux ARM](https://archlinuxarm.org)** and **[Alpine Linux](https://alpinelinux.org)**: the installed system and the installer.
