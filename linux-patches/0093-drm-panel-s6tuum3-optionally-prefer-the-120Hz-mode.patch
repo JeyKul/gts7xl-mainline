@@ -1,0 +1,49 @@
+From 70a79ced7bb2afeb18f9cf868e73a3fcd46a0a8c Mon Sep 17 00:00:00 2001
+From: JeyKul <jey@kulovac.de>
+Date: Tue, 17 Nov 2026 23:17:01 +0100
+Subject: [PATCH] drm/panel: s6tuum3: optionally prefer the 120Hz mode
+
+Android uses the preferred mode as its default and only lowers the refresh
+rate from it (Smooth display); modes don't share a group, so starting at 60Hz
+it never reaches 120Hz. prefer_120hz=1 on Android's command line.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ drivers/gpu/drm/panel/panel-samsung-s6tuum3.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+index 1d99a8839..acf3e46fd 100644
+--- a/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
++++ b/drivers/gpu/drm/panel/panel-samsung-s6tuum3.c
+@@ -47,6 +47,14 @@ static int clean_handoff = 1;
+ module_param(clean_handoff, int, 0444);
+ MODULE_PARM_DESC(clean_handoff, "Bootloader handoff: 0 off, 1 panel off in first prepare, 2 hold reset from probe");
+ 
++/*
++ * Android takes the preferred mode as its default and only changes the refresh
++ * rate down from there (Smooth display), so it starts at 120Hz.
++ */
++static bool prefer_120hz;
++module_param(prefer_120hz, bool, 0444);
++MODULE_PARM_DESC(prefer_120hz, "Report 120Hz instead of 60Hz as the preferred mode");
++
+ struct s6tuum3 {
+ 	struct drm_panel panel;
+ 	struct mipi_dsi_device *dsi;
+@@ -343,6 +351,12 @@ static int s6tuum3_get_modes(struct drm_panel *panel, struct drm_connector *conn
+ 		if (!mode)
+ 			return i;
+ 
++		if (prefer_120hz) {
++			if (drm_mode_vrefresh(mode) == 120)
++				mode->type |= DRM_MODE_TYPE_PREFERRED;
++			else
++				mode->type &= ~DRM_MODE_TYPE_PREFERRED;
++		}
+ 		drm_mode_set_name(mode);
+ 		drm_mode_probed_add(connector, mode);
+ 	}
+-- 
+2.56.0
+

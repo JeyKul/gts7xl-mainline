@@ -14,17 +14,18 @@ on them.
 
 | | State | Notes |
 |---|---|---|
-| Display, 120 Hz, brightness | ✅ | Native panel driver; 120 Hz by default, Smooth display toggle |
+| Display, 120 Hz, brightness | ✅ | Native panel driver; 120 Hz by default, Smooth display switches to 60 Hz (the screen blinks once) |
 | GPU | ✅ | Adreno 650, Mesa freedreno (GLES 3.2) |
 | Touchscreen | ✅ | |
 | Wi-Fi, Bluetooth | ✅ | |
 | Speakers, media audio | ✅ | Each tablet's own factory calibration, read from `sec_efs` at boot |
 | Sensors | ✅ | Auto-rotate, auto-brightness, accelerometer, gyroscope; magnetometer not calibrated yet |
 | Charging, USB (adb) | 🟡 | Charges, but the battery icon says "discharging" |
-| Battery details | ✅ | Design capacity from Samsung's power profile, cycle count in About > Battery information |
-| Vibration | ✅ | Fixed-voltage motor, so short pulses instead of strength levels |
+| Battery details | ✅ | Design capacity and power tables from Samsung's power profile |
+| Vibration | ✅ | Fixed-voltage motor: short pulses, strength emulated by pulsing; touch feedback off by default |
+| Microphone | 🟡 | Sub mic (one of the two) |
 | Sleep | 🟡 | Suspends, but uses about 170 mA with the screen off (an SoC-level limit, also on Linux) |
-| Cameras, microphone, fingerprint, GPS, HDMI | ❌ | Not done on Android yet |
+| Cameras, fingerprint, GPS, HDMI | ❌ | Not done on Android yet |
 | Encryption | ❌ | **`/data` is not encrypted.** SELinux is permissive, and the build is userdebug (adb root works) |
 
 ## Install
@@ -76,7 +77,7 @@ build dependencies, `aarch64-linux-gnu-gcc`, `meson`, `ninja`, `python3-pip` and
 ```
 git clone https://github.com/torvalds/linux && cd linux
 git checkout v7.3 && git checkout -b gts7xl
-git am <this repo>/linux-patches/0*.patch            # 0001..0092, in order
+git am <this repo>/linux-patches/0*.patch            # 0001..0093, in order
 mkdir -p build-android && cp <this repo>/android/kernel/gts7xl-android_defconfig build-android/.config
 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- make O=build-android olddefconfig
 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- make O=build-android -j$(nproc) Image modules qcom/sm8250-samsung-gts7xlwifi.dtb

@@ -36,3 +36,10 @@ for a in FL FR RL RR; do
 	m "$a PCM Source" DSP
 done
 m "PRIMARY_TDM_RX_0 Audio Mixer MultiMedia1" 1
+# Microphone: the sub mic, DMIC3, through the VA macro to MultiMedia2 (hw:0,1),
+# +24 dB like on Linux; the main mic (DMIC1) reads zero so far
+m "VA DEC0 MUX" VA_DMIC
+m "VA DMIC MUX0" DMIC3
+m "VA_AIF1_CAP Mixer DEC0" 1
+m "VA_DEC0 Volume" 108
+m "MultiMedia2 Mixer VA_CODEC_DMA_TX_0" 1

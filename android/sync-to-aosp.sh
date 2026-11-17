@@ -12,9 +12,10 @@ mkdir -p "$1/prebuilts/mesa-build-dep/bin"
 install -m755 "$HERE/prebuilts-mesa-build-dep/meson" "$HERE/prebuilts-mesa-build-dep/ninja" "$1/prebuilts/mesa-build-dep/bin/"
 [ -d "$1/prebuilts/mesa-build-dep/pydeps/mako" ] || [ -n "${GTS7XL_PYDEPS:-}" ] ||
 	echo "warning: no Python modules for Mesa: pip install --target $1/prebuilts/mesa-build-dep/pydeps mako pyyaml packaging"
-# AOSP patches, once: patches/<project path with _ for />/*.patch
+# AOSP patches, once: patches/<project path with _ for />/*.patch (or the project
+# path in patches/<dir>/path, when the path itself has a _)
 for d in "$HERE"/patches/*/; do
-	p=$(basename "$d" | tr _ /)
+	if [ -f "$d/path" ]; then p=$(cat "$d/path"); else p=$(basename "$d" | tr _ /); fi
 	for f in "$d"*.patch; do
 		if git -C "$1/$p" apply --check "$f" 2>/dev/null; then
 			git -C "$1/$p" apply "$f" && echo "applied $(basename "$f") to $p"

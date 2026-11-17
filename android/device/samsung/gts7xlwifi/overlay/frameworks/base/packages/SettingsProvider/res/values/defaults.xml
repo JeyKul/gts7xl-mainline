@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Touch feedback off by default: the motor has no strength control, so every
+         tick (brightness slider, keyboard) is a full-strength pulse -->
+    <bool name="def_haptic_feedback">false</bool>
+</resources>
